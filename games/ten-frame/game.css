@@ -66,6 +66,10 @@
 [data-game="ten-frame"] .tf-svg path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
 [data-game="ten-frame"] .tf-svg .tf-halo { stroke: var(--halo); stroke-width: 9px; }
 [data-game="ten-frame"] .tf-svg .tf-line { stroke-width: 3px; }
+/* A thumb's cells are about 18-23px: there the halo and line scale with the unit, so the white cells, the
+   tray and the part's disc still show (rounds keep design 6.6's 3px). */
+[data-game="ten-frame"][data-thumb] .tf-svg .tf-halo { stroke-width: calc(var(--u) * 0.2); }
+[data-game="ten-frame"][data-thumb] .tf-svg .tf-line { stroke-width: calc(var(--u) * 0.08); }
 [data-game="ten-frame"] .tf-line-unknown .tf-line { stroke: var(--role-unknown); }
 [data-game="ten-frame"] .tf-line-whole .tf-line { stroke: var(--role-whole); }
 [data-game="ten-frame"] .tf-line-part .tf-line { stroke: var(--role-part-edge); }
