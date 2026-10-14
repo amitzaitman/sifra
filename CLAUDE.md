@@ -10,10 +10,10 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 
 - `docs/decisions.md`: the owner's decisions and why (Hebrew). Don't reverse one without asking.
 - The pedagogy doc is split by section; section numbers (§) are the same in every file:
-  - `docs/pedagogy.md` (§1, §5-§8): scope and evidence labels, how a silent app teaches, the first two games, what not to build on, the owner's decisions (§8.1, §8.5). It starts with an index of all the files.
+  - `docs/pedagogy.md` (§1, §5-§8): scope and evidence labels, how a silent app teaches (§5 is also the shell's spec), the first two games and their level tables (§6), what not to build on, and §8: the owner's decisions (§8.1), what to check in sources and with a child (§8.2-§8.4), design defaults (§8.5). It starts with an index of all the files.
   - `docs/rules.md` (§2): the eleven binding rules R1-R11 and how each is checked.
   - `docs/map.md` (§3): the grade 1-6 map. Aharoni and the Singapore series ("מתמטיקה יסודית") decide order, notation and teaching; the Ministry curriculum is secondary; §3.6 lists where the order differs from school.
-  - `docs/depth/README.md` (§4, §4.1) shared conventions; `docs/depth/errors.md` (§4.2) the error-rule catalogue; one `docs/depth/<strand>.md` per strand (§4.3-§4.14). A game needs rules.md, §4.1, errors.md and its strand file.
+  - `docs/depth/README.md` (§4, §4.1) shared conventions; `docs/depth/errors.md` (§4.2) the error-rule catalogue; one `docs/depth/<strand>.md` per strand (§4.3-§4.14). A game needs rules.md, §4.1, errors.md, the strand file of every skill its levels name, skills.md and dev-spec.md; ten-frame and balance also need §6 in pedagogy.md, and the shell needs §5.
   - `docs/sources.md` (§9): sources and what was checked. `docs/dev-spec.md` (Appendix A): generator output and how each check is implemented.
 - `docs/parents-videos.md`: Aharoni's videos per topic for the parents' page. Links unverified until checked.
 - `docs/skills.md`: every skill id with prerequisites and error-rule ids. Ids are stable: never rename one that a game or a saved record uses.
@@ -54,6 +54,7 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 ## Tools (planned)
 
 - Plain JavaScript with JSDoc, checked by `tsc --checkJs`. `node:test` for logic. Playwright on Chromium and WebKit (iPhone).
+- `npm test` runs `tests/docs.test.js`, which keeps skill ids, error rules, displays, models, meteg and links consistent across the docs. Run it after every docs change.
 - One CI workflow that tests and deploys to Pages.
 - Before a new game goes live: a manual iPhone check, logged with a date in `docs/device-checks.md`.
 

@@ -83,7 +83,7 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   `max(numbers) <= ceiling`. Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
   return `equation: null`: R2 checks the structure and unknown only, and R1 uses the no-equation
   branch.
-- **R3 [auto]:** each skill's allowed model order (the "מודל" line in [§4](depth/README.md)) is encoded as data.
+- **R3 [auto]:** each skill's allowed model order (the "מודל" line of each skill in its strand file under `depth/`; the line is defined in [§4.1](depth/README.md)) is encoded as data.
   Along a game's level list for one skill, the model index never decreases; within the same model
   and `max`, the look index (objects < dots < symbols) never decreases. `precision` (clock) counts
   as range, like `max`. A level with `helpEstimate: true` has skill `addsub.multi.two-digit` or
@@ -161,11 +161,13 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   R4 table was recomputed on 2026-10-14 for the chosen rule (up after 4 in a row, down after 2
   help rounds among the last 4, empty window at the start) by value iteration over (streak, last
   four outcomes).
-- The docs are checked by a script (ids in both files, prerequisites and cycles, rule lists per
-  depth section, catalogue, displays, models, meteg). It should move into the repo with the first
-  code.
+- The docs are checked by `npm test` (`tests/docs.test.js`): skill ids across skills.md, the map and
+  the depth files, prerequisites and cycles, rule lists per depth section, the catalogue, displays,
+  models, meteg, and relative links.
 
-### א.4 Exporting the attempt log (owner decision 2026-10-14, [§8.1](pedagogy.md) ח)
+### א.4 Exporting the attempt log (owner decision 2026-10-14, §8.1 ח)
+
+The decision is in [§8.1](pedagogy.md) ח.
 
 - A route on the hidden dev page, for example `#/dev/export`, downloads the attempt log as JSON:
   the versioned storage key's content as stored, plus the schema version.

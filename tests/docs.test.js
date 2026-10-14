@@ -275,7 +275,8 @@ function parseSkills(text, strands) {
     if (skills.has(id)) problems.push(`${SKILLS}: duplicate skill ${id}`);
     if (!strands.has(strand)) problems.push(`${SKILLS}: ${id}: strand "${strand}" is not in the strands table`);
     else if (strands.get(strand) !== strandName) {
-      problems.push(`${SKILLS}: ${id}: strand column says "${strandName}", the strands table says "${strands.get(strand)}"`);
+      const want = strands.get(strand);
+      problems.push(`${SKILLS}: ${id}: strand column says "${strandName}", the strands table says "${want}"`);
     }
     skills.set(id, { id, grade, prereqs, depth, rules });
   }
@@ -318,13 +319,15 @@ function parsePrereqs(cell) {
  */
 function allows(param, op, value) {
   const isNumber = /^\d+$/.test(value);
-  const inRange = isNumber && param.range !== null && param.range[0] <= Number(value) && Number(value) <= param.range[1];
+  const [low, high] = param.range ?? [NaN, NaN];
+  const inRange = isNumber && low <= Number(value) && Number(value) <= high;
   if (op === '=') return param.values.includes(value) || inRange;
   return isNumber && param.values.some((v) => /^\d+$/.test(v));
 }
 
 /**
- * Every prerequisite cycle, as a path that ends where it starts.
+ * Prerequisite cycles found by a depth-first search (at least one per loop), each as a
+ * path that ends where it starts.
  * @param {Map<string, string[]>} graph skill -> prerequisites
  * @returns {string[][]}
  */
@@ -461,11 +464,11 @@ test('3. each depth section lists exactly the rules of its skills.md row', () =>
   const problems = [];
   const sectionFile = new Map();
   for (const file of strandFiles) {
-    for (const { heading, body } of sections(read(file), 3)) {
+    for (const { heading, body } of sections(proseLines(read(file)).join('\n'), 3)) {
       if (!heading.startsWith('### `')) continue;
       const id = ticked(heading)[0];
       const skill = skills.get(id);
-      if (sectionFile.has(id)) problems.push(`${file}: ${id}: second depth section (first in ${sectionFile.get(id)})`);
+      if (sectionFile.has(id)) problems.push(`${file}: ${id}: second depth section, first in ${sectionFile.get(id)}`);
       sectionFile.set(id, file);
       if (!skill) {
         problems.push(`${file}: depth section for unknown skill ${id}`);
@@ -505,18 +508,23 @@ test('4. every rule a skill uses is in the errors.md catalogue, and every catalo
       if (!RULE_ID.test(rule)) problems.push(`${SKILLS}: ${skill.id}: bad rule id "${rule}"`);
       target.set(rule, [...(target.get(rule) ?? []), skill.id]);
     }
-    if (kindOf(skill) === 'depth' && !ids.length) problems.push(`${SKILLS}: ${skill.id}: depth skill without rules`);
+    if (kindOf(skill) === 'depth' && !ids.length) {
+      problems.push(`${SKILLS}: ${skill.id}: depth skill without rules`);
+    }
   }
   const { rules, candidates: listed, retired } = catalogue;
   for (const [rule, by] of used) {
-    if (!rules.has(rule)) problems.push(`${SKILLS}: rule ${rule} (used by ${by.join(', ')}) is not in the catalogue`);
+    if (!rules.has(rule)) {
+      problems.push(`${SKILLS}: rule ${rule} (used by ${by.join(', ')}) is not in the ${ERRORS} catalogue`);
+    }
   }
   for (const rule of rules.keys()) {
     if (!used.has(rule)) problems.push(`${ERRORS}: catalogue rule ${rule} is used by no skill`);
   }
   for (const [rule, by] of candidates) {
     if (!listed.has(rule) && !rules.has(rule)) {
-      problems.push(`${SKILLS}: candidate ${rule} (${by.join(', ')}) is neither listed in ${ERRORS} nor a catalogue rule`);
+      const where = `${SKILLS}: candidate ${rule} (${by.join(', ')})`;
+      problems.push(`${where} is neither listed in ${ERRORS} nor a catalogue rule`);
     }
   }
   for (const rule of listed) {
@@ -530,7 +538,8 @@ test('4. every rule a skill uses is in the errors.md catalogue, and every catalo
     proseLines(read(file)).forEach((line, i) => {
       for (const t of ticked(line)) {
         if (!RULE_ID.test(t) || FILE_NAME.test(t)) continue;
-        if (!rules.has(t) && !listed.has(t) && !retired.has(t)) problems.push(`${file}:${i + 1}: unknown rule ${t}`);
+        const known = rules.has(t) || listed.has(t) || retired.has(t);
+        if (!known) problems.push(`${file}:${i + 1}: unknown rule ${t}`);
       }
     });
   }
@@ -551,7 +560,9 @@ test('5. every display is defined once in §4.1, counted, used, and listed in sk
   problems.push(...compareIds('display ids', [SHARED, displays], [SKILLS, listed]));
   const usedDisplays = new Set();
   for (const [rule, ids] of catalogue.rules) {
-    if (ids.length !== 1) problems.push(`${ERRORS}: ${rule} names ${ids.length} displays (${ids.join(', ')}), expected one`);
+    if (ids.length !== 1) {
+      problems.push(`${ERRORS}: ${rule} names ${ids.length} displays (${ids.join(', ')}), expected one`);
+    }
     for (const id of ids) {
       usedDisplays.add(id);
       if (!displays.includes(id)) problems.push(`${ERRORS}: ${rule}: display ${id} is not defined in ${SHARED}`);
@@ -580,18 +591,19 @@ test('7. the totals sentence in skills.md matches the table', (t) => {
   const counts = { all: skills.size, depth: 0, map12: 0, upper: 0 };
   for (const skill of skills.values()) {
     const kind = kindOf(skill);
-    if (kind === 'other') problems.push(`${SKILLS}: ${skill.id}: depth cell "${skill.depth}" is neither עומק nor מפה`);
-    else counts[kind] += 1;
+    if (kind !== 'other') counts[kind] += 1;
+    else problems.push(`${SKILLS}: ${skill.id}: depth cell "${skill.depth}" is neither עומק nor מפה`);
     if (kind === 'depth' && !isEarly(skill)) {
       problems.push(`${SKILLS}: ${skill.id}: depth skill outside grades 1-2 (grade "${skill.grade}")`);
     }
   }
-  t.diagnostic(`skills ${counts.all}: depth ${counts.depth}, grade 1-2 map ${counts.map12}, grade 3+ map ${counts.upper}`);
+  const { all, depth, map12, upper } = counts;
+  t.diagnostic(`skills ${all}: depth ${depth}, grade 1-2 map ${map12}, grade 3+ map ${upper}`);
   const m = skillsText.match(TOTALS);
-  if (!m) problems.push(`${SKILLS}: the totals sentence ("בסך הכול ... מיומנויות פעילות") was not found`);
+  if (!m) problems.push(`${SKILLS}: the totals sentence ("בסך הכול ...") was not found`);
   else {
     const said = m.slice(1).map(Number).join(', ');
-    const table = [counts.all, counts.depth, counts.map12, counts.upper].join(', ');
+    const table = [all, depth, map12, upper].join(', ');
     if (said !== table) problems.push(`${SKILLS}: the totals sentence says ${said}, the table gives ${table}`);
   }
   assertNone(problems);
@@ -614,7 +626,7 @@ test('9. every relative link in the .md files points to an existing file', () =>
     proseLines(read(file)).forEach((line, i) => {
       for (const target of linkTargets(withoutCode(line))) {
         // Skip web and mail links, and links to a heading in the same file.
-        if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue;
+        if (/^(?:https?|mailto):/i.test(target) || target.startsWith('#')) continue;
         let path = target.replace(/[#?].*$/, '');
         try {
           path = decodeURI(path);
