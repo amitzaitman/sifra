@@ -58,19 +58,23 @@ test('no grade at run time or on screen: no deployed file names one (owner decis
   none(deployed.flatMap((file) => read(file).split('\n').flatMap((line, i) => (grade.test(plain(line)) ? [`${file}:${i + 1}: a grade: levels and progression are independent of grade`] : []))));
 });
 
-test('lib/ imports nothing and stays under 600 lines', () => {
-  none(scan(lib, /^\s*import\b|\bimport\(/, 'an import'));
-  const lines = lib.reduce((n, f) => n + read(f).split('\n').length - 1, 0);
-  assert.ok(lines < 600, `lib/ has ${lines} lines`);
-});
-
 /**
- * The repo paths a JS file imports, resolved from its folder (bare and URL specifiers as written).
+ * The repo paths a JS file imports or re-exports from, resolved from its folder (bare and URL specifiers as written).
  * @param {string} file
  */
 const importsOf = (file) => [...read(file).matchAll(/^\s*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]/gm)]
   .map((m) => m[1] ?? m[2] ?? m[3])
   .map((spec) => (spec.startsWith('.') ? posix.join(posix.dirname(file), spec) : spec));
+
+test('lib/ imports nothing and stays under 600 lines', () => {
+  // Any import line or import() call, and any `export ... from`, so lib/ never passes the shell on to a game.
+  none([
+    ...scan(lib, /^\s*import\b|\bimport\(/, 'an import'),
+    ...lib.flatMap((f) => importsOf(f).map((p) => `${f}: imports ${p}`)),
+  ]);
+  const lines = lib.reduce((n, f) => n + read(f).split('\n').length - 1, 0);
+  assert.ok(lines < 600, `lib/ has ${lines} lines`);
+});
 
 test('shell/ imports only lib/, data/ and shell/; games never import shell/ or app.js; a game imports every lib/ module', () => {
   // Who imports a module decides where it lives (owner decision 2026-10-14): a module only the shell

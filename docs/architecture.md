@@ -491,9 +491,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `Math.random`.
 - games/: no `localStorage`, `sessionStorage`, `indexedDB`, `cookie` or the storage manager (condition 1); no
   `animationend` or `transitionend`; no class name containing "cover" but lib/cover.js's.
-- lib/: no import, under 600 lines, and a game (games/) imports each module. shell/: imports only lib/, data/ and
-  shell/. games/ and the fixtures: no import of shell/ or app.js. Every deployed text file (section 1: data/videos.js, games/ and assets/
-  included): no grade, neither "grade" nor "כיתה"/"כיתות" in either spelling, compared without nikud (owner
+- lib/: no import and no `export ... from`, under 600 lines, and a game (games/) imports each module. shell/:
+  imports only lib/, data/ and shell/. games/ and the fixtures: no import of shell/ or app.js. Every deployed text
+  file (section 1: data/videos.js, games/ and assets/ included): no grade, neither "grade" nor "כיתה"/"כיתות" in either spelling, compared without nikud (owner
   decision 2026-10-14, pedagogy §1.2: nothing on the site asks for, keeps or shows a grade). index.html: no
   `maximum-scale`, no `user-scalable`. Site files: no `gesturestart` or `touchmove`
   listener, no `http(s)` URL outside data/videos.js, no emoji.
