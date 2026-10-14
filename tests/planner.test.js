@@ -178,6 +178,27 @@ test('stuck: a prerequisite another game offers wins over the previous level', (
   assert.deepEqual([same.game.meta.id, same.index], ['scale', 0], 'same-as not mastered: it comes first');
 });
 
+test('stuck: the next step holds the target until the child passes it (5.4)', () => {
+  // Stuck at make-ten with num.parts.split passed but not mastered: back to split-sym.
+  const split = ['split-5', 'split-10', 'split-sym'];
+  const c = child({ parts: ladder(parts, 'ten', split), scale: ladder(scale, 'left', ['same', 'right']) });
+  const to = stuckTarget(c, GAMES, parts, 3, SKILLS);
+  assert.deepEqual([to.game.meta.id, to.index], ['parts', 2]);
+  c.games.parts = moveTo(c.games.parts, 'split-sym', true);
+  const held = nextStep(c, GAMES, SKILLS);
+  assert.deepEqual([held.game.meta.id, held.index], ['parts', 2], 'not back to make-ten, and not to scale');
+  // Down from the target: the step follows the ladder there, with no jump.
+  c.games.parts = step(step(c.games.parts, parts.levels, { outcome: 'help', kind: 'new', session: 5 }).state, parts.levels, { outcome: 'help', kind: 'new', session: 5 }).state;
+  assert.equal(c.games.parts.level, 'split-10');
+  assert.equal(nextStep(c, GAMES, SKILLS).index, 1);
+  // Passed again: the hold ends and the walk goes on.
+  c.games.parts = { ...c.games.parts, level: 'split-sym', window: [] };
+  for (let n = 0; n < 4; n++) c.games.parts = step(c.games.parts, parts.levels, { outcome: 'first', kind: 'new', session: 6 }).state;
+  assert.equal(c.games.parts.hold, null);
+  const after = nextStep(c, GAMES, SKILLS);
+  assert.deepEqual([after.game.meta.id, after.index], ['parts', 3]);
+});
+
 test('5.12 walk: an always-right child follows the next step through every offered skill, in order', () => {
   const c = child();
   const offered = SKILLS.map((s) => s.id).filter((id) => GAMES.some((g) => g.levels.some((l) => l.skill === id)));

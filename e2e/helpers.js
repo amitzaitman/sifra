@@ -143,10 +143,15 @@ export async function expectMathLeftToRight(page) {
 
 /**
  * The screen at rest (R10): running animations only on [data-role] elements, and no delay
- * above 0.3 s outside [data-demo].
+ * above 0.3 s outside [data-demo]. The cards unlock when a display ends, while the hint's one
+ * pulse may still run (design 7.2: the hint does not lock), so finite animations in [data-hint]
+ * and [data-display] are waited out first; an infinite one is not, and fails.
  * @param {import('@playwright/test').Page} page
  */
 export async function expectCalm(page) {
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity && /** @type {KeyframeEffect} */ (a.effect)?.target?.closest('[data-hint], [data-display]'))
+    .map((a) => a.finished.catch(() => null))));
   const problems = await page.evaluate(() => {
     const out = [];
     for (const a of document.getAnimations()) {

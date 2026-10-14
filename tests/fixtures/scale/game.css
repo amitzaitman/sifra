@@ -1,5 +1,5 @@
 /* Fixture game "scale" (test code). Every selector starts with [data-game="scale"]. */
-[data-game="scale"] .fx-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
+[data-game="scale"] .fx-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
 [data-game="scale"] .fx-group { position: relative; display: grid; place-items: center; min-width: 40px; min-height: 40px; }
 [data-game="scale"] .fx-dots { display: flex; flex-wrap: wrap; gap: 6px; max-width: 134px; }
 [data-game="scale"] .fx-dot { position: relative; width: 22px; height: 22px; border-radius: 50%; }
@@ -16,5 +16,7 @@
 [data-game="scale"] .thumb .fx-dots, [data-game="scale"].thumb .fx-dots { gap: 3px; max-width: 62px; }
 [data-game="scale"] .thumb .fx-dot, [data-game="scale"].thumb .fx-dot { width: 10px; height: 10px; }
 [data-game="scale"].thumb .fx-tag { font-size: 16px; }
+[data-game="scale"] .fx-stage { width: 160px; height: 48px; border-radius: 12px; box-shadow: inset 0 0 0 3px var(--frame); }
+[data-game="scale"] .fx-card { max-width: 100%; overflow: hidden; white-space: nowrap; font-size: 14px; font-weight: 800; }
 @keyframes scale-in { from { opacity: 0; transform: scale(0.6); } }
 @keyframes scale-pulse { 50% { opacity: 0.3; } }

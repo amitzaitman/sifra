@@ -9,13 +9,14 @@
   <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-  <!-- index.html with the two fixture games of tests/fixtures instead of the registry. -->
+  <!-- index.html with the two fixture games of tests/fixtures instead of the registry; ?seed=n fixes the seeds. -->
   <div id="app"></div>
   <script type="module">
     import { start } from '../app.js';
     import * as parts from '../tests/fixtures/parts/game.js';
     import * as scale from '../tests/fixtures/scale/game.js';
-    start({ root: document.getElementById('app'), games: [parts, scale] });
+    const seed = Number(new URLSearchParams(location.search).get('seed')) || undefined;
+    start({ root: document.getElementById('app'), games: [parts, scale], seed });
   </script>
 </body>
 </html>

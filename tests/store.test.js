@@ -34,7 +34,7 @@ test('importing and loading with a storage that throws on any access does not th
   assert.deepEqual(childOf(store), newChild(DAY));
   assert.equal(save(store), false);
   assert.equal(load(null, newId, DAY).data.schema, SCHEMA);
-  assert.doesNotThrow(() => exportFile(throwing, new Date(), null));
+  assert.doesNotThrow(() => exportFile(throwing, new Date(), null, DAY));
 });
 
 test('migrate: missing, unparsable or broken gives a new value; schema 1 stays', () => {
@@ -55,6 +55,14 @@ test('migrate: a newer schema plays from memory and is never written', () => {
   assert.equal(store.data.current, 'c0000abcd');
   assert.equal(save(store), false);
   assert.equal(storage.getItem(KEY), raw);
+  // A newer schema of another shape is not "broken": still never written.
+  const other = JSON.stringify({ schema: SCHEMA + 1, current: 'p1', profiles: { p1: {} } });
+  const storage2 = memory({ [KEY]: other });
+  const store2 = load(storage2, newId, DAY);
+  assert.equal(store2.writable, false);
+  assert.equal(save(store2), false);
+  assert.equal(storage2.getItem(KEY), other);
+  assert.equal(migrate('{"schema":2,"current":"x","children":{}}', newId, DAY).writable, false);
 });
 
 test('save and load round-trip under one key', () => {
@@ -100,9 +108,10 @@ test('a quota error drops the oldest half of the attempts and retries once', () 
 
 test('export: the stored value as is, with key, schema, time and persisted', () => {
   const stored = { schema: 1, current: 'c1234abcd', children: { c1234abcd: newChild('2026-10-01') } };
-  const file = exportFile(memory({ [KEY]: JSON.stringify(stored) }), new Date('2026-10-14T08:00:00Z'), true);
+  // 00:30 in Israel is still the day before in UTC: the name takes the local day it is given.
+  const file = exportFile(memory({ [KEY]: JSON.stringify(stored) }), new Date('2026-10-13T21:30:00Z'), true, '2026-10-14');
   assert.equal(file.name, 'sifra-c1234abcd-2026-10-14.json');
-  assert.deepEqual(JSON.parse(file.text), { key: 'sifra', schema: 1, exported: '2026-10-14T08:00:00.000Z', persisted: true, data: stored });
-  assert.equal(JSON.parse(exportFile(memory({ [KEY]: '{oops' }), new Date(), null).text).data, '{oops');
-  assert.equal(exportFile(memory(), new Date('2026-10-14T08:00:00Z'), null).name, 'sifra-none-2026-10-14.json');
+  assert.deepEqual(JSON.parse(file.text), { key: 'sifra', schema: 1, exported: '2026-10-13T21:30:00.000Z', persisted: true, data: stored });
+  assert.equal(JSON.parse(exportFile(memory({ [KEY]: '{oops' }), new Date(), null, DAY).text).data, '{oops');
+  assert.equal(exportFile(memory(), new Date('2026-10-14T08:00:00Z'), null, DAY).name, 'sifra-none-2026-10-14.json');
 });

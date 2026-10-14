@@ -29,6 +29,10 @@ export function choose(round, options, rules, order) {
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
 
+/** @type {(value: any) => number} the size of a value's ghost row: a number, or a card's left side */
+const amount = (value) => (typeof value === 'number' ? value
+  : Array.isArray(value?.left) ? value.left.reduce((n, t, i) => (typeof t !== 'number' ? n : value.left[i - 1] === '−' ? n - t : n + t), 0) : 0);
+
 /** @type {(round: Round, role: string) => number} the count of the first group with a role */
 export const count = (round, role) => (round.look === 'symbols' ? round.helpPicture : round.picture).find((g) => g.role === role).count;
 
@@ -46,7 +50,7 @@ function el(tag, className, text) {
 
 /**
  * Draws groups left to right: dots in rows of five with their role, a chip for a tag, and the
- * cover over the unknown (none when solved).
+ * cover over the unknown (none when solved). No groups (a judging round): an empty stage.
  * @param {HTMLElement} host
  * @param {Group[]} groups
  * @param {boolean} solved
@@ -70,12 +74,14 @@ function drawGroups(host, groups, solved) {
     }
     row.append(box);
   }
+  if (!groups.length) row.append(el('div', 'fx-stage'));
   host.replaceChildren(row);
 }
 
 /**
  * The fixture's render: the picture (the help picture in symbols look, after view.picture()),
- * a ghost row per display, a ring as the hint, and a tour on the unknown that ends in the answer.
+ * a ghost row per display, a ring as the hint (not awaited: it does not lock the cards, design
+ * 7.2), and a tour on the unknown that ends in the answer. It checks that the host is in the page.
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
@@ -83,6 +89,7 @@ function drawGroups(host, groups, solved) {
  * @returns {RoundView}
  */
 export function render(host, round, { signal, mode, solved }, label) {
+  if (!host.isConnected) throw new Error('render: the host is not in the page (architecture 2.4)');
   const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
   if (round.look !== 'symbols' || mode === 'thumb') drawGroups(host, groups, solved);
   const unknown = () => host.querySelector('.fx-unknown');
@@ -93,16 +100,15 @@ export function render(host, round, { signal, mode, solved }, label) {
       host.querySelector('[data-display]')?.remove();
       const shown = el('div', 'fx-display');
       shown.dataset.display = display;
-      for (let i = 0; i < Math.min(Number(value) || 0, 20); i++) shown.append(el('span', 'fx-ghost'));
+      for (let i = 0; i < Math.min(amount(value), 20); i++) shown.append(el('span', 'fx-ghost'));
       host.append(shown);
       await settle(shown, signal);
       if (step >= 2 && !signal.aborted && !host.querySelector('[data-hint]')) {
         const hint = el('span', 'fx-hint');
         hint.dataset.hint = '';
-        unknown().append(hint);
-        await settle(hint, signal);
+        (unknown() ?? host.firstElementChild).append(hint);
       }
-      if (step < 3 || signal.aborted) return;
+      if (step < 3 || signal.aborted || !unknown()) return;
       const lid = unknown().querySelector('.cover');
       lid?.classList.add('is-lifted');
       await settle(lid, signal);

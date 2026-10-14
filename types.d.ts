@@ -101,7 +101,8 @@ interface Spec {
   kind: 'new' | 'review' | 'mixed';
   structure?: string;
   ask?: string;
-  demo?: 'auto' | 'how' | null;
+  /** the demos shown before the correct tap, in order: 'auto' on entry, 'how' for the hand */
+  demo?: ('auto' | 'how')[];
   record?: any;
 }
 
@@ -114,6 +115,8 @@ interface Ladder {
   at: Record<string, { n: number; first: number; sessions: number; lastSession: number | null }>;
   demoSeen: string[];
   demoDue: string | null;
+  /** a stuck return's target level: the next step stays on this game until it is passed */
+  hold: string | null;
 }
 
 interface SkillState {

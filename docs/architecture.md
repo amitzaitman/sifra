@@ -89,6 +89,12 @@ dev-spec A.1 is the shape, with these precisions:
 - Plain data only (survives `structuredClone`). In both milestone games `text` is `''` and `terms` is `[]`.
 - `rules[id](round)` returns the predicted value. When the catalogue formula says "or" (`slip.near`, `slip.far`) it
   returns `{ oneOf: [a, b] }`, and a choice with that rule equals one of them.
+- **Judging round** (`eq.sign.true-false`, balance level 9): the answer is a card, an equation object with numbers
+  and operators on both sides and no `'?'`; every choice is such a card; the answer card is true and every other card
+  false. `equation` is `null` (the exercises are on the cards, the equation row stays empty), there is no `unknown`
+  and no §4.6 row, and `picture` is the game's own stage (it may hold no groups). Values compare by deep equality,
+  whatever their key order. The shell's card label reads the tokens (`5 + 2 = 7`); `face` draws the card on one
+  line and may set its own `aria-label`.
 
 ### 2.4 render and the RoundView
 
@@ -103,14 +109,17 @@ dev-spec A.1 is the shape, with these precisions:
 ```js
 // ctx: { signal, mode, solved, setEquation, onAttempt }
 //   signal       AbortSignal, aborted when the round leaves the screen
-//   mode         'play' | 'demo' | 'thumb' (a still picture for home and the end screen)
+//   mode         'play' | 'demo' | 'thumb' (a still picture for home and the end screen). host is in the page in
+//                every mode, thumbs too, so render may measure it
 //   solved       thumb only: draw the solved picture, without the cover
 //   setEquation  (equation) => void: rewrite the equation row (ten-frame level 10, "10 + 3")
 //   onAttempt    (value) => void: commit of a build round; unused in milestone 1
 // RoundView: { miss, solve, picture, demo, label }
 //   miss(choice, step) => Promise<void>   choice is { value, rule, display }; step is 1, 2 or 3
 //   solve() => Promise<void>              the closing: the cover lifts, the picture closes
-//   picture() => void                     look 'symbols' only: draw helpPicture into host
+//   picture() => void                     look 'symbols' only: draw helpPicture into host. In 'symbols' look render
+//                                         draws no picture in 'play' and 'demo' until picture() (the shell calls it
+//                                         at once in a demo); in 'thumb' it draws the help picture
 //   demo(hand) => Promise<void>           optional steps before the hand taps the answer; hand.tap(el) => Promise
 //   label                                 optional aria-label of the picture, from a locked template
 ```
@@ -119,29 +128,36 @@ dev-spec A.1 is the shape, with these precisions:
 
 1. The shell builds the level (adding the planner's `structure` or `ask`), calls `makeRound(level, rng(seed))`, and
    runs the demo first when one is due (2.6).
-2. It builds the screen (3.2): the panel host `[data-area="picture"][data-game]`, the equation row (each `'?'` a
-   cover over an `.eq-answer`), the cards (`face`, else the number, plus dots in rows of five when `look` is not
-   `symbols` and every value is an integer 0-20), then `view = render(host, round, ctx)`. In `symbols` look the
-   panel holds the 96×96 picture button, which calls `view.picture()` and logs `picture`.
-3. A correct tap (`deepEqual(value, answer)`) goes to step 5. A wrong tap: the shell retires the card (design §6.5),
-   counts the miss, sets `step` to `min(3, misses)` with 4 options or `min(3, misses + 1)` with 3, locks the cards,
-   calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
-   `view.miss({ value, rule, display }, step)` (`display` from RULES), and unlocks. After step 3 only the answer
-   card is left, ringed (design §6.5).
+2. It builds the screen (3.2): the panel host `[data-area="picture"][data-game]`, the equation row (each `'?'` a cover
+   over an `.eq-answer` with `aria-hidden`, so a screen reader hears the `?` and not the answer), the cards (`face`,
+   else the number, plus dots in rows of five when `look` is not `symbols` and every value is an integer 0-20), then
+   `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
+   `view.picture()` and logs `picture`.
+3. A correct tap (`deepEqual(value, answer)`, key order ignored) goes to step 5. A wrong tap: the shell retires the
+   card (design §6.5), counts the miss, sets `step` to `min(3, misses)` with 4 options or `min(3, misses + 1)` with 3,
+   locks the cards, calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
+   `view.miss({ value, rule, display }, step)` (`display` from RULES), and unlocks. After step 3 only the answer card
+   is left, ringed (design §6.5).
 4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`); from step 2
    it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2); at step 3 the tour: one `[data-tour]`
    per digit, the last one the answer (from 1 on the unknown when it is a part, on from the known part when it is
-   the whole; R5). It resolves when the picture is quiet, at once with reduced motion, and on abort.
+   the whole; R5). It resolves when the display has ended and, at step 3, the tour; it does not wait for the
+   hint's pulse, which goes on after the cards unlock (design §7.1-§7.2: the cards lock only while a display runs,
+   the hint does not lock). At once with reduced motion, and on abort.
 5. Correct: the shell applies the ladder (3.4) and writes the attempt (3.9), marks the card, sets `data-solved` on
-   the screen (app.css then shows `[data-role="unknown"]` and `.eq-answer`), lifts the equation cover, awaits
+   the screen (app.css then shows `[data-role="unknown"]` and `.eq-answer`), lifts the equation cover (it leaves the
+   accessibility tree, and each answer comes back as a new node, so the polite live region says the solved
+   equation, design §6.4), awaits
    `view.solve()`, then puts "הַבָּא" in the cards' place and focuses it (design §6.9). On "הַבָּא" it aborts
    `signal`, empties the host and starts the next round.
 
 ### 2.6 Demo and "show me how" (R9)
 
 - The demo screen, `main[data-screen="demo"]`, has an overlay `[data-demo]` with the hand `[data-hand]`; its round
-  comes from a derived seed (3.8); the cards stay locked. `await view.demo?.(hand)`, then the hand taps the answer
-  card and step 5 runs; "הַבָּא" leads to the real round. No attempt is written; the next one carries `demo`.
+  comes from a derived seed (3.8); the cards stay locked; in `symbols` look the shell calls `view.picture()` at once,
+  so the hand works on the help picture; the bar keeps the session's rounds done. `await view.demo?.(hand)`, then
+  the hand taps the answer card and step 5 runs; "הַבָּא" leads to the real round. No attempt is written; the
+  next one lists the demo in `demo`.
 - It runs on entry to a level with `demo: true` as 3.4 says (never in a review round), and once at any level after a
   stuck return (3.7).
 - The hand button (always in the bar) aborts the round, runs a demo at its level, then mounts the same round again
@@ -206,7 +222,7 @@ export function render(host, round, { signal }) {
     async miss({ value, display }, step) {
       host.querySelector('[data-display]')?.remove();
       await settle(drawDisplay(frame, display, value, round), signal);
-      if (step >= 2 && !frame.querySelector('[data-hint]')) frame.append(drawHint(round));
+      if (step >= 2 && !frame.querySelector('[data-hint]')) frame.append(drawHint(round));   // not awaited (2.5)
       for (let n = 1; step === 3 && n <= round.answer && !signal.aborted; n++) {
         await settle(drawTourDigit(frame, round, n), signal);
       }
@@ -225,10 +241,12 @@ export function render(host, round, { signal }) {
 ### 3.1 start() and routes
 
 `start({ root, games, now = () => new Date(), storage, seed })`. index.html passes `Object.values(registry)`;
-e2e/fixture.html passes the fixture games; unit tests inject `storage` (default: localStorage, read only inside
-start) and `now`; `seed` defaults to a uint32 from `crypto.getRandomValues()`. start installs the error screen
-(from AlefBet error-screen.js, without the emoji: `main[data-screen="error"]` and a home button), loads the store,
-calls `navigator.storage.persist()` once, links each `meta.css`, and renders the route on every hashchange.
+e2e/fixture.html passes the fixture games, and `?seed=n` as `seed`, so a failing round can be replayed; unit tests
+inject `storage` (default: localStorage, read only inside start) and `now`; `seed` defaults to a uint32 from
+`crypto.getRandomValues()`. start installs the error screen (from AlefBet error-screen.js, without the emoji:
+`main[data-screen="error"]` and a home button), loads the store, calls `navigator.storage.persist()` once, links each
+`meta.css`, and renders the route on every hashchange.
+
 
 | Route | Screen |
 |---|---|
@@ -240,7 +258,8 @@ calls `navigator.storage.persist()` once, links each `meta.css`, and renders the
 | `#/dev/export` | one button that downloads the export (3.9) |
 
 Anything else goes home. Nothing a child reaches links to `#/dev`. Home orders games by the SKILLS position of the
-skill of their first level (ten-frame, then balance). Thumbs use seed 1, drawn with `mode: 'thumb'`.
+skill of their first level (ten-frame, then balance). Thumbs use seed 1, drawn with `mode: 'thumb'` once their host
+is in the page.
 
 ### 3.2 Screens and test hooks
 
@@ -261,24 +280,28 @@ skill of their first level (ten-frame, then balance). Thumbs use seed 1, drawn w
   round's level is filled in when it starts, so the ladder moves within a session.
 - Mixed level: a second `rng` from the session seed picks each round's structure (or `ask`): the first uniformly,
   then another value with probability 0.4 (R3, R11). Kind `mixed`.
-- After a stuck return (3.7) the remaining new rounds go to the target. Leaving mid-round drops that round.
+- After a stuck return (3.7) the remaining new rounds go to the target, and the next step holds there (3.6).
+  Leaving mid-round drops that round.
 - End screen: solved thumbs of the rounds played, and the home button (R10, §5.10).
 
 ### 3.4 The ladder, per game
 
-State `{ level, fast, streak, window, passed, at, demoSeen }`; `level`, `passed` and `demoSeen` hold level ids;
-`fast` is the id of the level the climb started at, or null; `at[id]` is `{ n, first, sessions, lastSession }`. A new
-state starts at level 1 (or the next-step target) with `fast` set.
+State `{ level, fast, streak, window, passed, at, demoSeen, demoDue, hold }`; `level`, `passed` and `demoSeen` hold
+level ids; `fast` is the id of the level the climb started at, or null; `at[id]` is `{ n, first, sessions,
+lastSession }`; `demoDue` and `hold` are the level of a stuck return (3.7), or null. A new state starts at level 1
+(or the next-step target) with `fast` set.
 
 - Review rounds change nothing. Mixed rounds count toward going up, not in the down window.
 - **Fast climb:** a first try marks the level passed, adds it to `demoSeen` (the child showed it), and goes up one
-  (the last level stays). Any other outcome sets `fast` to null: above the start level, go back one level and unmark
-  it (one success may be a guess); at the start level, stay.
+  (the last level stays). Any other outcome sets `fast` to null: at a level reached by a fast promotion and not yet
+  passed, go back one level and unmark it (one success may be a guess); at the start level, at the last level once
+  passed there (it is the last level passed on a first try), and after a mixed round (§5.6), stay.
 - **Normal:** `first` adds 1 to `streak`, anything else resets it. `window` keeps the last 4 outcomes at this level
   and is emptied on every level change. Streak 4: mark passed, go up (the last level stays). Two outcomes in the
   window that are not `first` (`shown` included): go down one (level 1 stays, window emptied).
 - **Stuck:** `at[id]` counts rounds, first tries and distinct sessions at a level across visits until it is passed.
   At `n >= 10`, `sessions >= 2` and `first / n < 0.5` the counters reset and the planner picks a target (3.7).
+  Passing the `hold` level sets `hold` to null.
 - **Demo** (R9): a new round runs the demo first when its level has `demo: true`, is not in `demoSeen`, and was not
   just reached by a fast promotion. So the start level's demo runs (nothing is known yet), and after a fast climb
   ends, the demo of the level where it ended runs when the child gets there again. A demo adds its level to
@@ -306,6 +329,8 @@ state starts at level 1 (or the next-step target) with `fast` set.
 - **Prerequisites** for a level: `base`, plus each entry of `when` whose condition the level meets. Conditions keep
   the skills.md bracket: `{ max: '>20' }` compares numbers, `{ op: '=mul' }` tests equality (membership for arrays).
 - A skill no registered game offers is skipped, and counts as met when it is a prerequisite.
+- **Held:** while a game's ladder has a `hold` (3.7), the step is that game at its ladder level (no jump), first in
+  home order if two hold.
 - **The step:** the first skill in order that a game offers, not passed, with its prerequisites (for the level it
   would open) passed or offered by no game. Game: the first in home order that offers it. Level: the game's level if
   it has that skill, else the lowest unpassed level of the skill there; following the step moves the game there
@@ -316,9 +341,11 @@ state starts at level 1 (or the next-step target) with `fast` set.
 Walk the stuck skill's prerequisites in written order (base, then met conditions). The first that is not mastered
 and is offered by a game wins: that game, at its highest passed level of that skill, else the skill's first level
 there. Unmastered prerequisites no game offers go into `missing`. If none wins: the previous level of the same skill
-in this game, else the previous level in the list, else stay. The target game moves to the target level, whose demo
-runs once more, and the event `stuck` `{ game, level, skill, to: { game, level, skill }, missing }` is written. When
-the target is in another game, the stuck game keeps its own level.
+in this game, else the previous level in the list, else stay. The target game moves to the target level
+(`moveTo(..., again)`), whose demo runs once more (`demoDue`), and the event `stuck` `{ game, level, skill, to: { game,
+level, skill }, missing }` is written. The target is held (`hold`): the rest of the session plays there, and the next
+step points there until the child passes the target level, so a stuck return on a session's last round still leads
+to the prerequisite and its demo. When the target is in another game, the stuck game keeps its own level.
 
 ### 3.8 Random
 
@@ -332,8 +359,9 @@ an integer with both ends included, an element, a new array). makeRound uses not
   sessions, games: { [gameId]: ladder state }, skills: { [skillId]: { last, passedDay, box, due, reviewDays,
   lastReviewFirst } }, attempts, events }`. The child id is `c` plus 8 hex digits from crypto.
 - Storage is read only inside start and route handlers (the export reads when opened), always in try/catch; when it
-  throws or is missing, the shell plays from memory. `migrate(raw)`: missing or unparsable gives a new value; schema
-  1 stays; each new schema adds a step; a schema newer than the code: play from memory, never write.
+  throws or is missing, the shell plays from memory. `migrate(raw)`: a schema newer than the code, whatever its
+  shape, is checked first: play from memory, never write; then missing, unparsable or broken gives a new value;
+  schema 1 stays; each new schema adds a step.
 - Written after each solved round, each demo start and each jump. Caps: 4000 attempts and 500 events, oldest first
   out; on a quota error drop the oldest half of the attempts and retry once. `navigator.storage.persist()` runs once
   per start.
@@ -341,10 +369,12 @@ an integer with both ends included, an element, a new array). makeRound uses not
   `skill`, `seed`, `version`, `params` (the level as passed), `answer`, `kind`, `outcome` (`shown` if the tour ran;
   `help` after any miss, `picture` or `how`; else `first`), `wrong` (rules in tap order), `firstMs` and `ms` (from
   the mount to the first tap and to the correct tap), `help` (`hint`, `tour`, `picture`, `how` in arrival order),
-  `demo` (`auto`, `how` or null), `taps` (off-target, by area), `options`, `levelBefore`, `levelAfter`, `sinceDays`.
+  `demo` (the demos shown before the correct tap, in order: `auto` on entry, `how` for the hand; `[]` for none),
+  `taps` (off-target, by area), `options`, `levelBefore`, `levelAfter`, `sinceDays`.
   The round itself is not stored: seed, `version`, `params` and `answer` rebuild it.
-- Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`: `{ key: 'sifra', schema,
-  exported, persisted, data }`, with `data` the stored value as is.
+- Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`, `<day>` the local day like every
+  day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time and `data` the
+  stored value as is.
 
 ### 3.10 Parents page
 
@@ -361,7 +391,9 @@ against the doc. The home link renders only when `VERIFIED` is true, set by the 
   `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js` (4.3);
   `tests/code.test.js` (4.4); `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
-  `num.parts.make-ten`) and `scale` (`eq.sign.same-as` and `eq.sign.missing`).
+  `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
+  `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`
+  throws when its host is not in the page.
 
 ### 4.2 The generic game test
 
@@ -372,9 +404,12 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - Determinism: two calls deep-equal; a `structuredClone` copy is equal. The level has a unique `id`, a skill in
   SKILLS, `options`, `demo`, `model`, `look`; the round's copied fields are among the level's values.
 - R1: the k-th `'?'` maps to the k-th `unknown` group. Solve with `f = left - right`: `x = -f(0) / (f(1) - f(0))`,
-  requiring `f(1) !== f(0)`. Runs on `helpPicture` in `symbols` look.
-- R2: shapes compare with numbers as `n` and `∘` matching `+` and `−`; a `null` equation checks the pair only; the
-  ceiling (5 for a grade 1 skill, 10 for grade 2) applies to story structures, not `equation`.
+  requiring `f(1) !== f(0)`. Runs on `helpPicture` in `symbols` look. A judging round (2.3, answer of type card)
+  takes its own branch: `equation` null; every card numbers and operators on both sides, no `'?'` (R8); the answer
+  card true, every other card false; no picture groups needed, and its numbers within the level's range (R4).
+- R2: shapes compare with numbers as `n` and `∘` matching `+` and `−`; a `null` equation checks the pair only; a
+  judging round has no unknown and so no row; the ceiling (5 for a grade 1 skill, 10 for grade 2) applies to story
+  structures, not `equation`.
 - R3 (once per game): MODEL_ORDER, the look order, and the `terms` and `helpEstimate` constraints; each structure
   of a mixed level has an earlier level of its own.
 - R4: the answer in `[min ?? 0, max]`; rules in the skill's SKILLS list and in RULES; `oneOf` accepted;
@@ -388,12 +423,15 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - rng: same seed, same sequence; `int` stays in bounds over 10,000 draws; `shuffle` is a permutation.
 - ladder: each rule of 3.4 alone: up after 4; first, help, first, help goes down; the window empties on a level
   change; mixed only up; reviews nothing; the fast climb up on each first try, back one and unmarked on the first
-  miss, staying on a miss in its first round; the last level stays; stuck at 10 rounds, 2 sessions, under half.
+  miss, staying on a miss in its first round, at the last level once passed there, and on a mixed round; the last
+  level stays; stuck at 10 rounds, 2 sessions, under half; a stuck return holds until its level is passed.
 - planner: the dev-spec R3/R11 [unit] list, with the fixtures standing for ten-frame and balance (plain
   `{ meta, levels }` objects where makeRound is not needed), including both stuck cases and the switch rate
-  (0.4 ± 0.05 over 2000 sessions). The §5.12 walk: a child who is always right, from an empty store, follows the
-  next step until every offered skill is passed; each opens only after its offered prerequisites, in SKILLS order.
-- store: importing with a storage that throws on any access does not throw; migrate cases; caps; quota retry; export.
+  (0.4 ± 0.05 over 2000 sessions), and a held next step right after a stuck return. The §5.12 walk: a child who is always right, from
+  an empty store, follows the next step until every offered skill is passed; each opens only after its offered
+  prerequisites, in SKILLS order.
+- store: importing with a storage that throws on any access does not throw; migrate cases, a newer schema of another
+  shape included; caps; quota retry; export named by the local day.
 
 ### 4.4 Code scans
 
@@ -415,8 +453,12 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   (site.spec.js, chromium): one page per registered game, each on a round with a cover, waiting together.
 - Tests rebuild a round in Node from `data-level`, `data-seed` and `data-structure` by importing the game and
   lib/rng.js. Storage is seeded with `page.addInitScript()`; "yesterday" comes from `page.clock.setFixedTime()`.
+  Game specs open fixture.html or index.html routes with a fixed seed where the round matters, and assert what they
+  need of the round instead of returning early.
 - e2e/helpers.js (from AlefBet): `readsLeftToRight` per character and line, `expectTouchTargets` at 64px,
-  `roundOf`, `stored`, `seedStore`. e2e/fixture.html is index.html with the fixture games.
+  `roundOf`, `stored`, `seedStore`, and `expectCalm` (R10), which first waits out finite animations in `[data-hint]`
+  and `[data-display]` (the hint's pulse outlives the lock, 2.5). e2e/fixture.html is index.html with the fixture
+  games.
 
 ### 4.6 site.spec.js
 
@@ -473,7 +515,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Help ladder | The shell counts, picks the step, locks and decides; the game draws | R5 is one rule: one implementation, tested once |
 | Next-step order | skills.md rows, stable-sorted by grade; prerequisites gate | The only machine-readable order. Rows are grouped by strand, so an interleaved Aharoni/Singapore order needs an order column (an owner question; two games do not need it) |
 | Prerequisite no game offers | Met for the next step; logged in `missing` when stuck | §5.12's own example, `count.set.how-many` |
-| Fast climb | Per game; the starting level's demo runs; a miss goes back one and unmarks it | "New" is new to the game (also after a Safari wipe); one success may be a 1-in-4 guess |
+| Fast climb | Per game; the starting level's demo runs; a miss goes back one and unmarks it, except at the last level once passed there and after a mixed round | "New" is new to the game (also after a Safari wipe); one success may be a 1-in-4 guess; §5.3 returns to the last level passed on a first try; §5.6: mixing does not lower a level |
 | Down window | Emptied on every level change | A.3 computed the thresholds with an empty window at the start |
 | Stuck counters | Per level, across visits, until passed; 2 or more sessions | The down rule keeps moving the child; a count per visit would never reach 10 |
 | Review start | From a skill's first passed level; nothing passed, no review | R11 reviews "the last level passed" |
@@ -488,9 +530,12 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | What is logged | `params`, seed, `version`, `answer`; not the round | The storage cap; skills.md copies the params because a seed alone may not rebuild a round |
 | Storage key | One key, `sifra`, with `schema` | One key forever; migrate() steps by schema |
 | `symbols` look | The first miss shows the help picture before the display | Displays run on the picture (R5, step 1) |
-| Answer in the equation | `.eq-answer`, not `data-role` | design §3 gives `[data-role="unknown"]` a background, and R6 [browser] expects roles on quantities only |
-| "Show me how" | A demo, then the same round from the start; at best `help` | R5 logs it as help; restarting avoids replaying half a ladder |
-| Stuck target | Takes the rest of the session | §5.4: "the child plays it"; sessions already mix games |
+| Answer in the equation | `.eq-answer`, not `data-role`; `aria-hidden` until solved, then a new node | design §3 gives `[data-role="unknown"]` a background, and R6 [browser] expects roles on quantities only; design §6.4 wants the live region to say the solved equation |
+| Judging rounds | Answer and choices are cards, `equation` null, R1 per card (2.3, 4.2) | dev-spec A.2 R1 has no branch for "no unknown, the child judges cards" (§4.9 `eq.sign.true-false`, §6.3 level 9) |
+| Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
+| Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
+| "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
+| Stuck target | Held (`hold`): the rest of the session, then the next step, until the child passes the target level | §5.4: "the child plays it" and sees the demo again, also when the stuck round was a session's last |
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |
 | End screen | Solved thumbs and home only | R10, §5.10; the next step on home starts the next session |

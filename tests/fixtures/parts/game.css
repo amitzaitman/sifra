@@ -1,5 +1,5 @@
 /* Fixture game "parts" (test code). Every selector starts with [data-game="parts"]. */
-[data-game="parts"] .fx-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
+[data-game="parts"] .fx-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
 [data-game="parts"] .fx-group { position: relative; display: grid; place-items: center; min-width: 40px; min-height: 40px; }
 [data-game="parts"] .fx-dots { display: flex; flex-wrap: wrap; gap: 6px; max-width: 134px; }
 [data-game="parts"] .fx-dot { position: relative; width: 22px; height: 22px; border-radius: 50%; }

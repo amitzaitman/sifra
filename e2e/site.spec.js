@@ -77,7 +77,7 @@ test('the level is kept after a reload: one first try climbs to level 2', async 
   await solve(page);
   const { child } = await stored(page);
   expect(child.games.parts.level).toBe('split-10');
-  expect(child.attempts.at(-1)).toMatchObject({ outcome: 'first', level: 1, levelBefore: 1, levelAfter: 2, demo: 'auto', child: expect.stringMatching(/^c[0-9a-f]{8}$/) });
+  expect(child.attempts.at(-1)).toMatchObject({ outcome: 'first', level: 1, levelBefore: 1, levelAfter: 2, demo: ['auto'], child: expect.stringMatching(/^c[0-9a-f]{8}$/) });
   await page.reload();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '2');
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-kind', 'new');
@@ -103,7 +103,7 @@ test('review: a level passed yesterday opens the session with a review round, fr
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-game', 'scale');
 });
 
-test('R9: the first entry to a demo level runs the demo and writes no attempt; the hand logs how', async ({ page }) => {
+test('R9: the first entry to a demo level runs the demo and writes no attempt; the hand logs how; the bar keeps the rounds done', async ({ page }) => {
   await open(page, `${FIXTURE}#/play/parts`);
   await expect(page.locator('main[data-screen="demo"] [data-demo] [data-hand]')).toBeVisible();
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
@@ -121,7 +121,15 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   await solve(page);
   ({ child } = await stored(page));
   expect(child.attempts).toHaveLength(1);
-  expect(child.attempts[0]).toMatchObject({ outcome: 'help', help: ['how'], demo: 'how', wrong: [] });
+  // The round opened with the auto demo, then the hand: both are logged.
+  expect(child.attempts[0]).toMatchObject({ outcome: 'help', help: ['how'], demo: ['auto', 'how'], wrong: [] });
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"] [role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+  await page.locator('[data-how]').click();
+  await expect(page.locator('main[data-screen="demo"] [role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+  await page.locator('[data-next]').click();
+  await solve(page);
+  expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
 
 test('parents page: plain links that open YouTube in a new tab, and the home button', async ({ page }) => {
@@ -144,10 +152,12 @@ test('an uncaught error shows the error screen with a home button, not a white p
   await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
 });
 
-test('#/dev/export: one button downloads the stored value as is', async ({ page }) => {
+test('#/dev/export: one button downloads the stored value as is, named by the local day', async ({ page }) => {
   const value = storeWith({ sessions: 3 });
   await seedStore(page, value);
-  await open(page, `${FIXTURE}#/dev/export`);
+  // 00:30 in Israel, still the day before in UTC.
+  await page.clock.install({ time: new Date('2026-10-14T00:30:00+03:00') });
+  await page.goto(`${FIXTURE}#/dev/export`);
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-export]').click()]);
   expect(download.suggestedFilename()).toBe(`sifra-${CHILD}-2026-10-14.json`);
   const file = JSON.parse(readFileSync(await download.path(), 'utf8'));

@@ -102,6 +102,23 @@ test('fast climb to the last level stays there', () => {
   assert.deepEqual(s.passed, ['d', 'e']);
 });
 
+test('fast climb: a miss at the last level, once passed there, stays and keeps every level passed', () => {
+  const s = play(startLadder(levels, 'd'), ['first', 'first', 'help']);
+  assert.equal(s.level, 'e');
+  assert.equal(s.fast, null);
+  assert.deepEqual(s.passed, ['d', 'e']);
+  // Reached by the promotion but not yet passed: back one, as on any level.
+  const back = play(startLadder(levels, 'd'), ['first', 'help']);
+  assert.deepEqual([back.level, back.passed], ['d', []]);
+});
+
+test('fast climb: a miss on a mixed round ends the climb without going back (5.6)', () => {
+  const s = play(startLadder(levels), ['first', 'help/mixed']);
+  assert.equal(s.level, 'b');
+  assert.equal(s.fast, null);
+  assert.deepEqual(s.passed, ['a']);
+});
+
 test('demo: at the start level, not on a fast promotion, again after the climb ends', () => {
   const start = startLadder(levels);
   assert.equal(needsDemo(start, levels[0]), true, 'the start level has a demo and nothing is known');
@@ -118,11 +135,18 @@ test('demo: at the start level, not on a fast promotion, again after the climb e
   assert.equal(needsDemo(again, levels[1]), false, 'b has no demo');
 });
 
-test('a stuck return runs the target demo once more, at any level', () => {
+test('a stuck return runs the target demo once more, at any level, and holds until the target is passed', () => {
   const s = moveTo(normal('c'), 'b', true);
   assert.equal(s.level, 'b');
+  assert.equal(s.hold, 'b');
   assert.equal(needsDemo(s, levels[1]), true);
   assert.equal(needsDemo(sawDemo(s, 'b'), levels[1]), false);
+  assert.equal(moveTo(s, 'c').hold, 'b', 'a jump keeps the hold');
+  const down = play(s, ['help', 'shown']);
+  assert.deepEqual([down.level, down.hold], ['a', 'b'], 'going down keeps the hold');
+  const passed = play(s, ['first', 'first', 'first', 'first']);
+  assert.deepEqual([passed.level, passed.hold], ['c', null], 'passing the target ends it');
+  assert.equal(startLadder(levels).hold, null);
 });
 
 test('stuck at 10 rounds, 2 sessions, under half first tries', () => {

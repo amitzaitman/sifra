@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { GAMES } from './all-games.js';
 import * as parts from './fixtures/parts/game.js';
+import * as scale from './fixtures/scale/game.js';
 import { rng } from '../lib/rng.js';
 import { RULES } from '../data/errors.js';
 import { FORMS } from '../data/forms.js';
@@ -82,6 +83,8 @@ const balance = (equation, values) => {
   return evaluate(equation.left, queue) - evaluate(equation.right, queue);
 };
 const shapeOf = (tokens) => tokens.map((t) => (typeof t === 'number' ? 'n' : t));
+/** A side of a card: number, operator, number, ... with no '?'. */
+const exercise = (side) => Array.isArray(side) && side.length % 2 === 1 && side.every((t, i) => (i % 2 ? OPERATORS.includes(t) : typeof t === 'number'));
 const fits = (shape, form) =>
   shape.length === form.length && shape.every((t, i) => t === form[i] || (form[i] === '∘' && (t === '+' || t === '−')));
 
@@ -96,6 +99,26 @@ function typed(value, types) {
     picture: value !== null && typeof value === 'object' && !Array.isArray(value),
     order: Array.isArray(value),
   })[type]);
+}
+
+/**
+ * R1 and R8 of a judging round (architecture 2.3, eq.sign.true-false): the answer is a card, the
+ * cards are the exercises, and the equation row is empty. Every card has numbers and operators on
+ * both sides and no '?'; the answer card is true and every other card false.
+ * @param {Round} round
+ * @returns {string[]}
+ */
+function checkJudging(round) {
+  const problems = [];
+  if (round.equation !== null) problems.push('R1: a judging round has equation null: its exercises are on the cards');
+  for (const { value, rule } of round.choices ?? []) {
+    if (!typed(value, ['card']) || !exercise(value.left) || !exercise(value.right)) {
+      problems.push(`R8: the card ${show(value)} is not numbers and operators on both sides, without '?'`);
+    } else if ((balance(value, []) === 0) !== (rule === null)) {
+      problems.push(`R1: the card ${show(value)} is ${rule === null ? 'the answer but false' : `tagged ${rule} but true`}`);
+    }
+  }
+  return problems;
 }
 
 /**
@@ -174,33 +197,38 @@ export function checkRound(game, level, index, round) {
     const allowed = level[key] === undefined ? [undefined, ...(key === 'eqform' ? ['standard'] : [])] : [level[key]].flat();
     if (!allowed.includes(round[key])) fail(`round.${key} ${round[key]} is not among the level's ${show(level[key])}`);
   }
-  // R1: every given number is a countable or tagged group; each '?' is its unknown group.
-  const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
-  if (!Array.isArray(groups) || !groups.length) return [...problems, 'R1: no picture groups (helpPicture in symbols look)'];
-  const unknowns = groups.filter((g) => g.role === 'unknown' && ['covered', 'items'].includes(g.shown));
   const { equation } = round;
-  if (equation) {
-    const leaves = [...equation.left, ...equation.right];
-    for (const t of leaves) {
-      if (typeof t !== 'number' && t !== '?' && !OPERATORS.includes(t)) fail(`R8: token ${show(t)} (one '=' only; operators + − × :)`);
-      if (typeof t === 'number' && !groups.some((g) => g.count === t && ['items', 'tag'].includes(g.shown))) fail(`R1: ${t} has no countable or tagged group`);
-    }
-    const k = leaves.filter((t) => t === '?').length;
-    const answers = k === 1 ? [round.answer] : round.answer;
-    if (!Array.isArray(answers) || answers.length !== k) fail(`R1: ${k} '?' but the answer is ${show(round.answer)}`);
-    else {
-      answers.forEach((a, i) => unknowns[i]?.count !== a && fail(`R1: '?' ${i + 1} is ${a}, its unknown group has ${unknowns[i]?.count}`));
-      if (balance(equation, answers) !== 0) fail(`R8: ${show(equation)} with ${show(answers)} is not true`);
-      const f = (x) => balance(equation, [x]);
-      if (k === 1 && f(1) === f(0)) fail(`R1: ${show(equation)} does not depend on '?'`);
-      else if (k === 1 && -f(0) / (f(1) - f(0)) !== round.answer) fail(`R1: ${show(equation)} solves to ${-f(0) / (f(1) - f(0))}, not ${round.answer}`);
-    }
-  } else if (unknowns[0]?.count !== round.answer) fail(`R1: no equation, and the answer ${show(round.answer)} is not the unknown group's count`);
+  const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
+  const judging = typed(round.answer, ['card']);
+  if (judging) problems.push(...checkJudging(round));
+  else {
+    // R1: every given number is a countable or tagged group; each '?' is its unknown group.
+    if (!Array.isArray(groups) || !groups.length) return [...problems, 'R1: no picture groups (helpPicture in symbols look)'];
+    const unknowns = groups.filter((g) => g.role === 'unknown' && ['covered', 'items'].includes(g.shown));
+    if (equation) {
+      const leaves = [...equation.left, ...equation.right];
+      for (const t of leaves) {
+        if (typeof t !== 'number' && t !== '?' && !OPERATORS.includes(t)) fail(`R8: token ${show(t)} (one '=' only; operators + − × :)`);
+        if (typeof t === 'number' && !groups.some((g) => g.count === t && ['items', 'tag'].includes(g.shown))) fail(`R1: ${t} has no countable or tagged group`);
+      }
+      const k = leaves.filter((t) => t === '?').length;
+      const answers = k === 1 ? [round.answer] : round.answer;
+      if (!Array.isArray(answers) || answers.length !== k) fail(`R1: ${k} '?' but the answer is ${show(round.answer)}`);
+      else {
+        answers.forEach((a, i) => unknowns[i]?.count !== a && fail(`R1: '?' ${i + 1} is ${a}, its unknown group has ${unknowns[i]?.count}`));
+        if (balance(equation, answers) !== 0) fail(`R8: ${show(equation)} with ${show(answers)} is not true`);
+        const f = (x) => balance(equation, [x]);
+        if (k === 1 && f(1) === f(0)) fail(`R1: ${show(equation)} does not depend on '?'`);
+        else if (k === 1 && -f(0) / (f(1) - f(0)) !== round.answer) fail(`R1: ${show(equation)} solves to ${-f(0) / (f(1) - f(0))}, not ${round.answer}`);
+      }
+    } else if (unknowns[0]?.count !== round.answer) fail(`R1: no equation, and the answer ${show(round.answer)} is not the unknown group's count`);
+  }
   if (round.text !== '' && !game.text.includes(round.text)) fail(`R1: text "${round.text}" is not in the game's text list`);
   if (/[0-9]/.test(round.text) || round.text.split(/\s+/).filter(Boolean).length > 6 || round.text.includes(METEG)) fail('R1: text has a digit, over six words or a meteg');
   if (!level.terms && round.terms?.length !== 0) fail('R1: terms must be [] when the level has terms: false');
-  // R2: a §4.6 row, and the equation has its form (reversed with eqform 'reversed').
-  if (round.structure) {
+  // R2: a §4.6 row, and the equation has its form (reversed with eqform 'reversed'). A judging
+  // round has no unknown, so no row.
+  if (round.structure && !judging) {
     const row = FORMS.find((f) => f.structure === round.structure && f.unknown === round.unknown);
     if (!row) fail(`R2: (${round.structure}, ${round.unknown}) is not a row of the §4.6 table`);
     else if (equation) {
@@ -247,7 +275,7 @@ export function checkRound(game, level, index, round) {
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
   const values = choices.map((c) => c.value);
   if (values.every((v) => typeof v === 'number') && values.some((v, i) => i > 0 && v <= values[i - 1])) fail(`R4: numbers not ascending: ${show(values)}`);
-  for (const a of [round.answer].flat()) {
+  for (const a of judging ? [...round.answer.left, ...round.answer.right] : [round.answer].flat()) {
     if (typeof a === 'number' && (a < (level.min ?? 0) || a > (level.max ?? Infinity))) fail(`R4: the answer ${a} is outside the level's range`);
   }
   return problems;
@@ -303,6 +331,20 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(broken((r) => { r.choices.find((c) => c.rule === 'op.other').rule = 'keyword.added'; }), /keyword/);
   assert.match(broken((r) => { r.unknown = 'whole'; }), /unknown whole is not among/);
   assert.throws(() => withoutRandom(() => Math.random()), /Math\.random/);
+  // A judging round (eq.sign.true-false): cards, one true, no equation.
+  const judge = scale.levels.findIndex((l) => l.skill === 'eq.sign.true-false');
+  const cards = scale.makeRound(scale.levels[judge], rng(3));
+  assert.deepEqual(checkRound(scale, scale.levels[judge], judge, cards), []);
+  const judged = (change) => {
+    const round = structuredClone(cards);
+    change(round);
+    return checkRound(scale, scale.levels[judge], judge, round).join('\n');
+  };
+  const wrongCard = (r) => r.choices.find((c) => c.rule === 'slip.card');
+  assert.match(judged((r) => { wrongCard(r).value = structuredClone(r.answer); }), /tagged slip\.card but true/);
+  assert.match(judged((r) => { r.choices.find((c) => c.rule === null).value.right = [99]; }), /the answer but false/);
+  assert.match(judged((r) => { wrongCard(r).value.right = ['?']; }), /R8: the card/);
+  assert.match(judged((r) => { r.equation = { left: [1, '+', '?'], right: [2] }; }), /equation null/);
   const bad = { ...parts, levels: [parts.levels[1], { ...parts.levels[0], id: 'split-10', model: 'tree', look: 'objects', colour: 'red' }] };
   const problems = checkGame(bad).join('\n');
   assert.match(problems, /used twice/);

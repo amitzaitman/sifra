@@ -2,29 +2,36 @@
 // game branch writes e2e/<id>.spec.js the same way.
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
+import * as scale from '../tests/fixtures/scale/game.js';
 import { FIXTURE, NOW, ladderAt, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 /**
- * Opens a play session of a game whose ladder is at a level (its demo already seen).
+ * Opens a play session of a game whose ladder is at a level (its demo already seen). The seed
+ * fixes the session's rounds, so a failure can be replayed.
  * @param {import('@playwright/test').Page} page
  * @param {string} game
  * @param {string} level a level id
  * @param {object} [over] more ladder fields
+ * @param {number} [seed] fixture.html's seed
  */
-async function playAt(page, game, level, over = {}) {
+async function playAt(page, game, level, over = {}, seed = 1) {
   await seedStore(page, storeWith({ games: { [game]: ladderAt(level, over) } }));
   await page.clock.install({ time: NOW });
-  await page.goto(`${FIXTURE}#/play/${game}`);
+  await page.goto(`${FIXTURE}?seed=${seed}#/play/${game}`);
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
   return roundOf(page);
 }
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
 const unlocked = (page) => expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked');
 const lastAttempt = async (page) => (await stored(page)).child.attempts.at(-1);
+/** What a screen reader gets from the equation row: the '?' until solved, then the answer. */
+const spoken = (equation, answer) => `- paragraph: ${[...equation.left, '=', ...equation.right].map((t) => (t === '?' ? answer : t)).join(' ')}`;
 
 for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
   test(`${game}: a first try closes the picture, writes the equation and puts "הַבָּא" in the cards' place`, async ({ page }) => {
     const { round, answerAt } = await playAt(page, game, level);
+    const row = page.locator('[data-area="equation"] .eq');
+    expect(await row.ariaSnapshot()).toBe(spoken(round.equation, '?'));
     const panel = await page.locator('[data-area="picture"]').boundingBox();
     await page.mouse.click(panel.x + 40, panel.y + 40);
     await card(page, answerAt).click();
@@ -34,6 +41,7 @@ for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
     await expect(answer).toHaveText(String(round.answer));
     await expect(answer).toHaveCSS('opacity', '1');
     await expect(answer).toHaveCSS('color', 'rgb(214, 51, 108)');
+    expect(await row.ariaSnapshot()).toBe(spoken(round.equation, round.answer));
     await expect(page.locator('[data-area="equation"] .cover')).toHaveClass(/is-lifted/);
     await expect(page.locator('[data-next]')).toBeFocused();
     await expect(page.locator('[data-choices]')).toHaveCount(0);
@@ -118,17 +126,46 @@ test('a symbols level shows the picture on request and logs picture', async ({ p
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', help: ['picture'], wrong: [] });
 });
 
+test('"show me how" on a symbols level draws the help picture in the demo', async ({ page }) => {
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}#/dev/parts/3/1`);
+  await expect(page.locator('[data-show-picture]')).toHaveCount(1);
+  await page.locator('[data-how]').click();
+  await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+  await expect(page.locator('[data-show-picture]')).toHaveCount(0);
+  await expect(page.locator('[data-area="picture"] [data-role="part"]').first()).toBeVisible();
+});
+
+test('a judging round: the cards read as exercises, a wrong one gets its display, the true one solves it', async ({ page }) => {
+  await page.clock.install({ time: NOW });
+  const n = scale.levels.findIndex((l) => l.skill === 'eq.sign.true-false') + 1;
+  await page.goto(`${FIXTURE}#/dev/scale/${n}/1`);
+  const { round, answerAt } = await roundOf(page);
+  for (const [i, { value }] of round.choices.entries()) {
+    await expect(card(page, i)).toHaveAttribute('aria-label', [...value.left, '=', ...value.right].join(' '));
+  }
+  const wrong = answerAt === 0 ? 1 : 0;
+  await card(page, wrong).click();
+  await expect(card(page, wrong)).toHaveClass(/is-retired/);
+  await expect(page.locator(`[data-display="${RULES[round.choices[wrong].rule].display}"]`)).toBeVisible();
+  await unlocked(page);
+  await card(page, answerAt).click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  await expect(page.locator('[data-next]')).toBeFocused();
+});
+
 test('R6: the first dot is left of the second', async ({ page }) => {
-  await playAt(page, 'parts', 'split-10');
+  // Seed 2 opens on a round with five part dots.
+  await playAt(page, 'parts', 'split-10', {}, 2);
   const dots = page.locator('[data-area="picture"] [data-role="part"]');
-  if ((await dots.count()) < 2) return;
+  expect(await dots.count()).toBeGreaterThanOrEqual(2);
   expect((await dots.nth(0).boundingBox()).x).toBeLessThan((await dots.nth(1).boundingBox()).x);
 });
 
 test('a session of 8 rounds ends on the solved pictures and the home button', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install({ time: NOW });
-  await page.goto(`${FIXTURE}#/play/scale`);
+  await page.goto(`${FIXTURE}?seed=1#/play/scale`);
   for (let n = 0; n < 20; n++) {
     const screen = page.locator('main[data-screen]');
     await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);

@@ -2,7 +2,7 @@
 // demos and the error screen. The shell owns levels, storage and records; games only draw.
 import { drawCards } from './lib/cards.js';
 import { cover } from './lib/cover.js';
-import { drawEquation, fitEquation } from './lib/equation.js';
+import { drawEquation, fitEquation, solveEquation } from './lib/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './lib/ladder.js';
 import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './lib/planner.js';
 import { demoSeed, rng, seedFrom } from './lib/rng.js';
@@ -30,7 +30,10 @@ const MIX = 0x5bd1e995;
 /** @type {any} the started shell: games, store, clock, the current screen's controller */
 let S = null;
 
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/** @type {(a: any, b: any) => boolean} deep equality of plain data, whatever the key order (an answer card is an object) */
+const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' &&
+  Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length &&
+  Object.keys(a).every((k) => Object.hasOwn(b, k) && same(a[k], b[k])));
 const today = () => dayOf(S.now());
 const child = () => childOf(S.store);
 const persist = () => save(S.store);
@@ -70,19 +73,24 @@ const homeButton = (props = {}) => control('home', T.home, () => { location.hash
 function screen(name, title, attrs = {}) {
   S.ctl?.abort();
   S.ctl = new AbortController();
+  S.thumbs.length = 0;
   const main = h('main', { 'data-screen': name, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
   return main;
 }
 
-/** A still picture of a round (home, the end screen); app.css stops motion under [data-thumb]. */
+/**
+ * A still picture of a round (home, the end screen); app.css stops motion under [data-thumb].
+ * It is drawn by drawThumbs() once the host is in the page, so render can measure it as in a round.
+ */
 function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
   const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, onAttempt() {} };
-  game.render(host, game.makeRound(level, rng(seed)), ctx);
+  S.thumbs.push(() => game.render(host, game.makeRound(level, rng(seed)), ctx));
   return host;
 }
+const drawThumbs = () => S.thumbs.splice(0).forEach((draw) => draw());
 
 function home() {
   const main = screen('home', T.brand);
@@ -98,6 +106,7 @@ function home() {
     thumb(g, still(g, ladderIndex(g))), h('span', {}, g.meta.title));
   if (S.games.length) main.append(h('h2', { class: 'all' }, T.all), h('nav', { class: 'games' }, S.games.map(card)));
   if (VERIFIED) main.append(h('a', { class: 'parents-link', href: '#/parents', 'data-parents': true }, T.parents));
+  drawThumbs();
 }
 
 /** #/next: follows the next step (a jump moves the game's level, 3.6), then plays that game. */
@@ -140,9 +149,9 @@ function nextRound(session) {
     }
     if (needsDemo(ladder, level)) {
       child().games[game.meta.id] = sawDemo(ladder, level.id);
-      spec.demo = 'auto';
+      spec.demo = ['auto'];
       persist();
-      return demo(game, spec, () => mount(session, spec));
+      return demo(game, spec, () => mount(session, spec), session.done.length);
     }
   }
   mount(session, spec);
@@ -158,8 +167,8 @@ function mount(session, spec) {
     onHow: (solved) => {
       // "Show me how" (2.6): a demo, then the same round from the start; the record goes on.
       if (!solved && !spec.record.help.includes('how')) spec.record.help.push('how');
-      if (!solved) spec.demo = 'how';
-      demo(game, spec, solved ? r.next : () => mount(session, spec));
+      if (!solved && !(spec.demo ??= []).includes('how')) spec.demo.push('how');
+      demo(game, spec, solved ? r.next : () => mount(session, spec), session.done.length);
     } });
 }
 
@@ -176,7 +185,7 @@ function finish(session, spec, level, round, outcome) {
   capped(c.attempts, {
     t: S.now().toISOString(), day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id,
     skill: level.skill, seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome,
-    wrong: rec.wrong, firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: rec.help, demo: spec.demo ?? null, taps: rec.taps,
+    wrong: rec.wrong, firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: rec.help, demo: spec.demo ?? [], taps: rec.taps,
     options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]), sinceDays: last ? daysBetween(last, day) : null,
   }, CAPS.attempts);
   if (stuck) {
@@ -232,6 +241,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     label();
   };
   if (!shown) host.append(control('picture', T.picture, () => picture(true), { 'data-show-picture': true }));
+  if (mode === 'demo') picture(false);   // a demo draws the help picture from the start (2.6)
   label();
   // Off-target taps: not a button, a link or a [data-target]; counted by area (pedagogy 5.7).
   main.addEventListener('pointerdown', (e) => {
@@ -267,7 +277,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     onSolved?.(rec.tour ? 'shown' : rec.wrong.length || rec.help.length ? 'help' : 'first');
     cards.correct(i);
     main.setAttribute('data-solved', '');
-    for (const lid of eq.covers) lid.classList.add('is-lifted');
+    solveEquation(eq);
     await Promise.all([settle(eqArea, signal), view.solve?.()]);
     if (signal.aborted) return;
     const label = `<span>${T.next}</span>${svg('next')}`;
@@ -280,14 +290,17 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   return { main, view, cards, answerAt, solve, signal, next };
 }
 
-/** The demo (2.6): a round from the demo seed, cards locked; the game's steps, then the hand taps the answer. Nothing is written. */
-function demo(game, spec, then) {
+/**
+ * The demo (2.6): a round from the demo seed, cards locked, the help picture drawn in symbols look;
+ * the game's steps, then the hand taps the answer. Nothing is written; the bar keeps `done`.
+ */
+function demo(game, spec, then, done = 0) {
   const level = built(game, spec);
-  const real = JSON.stringify(game.makeRound(level, rng(spec.seed)));
+  const real = game.makeRound(level, rng(spec.seed));
   let seed = demoSeed(spec.seed);
-  for (let n = 0; n < 50 && JSON.stringify(game.makeRound(level, rng(seed))) === real; n++) seed = (seed + 1) >>> 0;
+  for (let n = 0; n < 50 && same(game.makeRound(level, rng(seed)), real); n++) seed = (seed + 1) >>> 0;
   const round = game.makeRound(level, rng(seed));
-  const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', onNext: then });
+  const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
   /** @type {Hand} moves the hand onto an element and taps (slower motion is allowed inside [data-demo]) */
@@ -313,6 +326,7 @@ function end(session) {
   const thumbs = session.done.map((spec) => thumb(S.byId.get(spec.game), built(S.byId.get(spec.game), spec), spec.seed, true));
   const home = h('div', { class: 'end-home' }, homeButton({ class: 'next btn btn-action' }));
   main.append(h('div', { class: 'end-thumbs' }, thumbs), home);
+  drawThumbs();
 }
 
 function parents() {
@@ -344,7 +358,7 @@ function dev(game, n, seed, choice) {
 function devExport() {
   const download = async () => {
     const persisted = (await navigator.storage?.persisted?.().catch(() => null)) ?? null;
-    const { name, text } = exportFile(S.storage, S.now(), persisted);
+    const { name, text } = exportFile(S.storage, S.now(), persisted, today());
     h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name }).click();
   };
   const main = screen('export', 'export');
@@ -388,7 +402,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
     store = null;
   }
   const ordered = homeOrder(games, SKILLS);
-  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null,
+  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [],
     seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]) };
   errorScreen();
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
