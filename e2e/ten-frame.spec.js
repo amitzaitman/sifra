@@ -46,7 +46,10 @@ async function playAt(page, level, over = {}) {
  */
 async function devAt(page, id, ok = () => true) {
   let seed = 1;
-  while (!ok(game.makeRound(game.levels[number(id) - 1], rng(seed)))) seed += 1;
+  while (!ok(game.makeRound(game.levels[number(id) - 1], rng(seed)))) {
+    seed += 1;
+    if (seed > 5000) throw new Error(`no round of ${id} passes the test`);
+  }
   const round = game.makeRound(game.levels[number(id) - 1], rng(seed));
   await page.clock.install({ time: NOW });
   await page.goto(`${INDEX}#/dev/${ID}/${number(id)}/${seed}`);
@@ -83,7 +86,9 @@ for (const [level, kind] of KINDS) {
       await expect(answer).toHaveCSS('color', 'rgb(214, 51, 108)');
     }
     const unknowns = page.locator('[data-area="picture"] [data-role="unknown"]');
-    expect(await unknowns.count()).toBeGreaterThan(0);
+    // Nothing under the cover (level 2, about one round in ten): the closing rings the empty place with 0.
+    if (round.answer === 0) await expect(page.locator('[data-area="picture"] .tf-ring.is-zero')).toBeVisible();
+    else expect(await unknowns.count()).toBeGreaterThan(0);
     for (const node of await unknowns.all()) {
       await expect(node).toHaveCSS('opacity', '1');
       await expect(node).toHaveCSS('background-color', 'rgb(214, 51, 108)');
@@ -145,7 +150,9 @@ test('the tour counts the unknown from 1 when it is a part, and on from ten when
   expect(await tours('ten-empty', (r) => r.answer === 0)).toEqual(['0']);
   expect(await tours('teen-bundle', (r) => r.answer === 14)).toEqual(['10', '11', '12', '13', '14']);
   expect(await tours('bridge-frames', (r) => r.equation.left[0] === 8 && r.equation.left[2] === 5)).toEqual(['10', '11', '12', '13']);
-  await expect(page.locator('[data-area="equation"] .eq'), 'the first frame filled: 10 + 3').toHaveText(/^10\+3=/);
+  await expect(page.locator('[data-area="equation"] .eq'), 'fixed frames: nothing moves, the exercise stays').toHaveText(/^8\+5=/);
+  expect(await tours('bridge-move', (r) => r.equation.left[0] === 8 && r.equation.left[2] === 5)).toEqual(['10', '11', '12', '13']);
+  await expect(page.locator('[data-area="equation"] .eq'), 'level 10: the first frame filled, 10 + 3').toHaveText(/^10\+3=/);
   expect(await tours('split-pairs', (r) => r.answer[0] === 2 && r.answer[1] === 3)).toEqual(['1', '2', '1', '2', '3']);
   expect(await tours('split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0)).toEqual(['1', '2', '3', '4', '5', '6', '7', '0']);
 });
@@ -346,4 +353,170 @@ test('a session of 8 rounds ends on the solved pictures, and a round after it pl
   await card(page, (await roundOf(page)).answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
   expect(await lastAttempt(page)).toMatchObject({ session: 2, outcome: 'first' });
+});
+
+/**
+ * The text boxes of elements, as drawn (Range rects include transforms), in DOM order.
+ * @param {import('@playwright/test').Locator} locator
+ */
+const textBoxes = (locator) => locator.evaluateAll((els) => els.map((el) => {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const { left, right, top, bottom } = range.getBoundingClientRect();
+  return { text: el.textContent, left, right, top, bottom, size: parseFloat(getComputedStyle(el).fontSize), cls: el.className };
+}));
+
+/** No two boxes on one line touch: at least 2px apart (design 4: digits at 14px and more stay separate). */
+function expectApart(boxes) {
+  for (const [i, a] of boxes.entries()) {
+    for (const b of boxes.slice(i + 1)) {
+      const sameLine = a.top < b.bottom && b.top < a.bottom;
+      if (sameLine) expect(Math.max(b.left - a.right, a.left - b.right), `"${a.text}" and "${b.text}"`).toBeGreaterThanOrEqual(2);
+    }
+  }
+}
+
+/** Plays every wrong card of a #/dev round, so the tour runs. */
+async function toTheTour(page, round, answerAt) {
+  for (const i of round.choices.keys()) {
+    if (i === answerAt) continue;
+    await card(page, i).click();
+    await unlocked(page);
+  }
+}
+
+test('bundles at 320px: the digits above the sticks stay apart, above the outline, the last one grown (design 4, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  // count-up (a slip card comes only where the place-value rules leave room: 10 and 11).
+  const near = await devAt(page, 'teen-bundle', (r) => r.answer === 11 && r.choices.some((c) => c.rule === 'slip.near' && c.value === 12));
+  await card(page, near.round.choices.findIndex((c) => c.rule === 'slip.near')).click();
+  await unlocked(page);
+  const shown = await textBoxes(page.locator('[data-display="count-up"] .tf-digit'));
+  expect(shown.map((d) => d.text)).toEqual(['10', '11', '12']);
+  expectApart(shown);
+  const { round, answerAt } = await devAt(page, 'teen-bundle', (r) => r.answer === 19);
+  await toTheTour(page, round, answerAt);
+  const tour = await textBoxes(page.locator('[data-tour]'));
+  expect(tour.map((d) => d.text)).toEqual(['10', '11', '12', '13', '14', '15', '16', '17', '18', '19']);
+  expect(tour.every((d) => d.size >= 14)).toBe(true);
+  expectApart(tour);
+  expect(tour.at(-1).bottom - tour.at(-1).top, 'the last digit grows').toBeGreaterThan(tour[1].bottom - tour[1].top);
+  // The group's outline is drawn under the digits, and its line passes below them.
+  const layer = page.locator('.tf-layer').filter({ has: page.locator('[data-tour]') });
+  expect(await layer.evaluate((el) => el.firstElementChild?.tagName.toLowerCase())).toBe('svg');
+  const line = await layer.locator('svg .tf-line').boundingBox();
+  expect(Math.max(...tour.map((d) => d.bottom))).toBeLessThanOrEqual(line.y);
+});
+
+test('a cover over a run of cells covers each of them, and its two pieces meet by a 4px bar (design 6.6)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  for (const [level, ok] of [['ten-cover', (r) => r.equation.left[0] === 3], ['split-10', (r) => r.equation.left[0] === 3 && r.equation.right[0] === 9]]) {
+    const { round } = await devAt(page, level, ok);
+    const misses = await page.evaluate(() => {
+      const out = [];
+      const lids = [...document.querySelectorAll('[data-area="picture"] .tf-lid')];
+      // Every cell under a lid: near its top and bottom edges, a quarter in from either side, is the
+      // cover itself (hit testing follows the dome's rounded corners), not the lid's box around it.
+      for (const cell of document.querySelectorAll('[data-area="picture"] .tf-cell')) {
+        const c = cell.getBoundingClientRect();
+        const lid = lids.find((l) => {
+          const b = l.getBoundingClientRect();
+          return c.left >= b.left - 1 && c.right <= b.right + 1 && c.top >= b.top - 1 && c.bottom <= b.bottom + 1;
+        });
+        if (!lid) continue;
+        for (const [fx, fy] of [[0.25, 0.2], [0.75, 0.2], [0.25, 0.85], [0.75, 0.85], [0.5, 0.1]]) {
+          const hit = document.elementFromPoint(c.left + fx * c.width, c.top + fy * c.height);
+          if (!hit?.matches('.cover')) out.push(`${cell.style.getPropertyValue('--x')},${cell.style.getPropertyValue('--y')} at ${fx},${fy}: ${hit?.className}`);
+        }
+      }
+      return out;
+    });
+    expect(misses, `${level}: ${JSON.stringify(round.equation)}`).toEqual([]);
+    const bar = await page.locator('[data-area="picture"] .tf-span').boundingBox();
+    expect(bar.width).toBeLessThanOrEqual(4.5);
+  }
+});
+
+test('fixed frames (level 11): the split labelled once per part, the ten counted in place, the exercise kept', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const { round, answerAt } = await devAt(page, 'bridge-frames', (r) => r.equation.left[0] === 6 && r.equation.left[2] === 9);
+  const wrong = round.choices.map((_, i) => i).filter((i) => i !== answerAt);
+  const counters = page.locator('[data-area="picture"] .tf-disc[data-role="part"]');
+  const where = () => counters.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((b) => [Math.round(b.x), Math.round(b.y)]));
+  const before = await where();
+  await card(page, wrong[0]).click();
+  await unlocked(page);
+  await card(page, wrong[1]).click();
+  await unlocked(page);
+  // 9 = 4 + 5: one number per part. The rest wraps a row and is still one outline.
+  const chips = page.locator('[data-hint] .tf-chip');
+  await expect(chips).toHaveText(['4', '5']);
+  await expect(page.locator('[data-hint] svg')).toHaveCount(1);
+  await card(page, wrong[2]).click();
+  await unlocked(page);
+  await expect(page.locator('[data-tour]')).toHaveText(['10', '11', '12', '13', '14', '15']);
+  expect(await where(), 'nothing moved').toEqual(before);
+  await expect(page.locator('[data-area="equation"] .eq')).toHaveText(/^6\+9=/);
+  // The ten's chip sits above the first frame, clear of the hint's numbers.
+  const ten = await page.locator('[data-tour="10"]').boundingBox();
+  for (const chip of await chips.all()) {
+    const b = await chip.boundingBox();
+    expect(ten.y + ten.height <= b.y || b.y + b.height <= ten.y || ten.x + ten.width <= b.x || b.x + b.width <= ten.x).toBe(true);
+  }
+  expect(ten.y + ten.height).toBeLessThanOrEqual((await page.locator('.tf-tray').first().boundingBox()).y + 4);
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await expect(page.locator('[data-area="equation"] .eq')).toHaveText('6+9=15');
+});
+
+test('pair cards at 320px: count-up digits on ghosts are 19px, two-digit ones on a label, none touching (design 4)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  const slip = (r) => r.choices.find((c) => c.rule === 'slip.near');
+  const { round } = await devAt(page, 'split-pairs', (r) => slip(r) && slip(r).value[0] + slip(r).value[1] === 11 && slip(r).value[0] % 5 !== 0);
+  await card(page, round.choices.indexOf(slip(round))).click();
+  await unlocked(page);
+  const digits = await textBoxes(page.locator('[data-display="count-up"] .tf-digit'));
+  expect(digits.map((d) => d.text)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+  for (const d of digits) {
+    if (d.text.length === 1) expect(d.size, d.text).toBeGreaterThanOrEqual(19);
+    else expect(d.cls, d.text).toContain('is-label');
+  }
+  expectApart(digits);
+  const label = page.locator('[data-display="count-up"] .tf-digit.is-label').first();
+  await expect(label).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+});
+
+test('the picture label says one in the singular (R1 templates)', async ({ page }) => {
+  await devAt(page, 'split-5', (r) => r.equation.left[0] === 1);
+  await expect(page.locator('[data-area="picture"]')).toHaveAttribute('aria-label', /עִגּוּל אֶחָד וּמִכְסֶה$/);
+  await devAt(page, 'ten-empty', (r) => r.answer === 1);
+  await expect(page.locator('[data-area="picture"]')).toHaveAttribute('aria-label', /, תָּא רֵיק אֶחָד$/);
+});
+
+test('the second miss locks the cards under a second, also where the cover lifts for the hint (design 7.1)', async ({ page }) => {
+  // The second miss is given.whole: its display (flash) leaves the cover down, so the hint lifts it.
+  const { round } = await devAt(page, 'split-10', (r) => r.answer > 0 && r.choices.some((c) => c.rule === 'given.whole'));
+  const wrong = [round.choices.findIndex((c) => c.rule && c.rule !== 'given.whole'), round.choices.findIndex((c) => c.rule === 'given.whole')];
+  await card(page, wrong[0]).click();
+  await unlocked(page);
+  // Timed on the animation timeline, which the page's fake clock does not touch.
+  await page.evaluate(() => {
+    const row = document.querySelector('[data-choices]');
+    const w = /** @type {any} */ (window);
+    w.lockTimes = [];
+    const lifting = () => document.getAnimations().some((a) => a.playState === 'running' && /** @type {KeyframeEffect} */ (a.effect)?.target?.matches('.cover'));
+    new MutationObserver(() => w.lockTimes.push([row.hasAttribute('data-locked'), document.timeline.currentTime, lifting()]))
+      .observe(row, { attributes: true, attributeFilter: ['data-locked'] });
+  });
+  await card(page, wrong[1]).click();
+  await unlocked(page);
+  await expect(page.locator('[data-hint]')).toBeVisible();
+  const times = await page.evaluate(() => /** @type {any} */ (window).lockTimes);
+  const on = times.find(([locked]) => locked);
+  const off = times.findLast(([locked]) => !locked);
+  expect(off[2], 'the cards are open while the cover still lifts').toBe(true);
+  expect(off[1] - on[1]).toBeGreaterThan(500);
+  expect(off[1] - on[1]).toBeLessThan(1000);
 });

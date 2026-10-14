@@ -76,6 +76,24 @@ test('runPath: one rectangle in a row, a stepped outline over two rows, two rect
   assert.equal(shapes(3, 7), 1, 'cells 3-9: one outline');
   assert.equal(corners(3, 7), 7, 'with a step');
   assert.equal(shapes(4, 2), 2, 'cell 4 and cell 5 only touch at a corner');
+  const joined = (from, n) => runPath(L.cells.slice(from, from + n), 0.1, true).split('M').length - 1;
+  assert.equal(joined(4, 2), 1, 'joined: one outline for one group, also across the row end');
+  assert.equal(joined(4, 5), 1);
+  assert.equal(runPath(L.cells.slice(3, 10), 0.1, true), runPath(L.cells.slice(3, 10), 0.1), 'rows that overlap: the same step');
+});
+
+test('bundles: digits above the sticks are a pitch apart and clear of an outline around them; two frames have room for a 10 above', () => {
+  const B = layoutBundles({ ones: 9 });
+  const row = Array.from({ length: 10 }, (_, j) => B.above(B.stick(j)));
+  row.forEach((box, j) => {
+    assert.ok(box.y >= 0, 'inside the drawing');
+    // An outline padded 0.18 around the sticks, its 9px halo reaching about 0.25 units at 320px.
+    assert.ok(box.y + box.h <= B.stick(j).y - 0.18 - 0.25, 'above the outline and its halo');
+    if (j) assert.ok(box.x - row[j - 1].x >= 1.1 - 1e-9, 'two digits fit between neighbours');
+  });
+  const F = layoutFrame({ frames: 2, rows: 2, tag: true });
+  assert.ok(F.tag.y >= 0 && F.tag.y + F.tag.h <= F.trays[0].y + 0.1, 'the 10 sits on the first frame\'s top edge, above its cells');
+  assert.ok(F.tag.y + F.tag.h <= F.cells[0].y);
 });
 
 test('R6, R7: the bond has the whole on top and the parts below it; bundles keep the ten left of the ones', () => {

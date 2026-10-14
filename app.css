@@ -87,9 +87,13 @@ main {
 .eq-answer { opacity: 0; color: var(--role-unknown); }
 [data-solved] .eq-answer { opacity: 1; }
 
-/* The one cover (design 6.6): a dome; it lifts 60% of its height and fades in 250ms. */
+/* The one cover (design 6.6): a dome; it lifts 60% of its height and fades in 250ms. Its corners
+   come from its height: a cover wider than tall (a run of places in a picture) sets --cover-h to
+   that height, keeps the dome's corners at its ends, and covers every place between them. */
 .cover {
-  position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50% 50% 20% 20% / 80% 80% 20% 20%;
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border-radius: min(50%, var(--cover-h, 100vmax) / 2) min(50%, var(--cover-h, 100vmax) / 2)
+    min(20%, var(--cover-h, 100vmax) / 5) min(20%, var(--cover-h, 100vmax) / 5) / 80% 80% 20% 20%;
   background: var(--role-unknown); color: var(--on-unknown); font-size: min(var(--cover-fs, 0.78em), 38px); font-weight: 800; line-height: 1;
 }
 .cover::after { content: attr(data-mark); }

@@ -144,7 +144,23 @@ export const segments = (cells) => [...new Set(cells.map((c) => `${c.frame}:${c.
   .map((key) => around(cells.filter((c) => `${c.frame}:${c.row}` === key)));
 
 /**
- * The cover over a run of cells: a piece per row, joined by a 4px bridge, '?' on the first only
+ * The bridge between two pieces of a cover, in the lower piece's own box (design 6.6): a 4px bar
+ * (game.css) across the gap at the first piece's first cell, where both pieces have that column;
+ * when they share none (the run wraps from the row's end to the next row's start), a bar along the
+ * gap from the lower piece's last cell to the upper piece's first. Both ends meet a flat edge.
+ * @param {import('./layout.js').Box} a the upper piece
+ * @param {import('./layout.js').Box} b the lower piece
+ * @returns {HTMLElement}
+ */
+function bridge(a, b) {
+  const [x, last] = [a.x + 0.5, b.x + b.w - 0.5];
+  const gap = { y: a.y + a.h - b.y, h: b.y - a.y - a.h };
+  if (x <= last) return put(el('span', 'tf-span is-bar'), { x: x - b.x, ...gap, w: 0 });
+  return put(el('span', 'tf-span'), { x: last - b.x, ...gap, w: x - last });
+}
+
+/**
+ * The cover over a run of cells: a piece per row, joined by a bridge, '?' on the first only
  * (design 6.6).
  * @param {Element} parent
  * @param {import('./layout.js').Cell[]} cells
@@ -153,14 +169,7 @@ function lids(parent, cells) {
   const pieces = segments(cells);
   return pieces.map((box, i) => {
     const node = lid(parent, box, i === 0 ? '?' : '');
-    if (i > 0) {
-      const [a, b] = [pieces[i - 1], box];
-      const [ax, bx] = [a.x + 0.5, b.x + b.w - 0.5];
-      const x = Math.min(ax, bx) - 0.06;
-      const w = Math.max(0.12, Math.abs(ax - bx) + 0.12);
-      // In the lid's own box: from the gap above it to its top edge.
-      put(node.appendChild(el('span', 'tf-span')), { x: x - b.x, y: a.y + a.h - b.y, w, h: b.y - a.y - a.h });
-    }
+    if (i > 0) node.append(bridge(pieces[i - 1], box));
     return node;
   });
 }
@@ -252,11 +261,12 @@ export function drawBundles(host, d) {
 /**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
  * second in the second; trays without a role (R6). Each counter carries a veil for the closing.
+ * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d
  */
 export function drawBridge(host, d) {
-  const L = layoutFrame({ frames: 2, rows: 2 });
+  const L = layoutFrame({ frames: 2, rows: 2, tag: true });
   const trays = L.trays.map((t) => at(host, 'tf-tray is-frame', t));
   const cells = L.cells.map((c) => at(host, 'tf-cell', c));
   const counter = (i, j) => {

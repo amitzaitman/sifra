@@ -51,8 +51,13 @@ export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, 
   };
 }
 
-const DOT = 0.84;
+const DOT = 0.95;
 const R = 1.35;
+/**
+ * The dot pitch of the bond: wide enough that two two-digit count-up digits side by side
+ * ("10", "11" on pair cards) do not touch at 320px (design 4).
+ */
+const DOT_PITCH = 1.3;
 
 /**
  * Rows of five dots from a top-left corner, one dot pitch apart.
@@ -60,7 +65,9 @@ const R = 1.35;
  * @param {number} y
  * @returns {(i: number) => Box}
  */
-const grid = (x, y) => (i) => ({ x: x + (i % 5), y: y + Math.floor(i / 5), w: DOT, h: DOT });
+const grid = (x, y) => (i) => ({ x: x + (i % 5) * DOT_PITCH, y: y + Math.floor(i / 5) * DOT_PITCH, w: DOT, h: DOT });
+/** The width of a row of five dots. */
+const ROW = 4 * DOT_PITCH + DOT;
 
 /**
  * The number bond (model tree, Singapore 1A): the whole's circle on top with its dots beside it,
@@ -70,22 +77,29 @@ const grid = (x, y) => (i) => ({ x: x + (i % 5), y: y + Math.floor(i / 5), w: DO
 export function layoutTree({ whole }) {
   const top = { x: 7.2 - R, y: 0.3, w: 2 * R, h: 2 * R };
   const rows = whole > 5 ? 2 : 1;
-  const wholeAt = grid(top.x + 2 * R + 0.45, top.y + R - (rows - 1 + DOT) / 2);
+  const wholeAt = grid(top.x + 2 * R + 0.35, top.y + R - ((rows - 1) * DOT_PITCH + DOT) / 2);
   const left = { x: 3.6 - R, y: 4.55, w: 2 * R, h: 2 * R };
   const right = { x: 10.8 - R, y: 4.55, w: 2 * R, h: 2 * R };
-  const under = (c) => grid(c.x + R - 2 - DOT / 2, c.y + 2 * R + 0.35);
-  const dh = left.y + 2 * R + 0.35 + 1 + DOT + 0.3;
+  const under = (c) => grid(c.x + R - ROW / 2, c.y + 2 * R + 0.35);
+  /** @param {number} n dots in rows of five under a part circle: the bottom of the drawing below them */
+  const below = (n) => left.y + 2 * R + 0.35 + (Math.ceil(Math.max(1, n) / 5) - 1) * DOT_PITCH + DOT + 0.3;
+  const dh = below(6);
   return {
-    dw: 14.4, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
+    dw: top.x + 2 * R + 0.35 + ROW + 0.3, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
     /** @param {number} n dots under a part circle: the height that holds them */
-    height: (n) => Math.max(dh, left.y + 2 * R + 0.35 + Math.ceil(Math.max(1, n) / 5) - 1 + DOT + 0.3),
+    height: (n) => Math.max(dh, below(n)),
   };
 }
 
 const STICK = { w: 0.4, h: 3.4 };
 const BUNDLE = 1.7;
-const PITCH = 0.8;
-const LIFT = 1.0;
+/**
+ * Loose sticks one pitch apart: two-digit digits above them (count-up, the tour) stay apart at
+ * their 14px minimum on a 320px screen (design 4, 7.2).
+ */
+const PITCH = 1.1;
+/** Room above the sticks for a row of digits clear of the group's outline and its halo. */
+const LIFT = 1.4;
 
 /**
  * A bundle of ten and loose sticks, the ten left of the ones (R7, place value 4.5), with room
@@ -106,8 +120,8 @@ export function layoutBundles({ ones }) {
   const below = LIFT + STICK.h + 0.7;
   return {
     dw: Math.max(7.5, base.right + 0.3), dh: LIFT + STICK.h + 0.3, bundle: base.bundles[0], stick: (i) => row(1, i + 1, LIFT).sticks[i],
-    /** @param {Box} b a digit's box above a stick or bundle */
-    above: (b) => ({ x: b.x + b.w / 2 - 0.5, y: b.y - 0.86, w: 1, h: 0.76 }),
+    /** @param {Box} b a digit's box above a stick or bundle, above the halo of an outline around them */
+    above: (b) => ({ x: b.x + b.w / 2 - 0.5, y: b.y - 1.2, w: 1, h: 0.76 }),
     row, below, belowH: below + STICK.h + 0.3,
   };
 }
@@ -138,12 +152,15 @@ export function pictureOf(round) {
 
 /**
  * An SVG path around a run of cells of one frame in fill order (at most two rows), padded: one
- * rectangle, a stepped outline when the rows overlap, or two rectangles.
+ * rectangle, a stepped outline when the rows overlap, or two rectangles. With join, rows that
+ * do not overlap are still one outline: the two boxes and a line along the gap between the rows,
+ * from the lower row's end to the upper row's start (one group, one label).
  * @param {Cell[]} cells
  * @param {number} pad
+ * @param {boolean} [join]
  * @returns {string}
  */
-export function runPath(cells, pad) {
+export function runPath(cells, pad, join = false) {
   if (!cells.length) return '';
   const rows = [...new Set(cells.map((c) => c.row))];
   const span = (row) => {
@@ -155,7 +172,7 @@ export function runPath(cells, pad) {
   if (rows.length === 1) return rect(span(rows[0]));
   const [a, b] = [span(rows[0]), span(rows[1])];
   const cols = (row) => cells.filter((c) => c.row === row).map((c) => c.col);
-  if (Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(a) + rect(b);
+  if (!join && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(a) + rect(b);
   const mid = (a.b - pad + b.t + pad) / 2;
   return `M${n(a.l)} ${n(a.t)}H${n(a.r)}V${n(mid)}H${n(b.r)}V${n(b.b)}H${n(b.l)}V${n(mid)}H${n(a.l)}Z`;
 }

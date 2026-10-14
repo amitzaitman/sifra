@@ -39,6 +39,8 @@ export const levels = [
   { id: 'ten-cover', ...ten },
   { id: 'ten-symbols', ...ten, look: 'symbols', eqform: ['standard', 'reversed'] },
   { id: 'teen-bundle', ...teen, demo: true },
+  // Pedagogy 6.2 gives level 9 `unknown: part` (14 = 10 + ?); the skill's rules cannot tag its
+  // wrong cards (R4), so it asks for the whole until the owner decides (architecture 6, open questions).
   { id: 'teen-symbols', ...teen, look: 'symbols', eqform: ['standard', 'reversed'] },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
@@ -274,14 +276,19 @@ export function makeRound(level, rng) {
 
 // ---------- The picture ----------
 
+/** @type {(n: number) => string} counters, in the singular for one */
+const circles = (n) => (n === 1 ? 'עִגּוּל אֶחָד' : `${n} עִגּוּלִים`);
+/** @type {(n: number) => string} empty cells, in the singular for one */
+const empties = (n) => (n === 1 ? 'תָּא רֵיק אֶחָד' : `${n} תָּאִים רֵיקִים`);
+
 /** Labels of the picture (locked templates, R1), for the panel's aria-label. */
 const LABEL = {
   /** @type {(w: number, p: number) => string} */
-  split: (w, p) => `מִסְגֶּרֶת: ${w} בְּסַךְ הַכֹּל, ${p} עִגּוּלִים וּמִכְסֶה`,
+  split: (w, p) => `מִסְגֶּרֶת: ${w} בְּסַךְ הַכֹּל, ${circles(p)} וּמִכְסֶה`,
   /** @type {(p: number, n: number) => string} */
-  open: (p, n) => `מִסְגֶּרֶת עֶשֶׂר: ${p} עִגּוּלִים, ${n} תָּאִים רֵיקִים`,
+  open: (p, n) => `מִסְגֶּרֶת עֶשֶׂר: ${circles(p)}, ${empties(n)}`,
   /** @type {(p: number) => string} */
-  covered: (p) => `מִסְגֶּרֶת עֶשֶׂר: ${p} עִגּוּלִים וּמִכְסֶה`,
+  covered: (p) => `מִסְגֶּרֶת עֶשֶׂר: ${circles(p)} וּמִכְסֶה`,
   /** @type {(w: number, p: number) => string} */
   bond: (w, p) => `קֶשֶׁר מִסְפָּרִים: ${w}, ${p} וּמִכְסֶה`,
   /** @type {(w: number) => string} */
@@ -289,7 +296,7 @@ const LABEL = {
   /** @type {(k: number) => string} */
   bundle: (k) => (k === 0 ? 'צְרוֹר שֶׁל עֶשֶׂר' : k === 1 ? 'צְרוֹר שֶׁל עֶשֶׂר וְעוֹד קַשִּׁית אַחַת' : `צְרוֹר שֶׁל עֶשֶׂר וְעוֹד ${k} קַשִּׁיּוֹת`),
   /** @type {(a: number, b: number) => string} */
-  frames: (a, b) => `שְׁתֵּי מִסְגָּרוֹת: ${a} עִגּוּלִים וְ-${b} עִגּוּלִים`,
+  frames: (a, b) => `שְׁתֵּי מִסְגָּרוֹת: ${circles(a)} וְ-${circles(b)}`,
 };
 
 /** @type {(p: { kind: string, data: any }) => string} the picture's label, from LABEL */
@@ -364,13 +371,16 @@ export function render(host, round, ctx) {
   const draw = () => {
     pic = drawRound(host, round, still && ctx.solved);
     if (still) return;
-    // The first frame full: the exercise becomes 10 + the rest (level 10's move, the tour, the demo).
-    let rewritten = false;
-    pic.full = () => {
-      if (rewritten) return;
-      rewritten = true;
-      ctx.setEquation({ left: [10, '+', pic.bottom.length], right: ['?'] });
-    };
+    // The first frame full: the exercise becomes 10 + the rest. Only level 10 moves counters
+    // (pedagogy 6.2); fixed frames keep the child's exercise to the end.
+    if (pic.kind === 'bridge' && pic.d.move) {
+      let rewritten = false;
+      pic.full = () => {
+        if (rewritten) return;
+        rewritten = true;
+        ctx.setEquation({ left: [10, '+', pic.bottom.length], right: ['?'] });
+      };
+    }
     if (mode === 'demo') return;
     const movable = () => pic.kind === 'bridge' && pic.d.move && pic.top.length < 10;
     if (pic.kind === 'bridge' && pic.d.move) {
@@ -398,12 +408,13 @@ export function render(host, round, ctx) {
     shown = null;
     for (const undo of pic.undo.splice(0)) undo();
   };
+  // The hint (step 2): the cover lifts as its pulse runs, and neither is awaited: the cards lock
+  // only while a display runs, under a second (design 7.1-7.2).
   const hint = async () => {
-    if (pic.hint) return;
-    await Promise.all(kind().prep(pic).map((node) => settle(node, signal)));
-    if (signal.aborted) return;
+    if (pic.hint || signal.aborted) return;
+    kind().prep(pic);
     pic.hint = layer(pic, 'hint');
-    kind().hint(pic, pic.hint);   // its pulse is not awaited: the hint does not lock (design 7.2)
+    kind().hint(pic, pic.hint);
   };
   const tour = async () => {
     pic.toured = true;

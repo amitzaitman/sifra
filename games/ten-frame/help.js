@@ -132,6 +132,19 @@ const show = (node) => {
 /** Waits for a list of elements' motion. @param {Element[]} nodes @param {AbortSignal} signal */
 const settled = (nodes, signal) => Promise.all(nodes.map((node) => settle(node, signal)));
 
+/**
+ * Moves an outline under what is already in its layer, so its line and halo never cover a
+ * digit or a chip there (digits keep their reading order: the outline holds no text).
+ * @template {Element} T
+ * @param {Element} root
+ * @param {T} node
+ * @returns {T}
+ */
+const under = (root, node) => {
+  root.prepend(node);
+  return node;
+};
+
 // ---------- Frames: the parts of a number, and making ten ----------
 
 /** @param {Pic} pic */
@@ -275,9 +288,11 @@ function treeGhosts(pic, root, sides, fit, digits) {
       const box = side.place(j);
       const delay = stagger(k, total, digits ? 120 : 40);
       // count-up on a bond: the unknown's own places stay empty circles, the extra ones are ghosts.
-      if (digits && pic.kind === 'tree' && k < fit) mark(root, 'tf-place tf-enter', box, undefined, delay);
+      const place = digits && pic.kind === 'tree' && k < fit;
+      if (place) mark(root, 'tf-place tf-enter', box, undefined, delay);
       else ghost(root, box, delay, 'is-dot');
-      if (digits) digit(root, box, String(k + 1), delay, 'is-small');
+      // On a ghost a digit is 19px, or a two-digit number sits on a white label (design 4).
+      if (digits) digit(root, box, String(k + 1), delay, place ? 'is-small' : k + 1 > 9 ? 'is-small is-label' : 'is-small on-ghost');
       if (!digits && k >= fit) ring(root, grow(box, 0.12), delay);
     }
   }
@@ -289,7 +304,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
     ring(root, grow(box, 0.12), stagger(total, total + 1, 120));
   } else {
     const side = sides[sides.length - 1].n ? sides[sides.length - 1] : sides[0];
-    ring(root, grow(side.place(side.n - 1), 0.12), stagger(total - 1, total, 120));
+    // Under the digits: a two-digit label is wider than its ghost.
+    under(root, ring(root, grow(side.place(side.n - 1), 0.12), stagger(total - 1, total, 120)));
   }
 }
 
@@ -452,7 +468,7 @@ export const BUNDLES = {
       ...t.sticks.map((s, j) => ({ box: L.above(stickBox(pic, j)), n: 11 + j, cls: 'is-above', before: () => show(veil(s)) })),
     ], signal);
     const boxes = [L.bundle, ...t.sticks.map((_, j) => stickBox(pic, j))];
-    if (!signal.aborted) await settle(outline(root, L, [boxPath(around(boxes), 0.18, 0.4)], 'tf-line-unknown tf-enter'), signal);
+    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(boxes), 0.18, 0.4)], 'tf-line-unknown tf-enter')), signal);
   },
   solve: () => [],
   /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
@@ -472,13 +488,13 @@ const slot = (pic, i) => disc(pic.t.L.place(i));
 /**
  * Moves a counter of the second frame into the first frame's next cell; the rest of the second
  * frame closes up from the left (R6). When the first frame is full, the exercise is rewritten
- * as 10 + the rest (pedagogy 6.2, level 10).
+ * as 10 + the rest (pedagogy 6.2: level 10 only; its picture is the only one that moves).
  * @param {Pic} pic
  * @param {HTMLElement} [which]
  * @returns {HTMLElement[]} what moves
  */
 export function move(pic, which) {
-  if (pic.top.length >= 10 || !pic.bottom.length) return [];
+  if (!pic.d.move || pic.top.length >= 10 || !pic.bottom.length) return [];
   const i = Math.max(0, which ? pic.bottom.indexOf(which) : 0);
   const [node] = pic.bottom.splice(i, 1);
   pic.top.push(node);
@@ -486,12 +502,12 @@ export function move(pic, which) {
   for (const m of moving) m.classList.add('is-moving');
   put(node, slot(pic, pic.top.length - 1));
   pic.bottom.forEach((m, j) => put(m, slot(pic, 10 + j)));
-  if (pic.top.length === 10) pic.full();
+  if (pic.top.length === 10) pic.full?.();
   if (pic.hint) BRIDGE.hint(pic, pic.hint);   // the hint follows the counters
   return moving;
 }
 
-/** Moves until the first frame is full, one counter at a time. @param {Pic} pic @param {AbortSignal} signal @param {Hand} [hand] */
+/** Moves until the first frame is full, one counter at a time (level 10). @param {Pic} pic @param {AbortSignal} signal @param {Hand} [hand] */
 export async function fill(pic, signal, hand) {
   while (pic.top.length < 10 && pic.bottom.length && !signal.aborted) {
     if (hand) await hand.tap(pic.bottom[0]);
@@ -539,13 +555,15 @@ export const BRIDGE = {
       gone.dataset.role = 'removed';
     });
     ring(root, grow(L.trays[0], 0.1), '', 'is-tray');
-    chipAt(root, L.trays[0], '10', 'tf-blink-in');
+    chipAt(root, L.tag, '10', 'tf-blink-in');
     return blink(pic, [t.trays[0]]);
   },
   prep: () => [],
   /**
-   * The second addend split as it goes into the frames (addsub-facts 4.7): the counters that make
-   * the ten and the rest, each with its number, and the empty cells they go to.
+   * The second addend split as it goes into the frames (addsub-facts 4.7), each part with its
+   * number: the counters that make the ten, dashed like the empty cells they go to, and the rest
+   * in one outline, also when it wraps a row (one group, one label). Once the first frame is full
+   * (level 10), the counters that came and the rest.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
@@ -553,41 +571,62 @@ export const BRIDGE = {
     const L = t.L;
     const [top, bottom] = [pic.top, pic.bottom];
     const m = 10 - top.length;
-    const group = (cells, n) => {
-      if (!cells.length) return;
-      outline(root, L, [runPath(cells, 0.12)], 'tf-line-part');
+    const label = (cells, n) => {
       const first = segments(cells)[0];
       chipAt(root, { x: first.x, y: first.y - 0.5, w: first.w, h: 0.6 }, String(n));
+    };
+    const group = (cells, n) => {
+      if (!cells.length) return;
+      outline(root, L, [runPath(cells, 0.12, true)], 'tf-line-part');
+      label(cells, n);
     };
     root.replaceChildren();
     if (m > 0) {
       for (let i = top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
-      group(bottom.slice(0, m).map((_, j) => L.place(10 + j)), m);
+      const going = bottom.slice(0, m).map((_, j) => L.place(10 + j));
+      for (const c of going) at(root, 'tf-place is-target', grow(disc(c), 0.08));
+      if (going.length) label(going, going.length);
       group(bottom.slice(m).map((_, j) => L.place(10 + m + j)), bottom.length - m);
     } else {
       group([...Array(10 - d.a).keys()].map((j) => L.place(d.a + j)), 10 - d.a);
       group(bottom.map((_, j) => L.place(10 + j)), bottom.length);
     }
   },
-  /** Ten (the first frame filled), then on over the rest (addsub-facts 4.7, R5). @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
+  /**
+   * Ten, then on over the rest (addsub-facts 4.7, R5). Level 10 first fills the first frame, so
+   * the exercise reads 10 + the rest; in fixed frames (levels 11-12) nothing moves and the
+   * child's exercise stays: the ten is the first frame's counters and the ones that would fill
+   * it, shown where they are. Its 10 sits above the first frame, clear of the hint's numbers.
+   * @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal
+   */
   async tour(pic, root, signal) {
-    const { t } = pic;
+    const { t, d } = pic;
     const L = t.L;
-    await fill(pic, signal);
+    if (d.move) await fill(pic, signal);
     if (signal.aborted) return;
-    pic.top.forEach((c, j) => {
+    const m = 10 - pic.top.length;
+    [...pic.top, ...pic.bottom.slice(0, m)].forEach((c, j) => {
       veil(c).style.setProperty('--d', stagger(j, 10));
       veil(c).classList.add('is-shown');
     });
     await count(root, [
-      { box: { x: L.trays[0].x + L.trays[0].w / 2 - 0.6, y: L.trays[0].y + L.trays[0].h / 2 - 0.42, w: 1.2, h: 0.84 }, n: 10, cls: 'is-chip' },
-      ...pic.bottom.map((c, j) => ({ box: slot(pic, 10 + j), n: 11 + j, cls: 'on-unknown', before: () => show(veil(c)) })),
+      { box: L.tag, n: 10, cls: 'is-chip' },
+      ...pic.bottom.slice(m).map((c, j) => ({ box: slot(pic, 10 + m + j), n: 11 + j, cls: 'on-unknown', before: () => show(veil(c)) })),
     ], signal);
-    if (!signal.aborted) await settle(outline(root, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-enter'), signal);
+    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-enter')), signal);
   },
   solve: () => [],
-  /** The hand moves counters into the first frame until it is full. @param {Pic} pic @param {Hand} hand @param {Steps} steps */
-  demo: (pic, hand, steps) => fill(pic, steps.signal, hand),
+  /**
+   * Level 10: the hand moves counters into the first frame until it is full. Fixed frames: the
+   * hand points at the second addend, then the hint and the tour.
+   * @param {Pic} pic @param {Hand} hand @param {Steps} steps
+   */
+  async demo(pic, hand, steps) {
+    if (pic.d.move) return fill(pic, steps.signal, hand);
+    if (pic.bottom.length) await hand.tap(pic.bottom[0]);
+    await steps.hint();
+    await steps.tour();
+  },
 };
 
 /**
