@@ -480,6 +480,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - Titles, `text` exports and the shell's strings: no word of a closed reward-word list kept in the test, compared
   without nikud ("שעון" and "מטבע" are not on it).
 - CSS: no `&`; game.css selectors scoped. JSDoc type lines: no em dash. Meteg is already test 8 of docs.test.js.
+- Site files: no feature on a list of CSS, HTML and JS features newer than Safari 16.4 (`@starting-style`,
+  `text-wrap`, `popover`, `modulepreload`, `checkVisibility`, Set methods, and more); a feature found later joins it.
 
 ### 4.5 Playwright
 
@@ -540,8 +542,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 ```
 
 - `node --test` finds `tests/**/*.test.js` and not the e2e specs. `check` is the full gate.
-- The ES2022 lib keeps most APIs newer than Safari 16.4 out (`Object.groupBy`, `Promise.withResolvers`). Only the
-  browser code is type-checked: tests, scripts and e2e would need `@types/node`, and the dev dependencies stay two.
+- The ES2022 lib keeps some APIs newer than Safari 16.4 out (`Object.groupBy`, `Promise.withResolvers`), but its DOM
+  part has newer ones, and CI's WebKit is Playwright's current WebKit, not Safari 16.4; neither enforces the target.
+  A code scan does (4.4). Only the browser code is type-checked: tests, scripts and e2e would need `@types/node`, and
+  the dev dependencies stay two.
 - CI (.github/workflows/ci.yml), on push to main, pull requests and workflow_dispatch: job `check` (Node 22: `npm ci`,
   `npx playwright install --with-deps chromium webkit`, `npm run check`); job `deploy` (push to main, after `check`):
   the deployed files (section 1) to `_site` with `.nojekyll`, `actions/upload-pages-artifact@v3`,
