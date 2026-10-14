@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as game from '../games/ten-frame/game.js';
-import { layoutBundles, layoutFrame, layoutTree, pictureOf, runPath } from '../games/ten-frame/layout.js';
+import { layoutBundles, layoutFrame, layoutTree, runPath } from '../games/ten-frame/draw.js';
+import { pictureOf } from '../games/ten-frame/picture.js';
 import { rng } from '../lib/rng.js';
 
 const SEEDS = 200;

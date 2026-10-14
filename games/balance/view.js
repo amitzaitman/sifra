@@ -108,7 +108,7 @@ function balanceScene(host, round, solved, signal) {
   const restTilt = solved ? 'level' : tiltOf(weight(data.left), weight(data.right));
   /** @type {(a: import('./stage.js').PanLayout, b: import('./stage.js').PanLayout) => number} rows for both pans */
   const rowsOf = (a, b) => Math.max(rowsFor(a.slots), rowsFor(b.slots));
-  const d = drawBalance(host, { ...data, tilt: restTilt, rows: rowsOf(layoutPan(data.left), layoutPan(data.right)) }, cover);
+  const d = drawBalance(host, { ...data, tilt: restTilt, rows: rowsOf(layoutPan(data.left), layoutPan(data.right)), cover });
   /** The rows the pans need now (a judging card or a hint may change what lies on them). */
   const rowsNow = () => rowsOf(d.pans.left.layout, d.pans.right.layout);
   const { scene, pans } = d;
@@ -335,7 +335,7 @@ function balanceScene(host, round, solved, signal) {
  */
 function rowsScene(host, round, solved) {
   const data = sidesOf(round, solved);
-  const d = drawRows(host, { ...data, rows: 1 }, cover);
+  const d = drawRows(host, { ...data, rows: 1, cover });
   const { scene, lines } = d;
   const restLen = scene.style.getPropertyValue('--len');
   const ui = data.right.findIndex((g) => g.role === 'unknown');

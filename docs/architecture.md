@@ -185,7 +185,9 @@ dev-spec A.1 is the shape, with these precisions:
 ### 2.8 Drawing, CSS and hooks
 
 - A representation is a pure layout function (`layoutFrame(data)`, tested in Node for R6 [unit]) and a drawing
-  function `drawFrame(host, data)` (condition 6), coloured only through role tokens.
+  function `drawFrame(host, data)` (condition 6), coloured only through role tokens. Both live in one module that
+  imports nothing (balance `stage.js`, ten-frame `draw.js`), so it can move to lib/ unchanged; the cover maker comes
+  in data (its `cover` key), because a lib/ module cannot import lib/cover.js. The game passes it in.
 - `data-role` only on quantity elements, never on frames, trays without a role, text or the equation. The unknown is
   drawn from the start with `data-role="unknown"`; app.css hides it until `[data-solved]` (design §6.9).
 - Covers only from lib/cover.js: `cover(mark = '?')` returns `<span class="cover">` filling its parent box; adding

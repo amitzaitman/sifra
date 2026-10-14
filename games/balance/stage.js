@@ -1,5 +1,6 @@
 // The balance and the turned rows (design 6.8, R6): pure layouts, and drawings that take (host,
-// data) and colour through role tokens only. Places: --c --r --w --h (or --x --y in cells).
+// data) and colour through role tokens only. The module imports nothing, so it can move to lib/
+// unchanged: the cover maker comes in data (lib/cover.js). Places: --c --r --w --h (or --x --y in cells).
 
 /**
  * A group on a pan or in a row, in the exercise's order.
@@ -191,11 +192,11 @@ const stageOf = () => {
  * Draws the balance (design 6.8): the frame in --frame, cubes in rows of five, and the ? cover over
  * a covered group, a piece per row joined by bridges, ? on the first.
  * @param {HTMLElement} host
- * @param {{ left: PanGroup[], right: PanGroup[], tilt: string, rows: number }} data
- * @param {(mark?: string) => HTMLElement} makeCover lib/cover.js
+ * @param {{ left: PanGroup[], right: PanGroup[], tilt: string, rows: number, cover: (mark?: string) => HTMLElement }} data
+ *   cover: the cover maker (lib/cover.js)
  * @returns {{ stage: HTMLElement, scene: HTMLElement, pans: Record<string, PanView> }}
  */
-export function drawBalance(host, data, makeCover) {
+export function drawBalance(host, data) {
   const stage = stageOf();
   const scene = stage.appendChild(el('div', 'bl-scene'));
   scene.dataset.tilt = data.tilt;
@@ -217,7 +218,7 @@ export function drawBalance(host, data, makeCover) {
       const pieces = layout.spans[i].runs.flatMap((r) => rowPieces(r.start, r.length));
       const lid = (className, box, mark) => {
         const node = stack.appendChild(el('span', className, box));
-        node.append(makeCover(mark));
+        node.append(data.cover(mark));
         return node;
       };
       return [...pieces.map((p, k) => lid('bl-lid', p, k ? '' : '?')),
@@ -233,11 +234,11 @@ export function drawBalance(host, data, makeCover) {
 /**
  * Draws the set model: the left side's row of groups, and under it the right side's.
  * @param {HTMLElement} host
- * @param {{ left: PanGroup[], right: PanGroup[], rows: number }} data
- * @param {(mark?: string) => HTMLElement} makeCover lib/cover.js
+ * @param {{ left: PanGroup[], right: PanGroup[], rows: number, cover: (mark?: string) => HTMLElement }} data
+ *   cover: the cover maker (lib/cover.js)
  * @returns {{ stage: HTMLElement, scene: HTMLElement, lines: Record<string, LineView>, lids: HTMLElement[] }}
  */
-export function drawRows(host, data, makeCover) {
+export function drawRows(host, data) {
   const stage = stageOf();
   const scene = stage.appendChild(el('div', 'bl-set'));
   /** @type {HTMLElement[]} */
@@ -254,7 +255,7 @@ export function drawRows(host, data, makeCover) {
     data[name].forEach((g, i) => {
       if (!g.cover) return;
       const lid = scene.appendChild(el('span', 'bl-lid', { x: layout.blocks[i].x, y, w: Math.max(1, g.count) }));
-      lid.append(makeCover('?'));
+      lid.append(data.cover('?'));
       lids.push(lid);
     });
     lines[name] = { layout, dots };

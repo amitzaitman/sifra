@@ -1,10 +1,11 @@
 // מִסְגֶּרֶת עֶשֶׂר: the parts of a number, making ten, ten and some more, and bridging ten
 // (pedagogy 6.2). The module contract is docs/architecture.md section 2; the drawing is in
 // draw.js, the help ladder's pictures in help.js.
+import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
 import { SKILLS } from '../../data/skills.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
-import { pictureOf } from './layout.js';
+import { pictureOf } from './picture.js';
 import { KINDS, layer, move } from './help.js';
 
 export const meta = {
@@ -324,14 +325,14 @@ function drawRound(host, round, solved) {
   /** @type {any} */
   let pic;
   if (kind === 'tree' || kind === 'pairs') {
-    const t = drawTree(base, { ...data, solved });
+    const t = drawTree(base, { ...data, solved, cover });
     pic = { t, d: { whole: data.whole, part: data.left.n, unknown: data.right.n }, covers: [...t.left.covers, ...t.right.covers] };
   } else if (kind === 'bundles') pic = { t: drawBundles(base, data), d: data, covers: [] };
   else if (kind === 'bridge') {
     const t = drawBridge(base, data);
     pic = { t, d: data, covers: [], top: t.top, bottom: t.bottom };
   } else {
-    const t = drawFrame(base, { ...data, solved });
+    const t = drawFrame(base, { ...data, solved, cover });
     pic = { t, d: data, covers: t.covers };
   }
   const L = pic.t.L;

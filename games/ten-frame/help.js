@@ -11,7 +11,7 @@ import { around, at, boxPath, disc, el, grow, outline, put, runPath, segments, s
  *   top?: HTMLElement[], bottom?: HTMLElement[], full?: () => void, hint?: HTMLElement }} Pic
  */
 
-/** @typedef {import('./layout.js').Box} Box */
+/** @typedef {import('./draw.js').Box} Box */
 
 /**
  * An overlay over the drawing: its own [data-math] row (R7), read left to right inside.
