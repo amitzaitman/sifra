@@ -469,10 +469,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - On index.html, looping over the registry (home and parents only until the games merge): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KB of same-origin
-  responses; R7 on every `[data-math]` (attribute, computed direction, characters left to right); R10 (animations
-  only on `[data-role]`, `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the
-  60 s test); R1 [browser] (text hidden, every control has `[data-icon]`, a screenshot per level for the owner);
-  R6 [browser] (every `[data-role]` element has its role token in `fill` or `background-color`).
+  responses, gzipped as GitHub Pages serves them (section 6); R7 on every `[data-math]` (attribute, computed
+  direction, characters left to right); R10 (animations only on `[data-role]`, `page.clock.runFor(60000)` adds
+  nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser] (text hidden, every control has
+  `[data-icon]`, a screenshot per level for the owner); R6 [browser] (every `[data-role]` element has its role token
+  in `fill` or `background-color`).
 
 ### 4.7 Each game spec (e2e/<id>.spec.js)
 
@@ -525,6 +526,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | R2 ceiling | Story structures only | §6 starts `equation` at 10 (balance 1) and 20 (ten-frame 10); §4.9 orders it by form |
 | "Or" formulas | `{ oneOf: [...] }` | One formula per rule (R4) must still give both neighbours of the answer |
 | Pair cards | An array of numbers satisfies a number rule. A pair reads as a known number and a missing part, in either order: a rule's pair keeps one number of the answer and puts the rule's number for the other in its place (`{ oneOf }` over both orders, `ten-frame/game.js`). A pair that makes the whole is never a rule's value; `given.part` has none (nothing is given) | §6.2 level 4 tags pairs with number rules; the catalogue has no pair type. One lift for every number rule, so each id keeps one formula (R4), with no new rule and no docs change |
+| First-load budget | 200 KB of same-origin responses, gzipped as Pages serves them | Raw, the shell and the fonts are about 146 KB and each milestone game 70-80 KB, so two games cannot fit 200 KB raw; a phone downloads the gzipped files (fonts are woff2 either way) |
 | `ten-frame` level 9 | `unknown: whole` with `eqform` mixed (`10 + 4 = ?`, `? = 10 + 4`), not §6.2's `unknown: part` | `pv.teens.ten-and`'s rules have no value when the ones are missing (`14 = 10 + ?`): only `slip.near` would tag a wrong card, and R4 needs four options and two real errors. The part form needs `given.whole` and `given.part` in the skill's list: an owner question |
 | 3 options | The skill's first level in the game's list, or relation answers | R4's two cases, made checkable |
 | Level identity | A stable `id`; numbers from 1 for people | §6.2 plans an entry level before level 1; stored state must survive it |
