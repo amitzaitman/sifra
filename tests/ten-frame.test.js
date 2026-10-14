@@ -168,11 +168,32 @@ test('choices: real errors before slips, and pairs sorted by their first then se
 /** An equation as its shape: numbers as n (tests read forms this way, like the generic test's R2). */
 const shape = (r) => [...r.equation.left, '=', ...r.equation.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ');
 
-test('R8: the mixed level writes the unknown left of = in a third of the rounds', () => {
-  const reversed = rounds('ten-symbols').filter((r) => r.eqform === 'reversed').length;
-  assert.ok(reversed >= SEEDS / 4 && reversed <= SEEDS / 2, `ten-symbols: ${reversed}`);
+test('R8: the mixed levels write the unknown or the result left of = in a third of the rounds', () => {
+  for (const id of ['split-bond', 'ten-symbols']) {
+    const reversed = rounds(id).filter((r) => r.eqform === 'reversed').length;
+    assert.ok(reversed >= SEEDS / 4 && reversed <= SEEDS / 2, `${id}: ${reversed}`);
+  }
   const forms = new Set(rounds('ten-symbols').map(shape));
   assert.deepEqual([...forms].sort(), ['n + ? = n', 'n = n + ?', 'n − n = ?'], 'pedagogy 6.2 level 7: 7 + ? = 10, 10 − 7 = ?, 10 = 7 + ?');
+  // Level 3, the bond (decisions.md 2026-10-14, "להוסיף לשתי רמות"): 3 + ? = 9 and 9 = 3 + ?, the picture the same.
+  const bond = rounds('split-bond');
+  assert.deepEqual([...new Set(bond.map(shape))].sort(), ['n + ? = n', 'n = n + ?']);
+  for (const r of bond.filter((x) => x.eqform === 'reversed')) {
+    const { whole, part } = { whole: r.picture[0].count, part: r.picture[1].count };
+    assert.deepEqual(r.equation, { left: [whole], right: [part, '+', '?'] });
+    assert.equal(pictureOf(r).kind, 'tree');
+  }
+  // Level 12, bridging ten in symbols: ? = 8 + 5 in a third of the rounds, with the same cards as 8 + 5 = ?.
+  const bridge = rounds('bridge-symbols');
+  const left = bridge.filter((r) => r.unknown === 'result-left');
+  assert.ok(left.length >= SEEDS / 4 && left.length <= SEEDS / 2, `result-left: ${left.length}`);
+  assert.ok(left.every((r) => shape(r) === '? = n + n') && bridge.filter((r) => r.unknown === 'result-right').every((r) => shape(r) === 'n + n = ?'));
+  for (const r of left) {
+    const [a, , b] = r.equation.right;
+    const right = { ...r, unknown: 'result-right', equation: { left: [a, '+', b], right: ['?'] } };
+    for (const { value, rule } of r.choices.filter((c) => c.rule)) assert.deepEqual(game.rules[rule](right), game.rules[rule](r), `${rule} in ${a} + ${b}`);
+    assert.ok(r.choices.filter((c) => c.rule && !c.rule.startsWith('slip.')).length >= 2);
+  }
 });
 
 test('level 9 (14 = 10 + ?): the ones unknown, cards 4, 10, 14 and a slip, the ones covered in the help picture', () => {

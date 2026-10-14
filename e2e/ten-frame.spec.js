@@ -646,3 +646,38 @@ for (const [level, ok, what] of [['ten-cover', (r) => r.answer === 5, '5 + 5'], 
     await expect(row(page)).toHaveText(`${round.answer}+${round.answer}=${whole}`);
   });
 }
+
+test('R8: a result-left round of level 12 and a reversed bond: the hint and the tour end on the answer, and the solved exercise is the one the child got', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const { round, answerAt } = await devAt(page, 'bridge-symbols', (r) => r.unknown === 'result-left' && r.equation.right[0] === 8 && r.equation.right[2] === 5);
+  expect(round.equation).toEqual({ left: ['?'], right: [8, '+', 5] });
+  expect(await said(row(page))).toBe('- paragraph: ? = 8 + 5');
+  for (const i of round.choices.keys()) {
+    if (i === answerAt) continue;
+    await card(page, i).click();
+    await unlocked(page);
+  }
+  // 8 + 5 in fixed frames: 2 go to the ten and 3 stay; the tour counts the ten, then on to 13.
+  await expect(page.locator('[data-hint] .tf-chip')).toHaveText(['2', '3']);
+  await expect(page.locator('[data-tour]')).toHaveText(['10', '11', '12', '13']);
+  await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+  await expectMathLeftToRight(page);
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await expect(row(page)).toHaveText('13=8+5');
+  expect(await said(row(page))).toBe('- paragraph: 13 = 8 + 5');
+  // The bond (level 3) also writes 9 = 3 + ?: the same picture and tour, the exercise kept.
+  const bond = await devAt(page, 'split-bond', (r) => r.eqform === 'reversed');
+  const [whole] = bond.round.equation.left;
+  const part = bond.round.equation.right[0];
+  expect(await said(row(page))).toBe(`- paragraph: ${whole} = ${part} + ?`);
+  for (const i of bond.round.choices.keys()) {
+    if (i === bond.answerAt) continue;
+    await card(page, i).click();
+    await unlocked(page);
+  }
+  await expect(page.locator('[data-tour]').last()).toHaveText(String(bond.round.answer));
+  await card(page, bond.answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await expect(row(page)).toHaveText(`${whole}=${part}+${bond.round.answer}`);
+});

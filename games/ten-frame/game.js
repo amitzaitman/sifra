@@ -35,7 +35,7 @@ const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknow
 export const levels = [
   { id: 'split-5', ...split, max: 5, options: 3, demo: true },
   { id: 'split-10', ...split },
-  { id: 'split-bond', ...split, model: 'tree', demo: true },
+  { id: 'split-bond', ...split, model: 'tree', demo: true, eqform: ['standard', 'reversed'] },
   { id: 'split-pairs', ...split, unknown: 'both', model: 'cards', demo: true },
   { id: 'ten-empty', ...ten, demo: true },
   { id: 'ten-cover', ...ten },
@@ -44,7 +44,7 @@ export const levels = [
   { id: 'teen-symbols', ...teenPart, eqform: 'reversed' },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
-  { id: 'bridge-symbols', ...bridge, look: 'symbols' },
+  { id: 'bridge-symbols', ...bridge, look: 'symbols', unknown: ['result-right', 'result-left'] },
 ];
 
 /** What a level draws beyond its parameters, by level id: a five-frame, visible empty cells, counters that move. */
@@ -58,8 +58,11 @@ export const text = [];
 const groupsOf = (r) => (r.look === 'symbols' ? r.helpPicture : r.picture) ?? [];
 /** @type {(r: Round, role: string, k?: number) => number | null} */
 const count = (r, role, k = 0) => groupsOf(r).filter((g) => g.role === role)[k]?.count ?? null;
-/** @type {(r: Round) => [number, number] | null} the addends of a + b = ? */
-const addends = (r) => (r.unknown === 'result-right' && r.equation?.left[1] === '+' ? [Number(r.equation.left[0]), Number(r.equation.left[2])] : null);
+/** @type {(r: Round) => [number, number] | null} the addends of a + b = ? or ? = a + b */
+const addends = (r) => {
+  const side = { 'result-right': r.equation?.left, 'result-left': r.equation?.right }[r.unknown];
+  return side?.[1] === '+' ? [Number(side[0]), Number(side[2])] : null;
+};
 
 /**
  * The number formulas for a missing part, on a reading { whole, part, answer }.
@@ -196,10 +199,10 @@ const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 
 const DOUBLES = 0.2;
 
 /**
- * The parts of a number: part + ? = whole. In the ten-frame level about one round in ten covers
- * nothing (the answer is 0: the cover stands on an empty cell); a bond never does. About one round
- * in five is a double (4 + ? = 8): there given.part is the answer, so its card gives way to the
- * next rule (number sense 4.4).
+ * The parts of a number: part + ? = whole, and at the bond also whole = part + ? (R8). In the
+ * ten-frame level about one round in ten covers nothing (the answer is 0: the cover stands on an
+ * empty cell); a bond never does. About one round in five is a double (4 + ? = 8): there given.part
+ * is the answer, so its card gives way to the next rule (number sense 4.4).
  * @param {Level} level
  * @param {Rng} rng
  */
@@ -220,9 +223,11 @@ function splitRound(level, rng) {
       part = rng.int(1, whole - 1);
     } while (part * 2 === whole);
   }
+  const eqform = eqformOf(level, rng);
   const groups = [{ role: 'whole', count: whole, shown: 'tag' }, { role: 'part', count: part, shown: 'items' },
     { role: 'unknown', count: whole - part, shown: 'covered' }];
-  return roundOf(level, /** @type {Group[]} */ (groups), { left: [part, '+', '?'], right: [whole] }, whole - part);
+  const equation = eqform === 'reversed' ? { left: [whole], right: [part, '+', '?'] } : { left: [part, '+', '?'], right: [whole] };
+  return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), whole - part, eqform);
 }
 
 /** All the ways: ? + ? = whole, and the cards are pairs (7 | 0 and 0 | 7 too). @param {Level} level @param {Rng} rng */
@@ -280,13 +285,22 @@ function teenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 + k, eqform);
 }
 
-/** Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). @param {Level} level @param {Rng} rng */
+/**
+ * Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). A level that lists
+ * result-left too writes ? = a + b in a third of the rounds (R8).
+ * @param {Level} level
+ * @param {Rng} rng
+ */
 function bridgeRound(level, rng) {
   const a = rng.int(6, 9);
   const b = rng.int(11 - a, 9);
+  const left = Array.isArray(level.unknown) && rng.next() < 1 / 3;
   const groups = [{ role: 'part', count: a, shown: 'items' }, { role: 'part', count: b, shown: 'items' },
     { role: 'unknown', count: a + b, shown: 'items' }];
-  return roundOf(level, /** @type {Group[]} */ (groups), { left: [a, '+', b], right: ['?'] }, a + b);
+  const equation = left ? { left: ['?'], right: [a, '+', b] } : { left: [a, '+', b], right: ['?'] };
+  const round = roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), a + b);
+  round.unknown = left ? 'result-left' : 'result-right';
+  return round;
 }
 
 /**
