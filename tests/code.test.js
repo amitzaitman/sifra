@@ -65,9 +65,9 @@ test('lib/ imports nothing and stays under 600 lines', () => {
 // WebKit (Playwright's current WebKit) catches them, so this list does. Before using a feature on it,
 // check Safari 16.4 support; add any newer feature found later.
 const NEWER = [
-  ['CSS', /@starting-style|@scope\b|@position-try|\btext-wrap\b|\blight-dark\(|\bfield-sizing\b|\banchor-name\b|\bposition-anchor\b|\banchor\(|:user-(in)?valid|\bview-transition-name\b|\bcontent-visibility\b|\binterpolate-size\b|\bcalc-size\(|\btransition-behavior\b|\btext-box\b|@container\s+style\(/],
+  ['CSS', /@starting-style|@scope\b|@position-try|\btext-wrap\b|\blight-dark\(|\bfield-sizing\b|\banchor-name\b|\bposition-anchor\b|\banchor\(|:user-(in)?valid|\bview-transition-name\b|\bcontent-visibility\b|\binterpolate-size\b|\bcalc-size\(|\btransition-behavior\b|\btext-box\b|@container\s+style\(|\blinear\(/],
   ['HTML', /\bpopover\b|rel="modulepreload"|\bfetchpriority\b|<search\b/],
-  ['JS', /\b(showPopover|hidePopover|togglePopover|checkVisibility|startViewTransition|requestIdleCallback|setHTMLUnsafe|moveBefore|withResolvers|groupBy)\b|\bscrollend\b|\.(union|intersection|symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(/],
+  ['JS', /\b(showPopover|hidePopover|togglePopover|checkVisibility|startViewTransition|requestIdleCallback|setHTMLUnsafe|moveBefore|withResolvers|groupBy)\b|\bscrollend\b|\.(union|intersection|symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(|\bAbortSignal\.any\b|\bIterator\.from\b|\.(keys|values|entries)\(\)\.(map|filter|take|drop|flatMap|reduce|toArray|forEach|some|every|find)\(/],
 ];
 
 test('nothing newer than Safari 16.4 in site files (CLAUDE.md target; CI\'s WebKit is newer)', () => {
