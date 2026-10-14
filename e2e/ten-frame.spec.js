@@ -157,20 +157,37 @@ test('the tour counts the unknown from 1 when it is a part, and on from ten when
   expect(await tours('split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0)).toEqual(['1', '2', '3', '4', '5', '6', '7', '0']);
 });
 
-test('a 3-option level: the first miss brings the display and the hint, the second the tour', async ({ page }) => {
-  const { round, answerAt } = await playAt(page, 'split-5');
-  const wrong = round.choices.map((_, i) => i).filter((i) => i !== answerAt);
-  await card(page, wrong[0]).click();
-  await unlocked(page);
-  await expect(page.locator(`[data-display="${RULES[round.choices[wrong[0]].rule].display}"]`)).toBeVisible();
-  await expect(page.locator('[data-hint]')).toBeVisible();
-  await card(page, wrong[1]).click();
-  await unlocked(page);
-  await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
-  await card(page, answerAt).click();
-  await expect(page.locator('[data-next]')).toBeVisible();
-  expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 3, help: ['hint', 'tour'] });
-});
+// A 3-option level's first miss is step 2 and still a first miss: its display stays to the next
+// tap, also with reduced motion (its final state), and the hint joins it (architecture 2.5 step 4).
+for (const reduced of [false, true]) {
+  test(`a 3-option level${reduced ? ' with reduced motion' : ''}: the first miss keeps its display to the next tap with the hint, the second brings the tour`, async ({ page }) => {
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
+    const { round, answerAt } = await playAt(page, 'split-5');
+    const wrong = round.choices.map((_, i) => i).filter((i) => i !== answerAt);
+    await card(page, wrong[0]).click();
+    await unlocked(page);
+    const first = page.locator(`[data-display="${RULES[round.choices[wrong[0]].rule].display}"]`);
+    await expect(first).toBeVisible();
+    await expect(first).not.toHaveClass(/is-leaving/);
+    await expect(first).toHaveCSS('opacity', '1');
+    expect(await first.locator('*').count(), 'the display draws something').toBeGreaterThan(0);
+    await expect(page.locator('[data-hint]')).toBeVisible();
+    await expectCalm(page);
+    const shown = await first.elementHandle();
+    const html = await page.locator('main').innerHTML();
+    await page.clock.runFor(60000);
+    expect(await page.locator('main').innerHTML(), 'a minute changes nothing').toBe(html);
+    await card(page, wrong[1]).click();
+    await unlocked(page);
+    expect(await shown.evaluate((el) => el.isConnected), 'the next tap removes the first display').toBe(false);
+    await expect(page.locator('[data-display]'), 'the second runs and leaves').toHaveCount(0);
+    await expect(page.locator('[data-hint]')).toHaveCount(1);
+    await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+    await card(page, answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 3, help: ['hint', 'tour'] });
+  });
+}
 
 /** Every display the game uses, on each kind of picture: [level, rule]. */
 const DISPLAYS = [

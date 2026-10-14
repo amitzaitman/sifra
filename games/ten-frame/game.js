@@ -430,16 +430,19 @@ export function render(host, round, ctx) {
       misses += 1;
       locked = true;
       clear();
-      // The display of the rule chosen (step 1). From the second miss it runs and leaves, so the
-      // picture is back at its start when the hint is drawn on it (design 7.2).
+      // The display of the rule chosen. A first miss keeps it to the next tap, also with reduced
+      // motion (its final state); on a 3-option level that miss is step 2 and the hint joins it
+      // (architecture 2.5 step 4). From the second miss it runs and leaves, so the picture is back
+      // at its start when the hint is drawn on it (design 7.2).
+      const first = misses === 1;
       const root = layer(pic, 'display', display);
       shown = root;
-      if (misses > 1) root.classList.add('is-leaving');
+      if (!first) root.classList.add('is-leaving');
       const targets = kind().display(pic, root, { value, rule, display });
       await Promise.all([settle(root, signal), ...targets.map((node) => settle(node, signal))]);
       if (signal.aborted) return;
       if (step >= 2 && pic.kind === 'frame' && pic.d.covered) pic.lidsUp = true;   // the hint lifts them for good
-      if (misses > 1) clear();
+      if (!first) clear();
       if (step >= 2) await hint();
       if (step === 3 && !signal.aborted) await tour();
       locked = false;
