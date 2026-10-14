@@ -7,6 +7,7 @@ import * as registry from '../games/registry.js';
 import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
+import { rng } from '../lib/rng.js';
 import {
   CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectTouchTargets,
   ladderAt, roundOf, seedStore, skillState, storeWith, stored,
@@ -287,7 +288,10 @@ test('R10: a minute in real time adds nothing to any game waiting on a covered r
   const waiting = [];
   for (const site of SITES) {
     for (const game of site.games) {
-      const n = game.levels.findIndex((l) => l.look !== 'symbols') + 1;
+      // The first level drawn without a click whose round at seed 1 has a '?' in its exercise (a level
+      // may cover nothing: balance level 1 leaves a pan empty).
+      const one = (l) => game.makeRound({ ...l, structure: [l.structure].flat()[0], ask: [l.ask].flat()[0] }, rng(1));
+      const n = game.levels.findIndex((l) => l.look !== 'symbols' && JSON.stringify(one(l).equation ?? '').includes('"?"')) + 1;
       const page = await context.newPage();
       await page.goto(`${site.path}#/dev/${game.meta.id}/${n}/1`);
       await expect(page.locator('main[data-screen="round"] .cover').first()).toBeVisible();

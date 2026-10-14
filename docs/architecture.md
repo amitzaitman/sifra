@@ -450,7 +450,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `chromium` (`devices['Pixel 7']`) and `webkit` (`devices['iPhone 13']`); no retries; traces kept on failure. In
   this container: `npm run e2e -- --project=chromium`.
 - `page.clock.install()` before every `goto`; never wait a fixed time. Exactly one real-time 60 s test in the suite
-  (site.spec.js, chromium): one page per registered game, each on a round with a cover, waiting together.
+  (site.spec.js, chromium): one page per registered game, each on a round with a cover, waiting together: the
+  first level drawn without a tap whose round at seed 1 has a `'?'` in its exercise (a level may cover nothing:
+  balance level 1 leaves a pan empty for the child to fill).
 - Tests rebuild a round in Node from `data-level`, `data-seed` and `data-structure` by importing the game and
   lib/rng.js. Storage is seeded with `page.addInitScript()`; "yesterday" comes from `page.clock.setFixedTime()`.
   Game specs open fixture.html or index.html routes with a fixed seed where the round matters, and assert what they
