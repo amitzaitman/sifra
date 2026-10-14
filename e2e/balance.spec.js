@@ -447,8 +447,10 @@ test('relational: the hint moves the cubes that make a into c to the first group
     // The cubes that change group stay in place and take its colour: c yellow on each pan, in the same places.
     await expect(cubes.nth(c - 1)).toHaveCSS('background-color', YELLOW);
     await expect(cubes.nth(c)).toHaveCSS('background-color', LIGHT);
-    const [mine, theirs] = [await cubes.nth(c - 1).boundingBox(), await stack(page, 'right').locator('.bl-cube').nth(c - 1).boundingBox()];
-    expect(Math.abs(mine.y - theirs.y)).toBeLessThan(1);
+    // The cards unlock while the beam still swings back (the return is not awaited at step 2): the
+    // pans move in opposite directions, so the rows line up only once it rests.
+    const theirs = stack(page, 'right').locator('.bl-cube').nth(c - 1);
+    await expect.poll(async () => Math.abs((await cubes.nth(c - 1).boundingBox()).y - (await theirs.boundingBox()).y)).toBeLessThan(1);
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     // The second group, now the answer's size, is ringed in the part's colour; the cover in magenta.
     const part = page.locator('[data-hint] .bl-pan[data-pan="left"] .bl-ring.is-part');
