@@ -12,15 +12,16 @@ and report. Section 6 lists the gaps in the docs that this file closes. Read wit
 ```text
 index.html            <html lang="he" dir="rtl">, viewport (design §10), font preloads, app.css, and an inline module
                       that imports games/registry.js and calls start()
-app.js                the shell (423 lines at milestone 1): routes, screens, round runner, demo, error screen
+app.js                the shell (424 lines): routes, screens, round runner, demo, error screen
 app.css               the design.md §3 block verbatim, then the shell's components
 types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
 shell/                the shell's own modules: only app.js (and the tests) import them. Each imports only lib/, data/
-                      and shell/; no game imports shell/ or app.js (owner decision 2026-10-14, section 6). 560 lines
+                      and shell/; no game imports shell/ or app.js (owner decision 2026-10-14, section 6). 594 lines
   cards.js 88  equation.js 77                 answer cards (AlefBet answer-choices.js), equation row (design §6.4)
   ladder.js 89  planner.js 193  store.js 77   levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
   rng.js 36                                   seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
+  taps.js 34                                  the double-tap window (3.2)
 lib/                  code the games share: a game imports each module; each imports nothing; under 600 lines together
                       (tests/code.test.js counts newlines: 36)
   settle.js 22  cover.js 14                   animation ends (2.7), covers (2.8)
@@ -287,14 +288,19 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
   `[data-area="equation"]`; cards `[data-choices]` of `button[data-index]`; `button[data-next]`;
   `[data-show-picture]`. Control buttons have `data-control` and an `svg[data-icon]`.
 - Off-target taps: each pointerdown on the screen that hits no button and no `[data-target]` is counted by the
-  nearest `[data-area]` (`picture`, `equation`, else `other`).
-- Double tap (design 6.9): a capture-phase click listener on the root drops a click whose `detail` is over 1 when
-  the screen, or the cards' place ("הַבָּא"), changed since the previous click. The browser counts the taps; there is
-  no clock and nothing locks, and the next tap is taken. So the second tap of a double tap never answers a round
-  the child has not seen, and never skips the solved picture, also with reduced motion. This holds where the browser
-  counts taps: Chromium does, iOS Safari does not (every tap's click has `detail` 1), so on the iPhone the guard
-  drops nothing yet, and the double-tap tests run on Chromium only. The owner chose a 0.3 s window instead (section
-  6, "Double tap"); this item changes with its code.
+  nearest `[data-area]` (`picture`, `equation`, else `other`); one the double-tap window drops is not.
+- Double tap (design 6.9; owner decision 2026-10-14, "חלון של 0.3 שנייה"): the shell drops a tap that comes within
+  300 ms of a change under the finger: a screen drawn (`screen()`: every route, round and demo) or "הַבָּא" put in
+  the cards' place, where it stays until the next screen. shell/taps.js decides on event times alone. A change is
+  stamped with `new Event('change').timeStamp`, the clock input events are stamped with; capture-phase `pointerdown`
+  and `click` listeners on the root drop (`preventDefault`, `stopImmediatePropagation`) an event stamped less than
+  300 ms after the change, or before it (a tap queued while the screen changed). A click goes with its pointerdown,
+  so a press that came down in the window stays dropped however long it lasts; a keyboard click (`detail` 0) goes by
+  its own time. No `setTimeout` or `setInterval`; nothing locks or waits, and a tap after the window is taken. So
+  the second tap of a double tap never answers a round the child has not seen, never skips the solved picture (also
+  with reduced motion), and never opens a game from the end screen's home button, in every browser: the window
+  counts no taps in `detail`, which iOS Safari never sets above 1. It replaced a `detail` guard that worked in
+  Chromium only.
 
 ### 3.3 Session
 
@@ -420,8 +426,8 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
 
 - `tests/docs.test.js` as today, importing its parsers from scripts/docs-parse.js; `tests/sync.test.js` regenerates
   data/ in memory and compares byte for byte (and the videos.js URLs with the doc's); `tests/games.test.js` (4.2);
-  `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js` (4.3);
-  `tests/code.test.js` (4.4); `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
+  `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js`, `tests/taps.test.js`
+  (4.3); `tests/code.test.js` (4.4); `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
   `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
   `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`
@@ -459,6 +465,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 ### 4.3 Units
 
 - rng: same seed, same sequence; `int` stays in bounds over 10,000 draws; `shuffle` is a permutation.
+- taps (3.2): nothing dropped before a change; 299.9 ms after it dropped, 300 ms taken; a tap stamped before the
+  change dropped; the click of a pointer that came down in the window dropped, however late, and the next tap taken;
+  a keyboard click by its own time; each change starts the window again.
 - ladder: each rule of 3.4 alone: up after 4; first, help, first, help goes down; the window empties on a level
   change; mixed only up; reviews nothing; the fast climb up on each first try, back one and unmarked on the first
   miss, staying on a miss in its first round, at the last level once passed there, and on a mixed round; the last
@@ -501,25 +510,32 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   fails instead of testing its files (`SIFRA_PORT=4174 npx playwright test` picks another); projects
   `chromium` (`devices['Pixel 7']`) and `webkit` (`devices['iPhone 13']`); no retries; traces kept on failure. In
   this container: `npm run e2e -- --project=chromium`.
-- `page.clock.install()` before every `goto`; never wait a fixed time. Exactly one real-time 60 s test in the suite
-  (site.spec.js, chromium): one page per registered game, each on a round with a cover, waiting together: the
-  first level drawn without a tap whose round at seed 1 has a `'?'` in its exercise (a level may cover nothing:
-  the balance's `same` level leaves a pan empty for the child to fill).
+- `page.clock.install()` before every `goto`; never wait a fixed time. After a change under the finger (a new screen,
+  "הַבָּא"), a spec calls `look(page)` from e2e/helpers.js before it taps: the clock moves past the 300 ms tap window
+  (3.2), as a child looks before tapping. Playwright's clock stamps the events too (it fakes `Event.timeStamp` with
+  `performance.now()`), so nothing waits. Exactly one real-time 60 s test in the suite (site.spec.js, chromium):
+  one page per registered game, each on a round with a cover, waiting together: the first level drawn without a tap
+  whose round at seed 1 has a `'?'` in its exercise (a level may cover nothing: the balance's `same` level leaves a
+  pan empty for the child to fill).
 - Tests rebuild a round in Node from `data-level`, `data-seed` and `data-structure` by importing the game and
   shell/rng.js. Storage is seeded with `page.addInitScript()`; "yesterday" comes from `page.clock.setFixedTime()`.
   Game specs open fixture.html or index.html routes with a fixed seed where the round matters, and assert what they
   need of the round instead of returning early.
 - e2e/helpers.js (from AlefBet): `readsLeftToRight` per character and line, `expectTouchTargets` at 64px,
-  `roundOf`, `stored`, `seedStore`, and `expectCalm` (R10), which first waits out finite animations in `[data-hint]`
-  and `[data-display]` (the hint's pulse outlives the lock, 2.5). e2e/fixture.html is index.html with the fixture
-  games.
+  `roundOf`, `stored`, `seedStore`, `look` (the tap window, above), and `expectCalm` (R10), which first waits out
+  finite animations in `[data-hint]` and `[data-display]` (the hint's pulse outlives the lock, 2.5).
+  e2e/fixture.html is index.html with the fixture games.
 
 ### 4.6 site.spec.js
 
 - On fixture.html: home (next-step card, every game, no parents link while not `VERIFIED`); next step (empty store:
   first game, level 1; first skill passed: the next one); level kept after reload (one first try climbs to level 2,
   reload shows 2); review (a level passed yesterday opens with `data-kind="review"`); R9 (first entry to a demo level
-  shows `[data-demo]` and writes no attempt; the hand logs `how`).
+  shows `[data-demo]` and writes no attempt; the hand logs `how`); the double tap (3.2), on a paused clock so every
+  tap of a double tap has one time, on every project: on the right card with reduced motion ("הַבָּא" stays), on
+  "הַבָּא" in a session and in `#/dev` (the next round, unanswered: a later wrong tap is its only miss), at the
+  window's edge (a tap on "הַבָּא" and on the next round's card at 299 ms dropped, at 300 ms taken), and on the end
+  screen's home button (home stays).
 - On index.html, looping over the registry (both games, ten-frame and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KB of same-origin
@@ -603,7 +619,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |
 | End screen | Solved thumbs and home only | R10, §5.10; the next step on home starts the next session |
-| Double tap | The shell drops a tap that comes within 300 ms of a screen change or of "הַבָּא" appearing or moving: it compares the event's `timeStamp` with the time it recorded at the change, with no `setTimeout` or `setInterval`. It replaces the click `detail` guard of 3.2, which changes with the code, and its tests run on every Playwright project. Decided 2026-10-14, see decisions.md | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once. iOS Safari sends every tap's click with `detail` 1 (WebKit's source), so the `detail` guard dropped nothing on the iPhone: the second tap answered the next round with a card the child never saw, skipped the solved picture with reduced motion, and opened a game from the end screen. The owner allowed the window: the child never sees it, so it is not a visible clock (design 6.9 changes with the code) |
+| Double tap | The shell drops a tap that comes within 300 ms of a screen change or of "הַבָּא" appearing or moving: it compares the event's `timeStamp` with the time it recorded at the change, with no `setTimeout` or `setInterval` (shell/taps.js, 3.2). It replaced the click `detail` guard, and its tests run on every Playwright project. Decided 2026-10-14, see decisions.md | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once. iOS Safari sends every tap's click with `detail` 1 (WebKit's source), so the `detail` guard dropped nothing on the iPhone: the second tap answered the next round with a card the child never saw, skipped the solved picture with reduced motion, and opened a game from the end screen. The owner allowed the window: the child never sees it, so it is not a visible clock (design 6.9 says so) |
 | 60 s test | One for the suite, all games in parallel pages | A.2 asks one per suite; one wait covers every game |
 | Parents labels | By hand with nikud; link hidden until `VERIFIED` | The doc's table has no nikud; decisions.md: every link is checked before the page goes live |
 | `meta` | No `topic`, no grade; `version` and `css` added | Owner decision 2026-10-14: nothing at run time uses a grade, so the review pool needs none; `version` marks a changed generator |

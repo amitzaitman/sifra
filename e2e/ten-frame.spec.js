@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
 import { rng } from '../shell/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, ladderAt, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const ID = 'ten-frame';
 /** @type {(id: string) => number} a level's number, from 1 */
@@ -35,6 +35,7 @@ async function playAt(page, level, over = {}) {
   await page.clock.install({ time: NOW });
   await page.goto(`${INDEX}#/play/${ID}`);
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
+  await look(page);
   return roundOf(page);
 }
 
@@ -54,6 +55,7 @@ async function devAt(page, id, ok = () => true) {
   await page.clock.install({ time: NOW });
   await page.goto(`${INDEX}#/dev/${ID}/${number(id)}/${seed}`);
   await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
   return { round, seed, answerAt: round.choices.findIndex((c) => c.rule === null) };
 }
 
@@ -242,6 +244,7 @@ for (const level of game.levels.filter((l) => l.demo).map((l) => l.id)) {
     if (level === 'bridge-move') await expect(page.locator('[data-area="equation"] .eq')).toHaveText(/^10\+\d=\d+$/);
     else await expect(page.locator('[data-tour]').first()).toBeVisible();
     expect((await stored(page)).child.attempts).toEqual([]);
+    await look(page);
     await page.locator('[data-next]').click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', String(number(level)));
   });
@@ -333,8 +336,10 @@ test('"show me how": a demo, then the same round from the start, logged as how',
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   await expect(page.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+  await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', data.seed);
+  await look(page);
   const { answerAt } = await roundOf(page);
   await card(page, answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
@@ -350,7 +355,12 @@ test('a session of 8 rounds ends on the solved pictures, and a round after it pl
       await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
       const name = await screen.getAttribute('data-screen');
       if (name === 'end') return;
-      if (name === 'round') await card(page, (await roundOf(page)).answerAt).click();
+      if (name === 'round') {
+        await look(page);
+        await card(page, (await roundOf(page)).answerAt).click();
+      }
+      await expect(page.locator('[data-next]')).toBeVisible();
+      await look(page);
       await page.locator('[data-next]').click();
     }
   };
@@ -362,11 +372,20 @@ test('a session of 8 rounds ends on the solved pictures, and a round after it pl
     expect(await thumb.locator('[data-role="unknown"], .tf-ring.is-zero').count()).toBeGreaterThan(0);
   }
   expect((await stored(page)).child.attempts).toHaveLength(8);
+  await look(page);
   await page.locator('[data-home]').click();
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await look(page);
   await page.locator(`[data-card][href="#/play/${ID}"]`).click();
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
   const screen = page.locator('main[data-screen]');
-  if (await screen.getAttribute('data-screen') === 'demo') await page.locator('[data-next]').click();
+  if (await screen.getAttribute('data-screen') === 'demo') {
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+    await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  }
+  await look(page);
   await card(page, (await roundOf(page)).answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
   expect(await lastAttempt(page)).toMatchObject({ session: 2, outcome: 'first' });

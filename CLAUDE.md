@@ -50,7 +50,8 @@ with children) only after the owner's iPhone check there is logged in `docs/devi
 - `lib/` holds only code the games share or will share (`cover.js`, `settle.js`). Its modules import nothing, a game
   imports each of them, and `lib/` stays under 600 lines.
 - `shell/` holds the shell's own modules, the ones only `app.js` (and the tests) import: cards, equation row, ladder,
-  planner, rng, store. They import only `lib/`, `data/` and each other. No game imports `shell/` or `app.js`.
+  planner, rng, store, the double-tap window. They import only `lib/`, `data/` and each other. No game imports
+  `shell/` or `app.js`.
 - Code moves to `lib/` only when a second game needs it. An option only one game uses stays in that game.
 
 ## Hebrew and layout

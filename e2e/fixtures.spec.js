@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as scale from '../tests/fixtures/scale/game.js';
-import { FIXTURE, NOW, ladderAt, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { FIXTURE, NOW, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 /**
  * Opens a play session of a game whose ladder is at a level (its demo already seen). The seed
@@ -19,6 +19,7 @@ async function playAt(page, game, level, over = {}, seed = 1) {
   await page.clock.install({ time: NOW });
   await page.goto(`${FIXTURE}?seed=${seed}#/play/${game}`);
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
+  await look(page);
   return roundOf(page);
 }
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
@@ -110,6 +111,7 @@ test('a demo level runs its demo first, and the hand taps the answer', async ({ 
   await expect(page.locator('[data-next]')).toBeVisible();
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
   expect((await stored(page)).child.attempts).toEqual([]);
+  await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '2');
 });
@@ -130,6 +132,7 @@ test('"show me how" on a symbols level draws the help picture in the demo', asyn
   await page.clock.install({ time: NOW });
   await page.goto(`${FIXTURE}#/dev/parts/3/1`);
   await expect(page.locator('[data-show-picture]')).toHaveCount(1);
+  await look(page);
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   await expect(page.locator('[data-show-picture]')).toHaveCount(0);
@@ -145,6 +148,7 @@ test('a judging round: the cards read as exercises, a wrong one gets its display
     await expect(card(page, i)).toHaveAttribute('aria-label', [...value.left, '=', ...value.right].join(' '));
   }
   const wrong = answerAt === 0 ? 1 : 0;
+  await look(page);
   await card(page, wrong).click();
   await expect(card(page, wrong)).toHaveClass(/is-retired/);
   await expect(page.locator(`[data-display="${RULES[round.choices[wrong].rule].display}"]`)).toBeVisible();
@@ -172,15 +176,19 @@ test('a session of 8 rounds ends on the solved pictures and the home button', as
     const name = await screen.getAttribute('data-screen');
     if (name === 'end') break;
     if (name === 'round') {
+      await look(page);
       const { answerAt } = await roundOf(page);
       await card(page, answerAt).click();
     }
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
     await page.locator('[data-next]').click();
   }
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
   const { child } = await stored(page);
   expect(child.attempts).toHaveLength(8);
   expect(child.attempts.every((a) => a.session === 1 && a.outcome === 'first')).toBe(true);
+  await look(page);
   await page.locator('[data-home]').click();
   await expect(page.locator('main[data-screen="home"]')).toBeVisible();
 });
