@@ -518,22 +518,33 @@ test('the second miss locks the cards under a second, also where the cover lifts
   const wrong = [round.choices.findIndex((c) => c.rule && c.rule !== 'given.whole'), round.choices.findIndex((c) => c.rule === 'given.whole')];
   await card(page, wrong[0]).click();
   await unlocked(page);
-  // Timed on the animation timeline, which the page's fake clock does not touch.
+  // The display's own timing, read when the cards lock (its animations exist by then), and the
+  // lock timed on the animation timeline, which the page's fake clock does not touch.
   await page.evaluate(() => {
     const row = document.querySelector('[data-choices]');
     const w = /** @type {any} */ (window);
     w.lockTimes = [];
     const lifting = () => document.getAnimations().some((a) => a.playState === 'running' && /** @type {KeyframeEffect} */ (a.effect)?.target?.matches('.cover'));
-    new MutationObserver(() => w.lockTimes.push([row.hasAttribute('data-locked'), document.timeline.currentTime, lifting()]))
-      .observe(row, { attributes: true, attributeFilter: ['data-locked'] });
+    new MutationObserver(() => {
+      const locked = row.hasAttribute('data-locked');
+      if (locked) w.display = document.getAnimations();
+      const ends = w.display.map((a) => Number(a.effect.getComputedTiming().endTime));
+      const running = w.display.filter((a) => a.playState === 'running').length;
+      w.lockTimes.push({ locked, t: document.timeline.currentTime, lifting: lifting(), end: Math.max(0, ...ends), running });
+    }).observe(row, { attributes: true, attributeFilter: ['data-locked'] });
   });
   await card(page, wrong[1]).click();
   await unlocked(page);
   await expect(page.locator('[data-hint]')).toBeVisible();
   const times = await page.evaluate(() => /** @type {any} */ (window).lockTimes);
-  const on = times.find(([locked]) => locked);
-  const off = times.findLast(([locked]) => !locked);
-  expect(off[2], 'the cards are open while the cover still lifts').toBe(true);
-  expect(off[1] - on[1]).toBeGreaterThan(500);
-  expect(off[1] - on[1]).toBeLessThan(1000);
+  const on = times.find((x) => x.locked);
+  const off = times.findLast((x) => !x.locked);
+  // The display runs under a second (design 7.1, 8) and the cards open when it has ended, not later.
+  expect(on.end, 'the display as authored').toBeGreaterThan(500);
+  expect(on.end, 'the display as authored').toBeLessThan(1000);
+  expect(off.running, 'nothing of the display still runs when the cards open').toBe(0);
+  expect(off.lifting, 'the cards are open while the cover still lifts').toBe(true);
+  // Measured on frames: a frame or two late on a busy machine is not a longer display.
+  expect(off.t - on.t).toBeGreaterThanOrEqual(on.end);
+  expect(off.t - on.t).toBeLessThan(on.end + 250);
 });
