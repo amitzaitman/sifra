@@ -16,8 +16,9 @@ app.js                the shell (424 lines): routes, screens, round runner, demo
 app.css               the design.md §3 block verbatim, then the shell's components
 types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
-shell/                the shell's own modules: only app.js (and the tests) import them. Each imports only lib/, data/
-                      and shell/; no game imports shell/ or app.js (owner decision 2026-10-14, section 6). 594 lines
+shell/                the shell's own modules: only app.js (and the tests) import them (owner decision 2026-10-14).
+                      Each imports only lib/, data/ and shell/, and no game imports shell/ or app.js (an engineering
+                      decision the owner may reverse, section 6). 594 lines
   cards.js 88  equation.js 77                 answer cards (AlefBet answer-choices.js), equation row (design §6.4)
   ladder.js 89  planner.js 193  store.js 77   levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
   rng.js 36                                   seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
