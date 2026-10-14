@@ -1,0 +1,172 @@
+/* app.css. Role colours only inside the picture. */
+:root {
+  color-scheme: light;
+  --paper: #FAF6EC; --grid: #E9E1CF; --grid-size: 26px; --panel: #FFFDF7; --surface: #FFFFFF; --slot: #F1EBDD;
+  --ink: #14213D; --ink-soft: #5B6B8C; --focus: #14213D;
+  --action: #0E3A8A; --on-action: #FFFFFF; --on-action-soft: #C9D6F5; --accent: #FFC233;
+  --lip: #8E8169; --lip-action: #082660;
+  --role-whole: #0E3A8A; --role-part: #FFC233; --role-part-edge: #9E6C00;
+  --role-unknown: #D6336C; --role-unknown-tint: #FBE3EC; --on-unknown: #FFFFFF;
+  --role-added: #1FA2E6; --role-added-edge: #0B6FA6; --role-added-ghost: #9AD5F4;
+  --role-removed: #544834; /* hollow 3px outline, never a fill */
+  --halo: #FFFFFF;         /* 3px gap where unknown or a ring meets whole, or unknown meets frame */
+  --frame: #7A6F5C;        /* no role: balance, tools, a ten-frame tray that is not the whole */
+  --tray-ghost: #DBE0E7;   /* pale whole: hypothetical tray in make-ten, too-far band */
+  --gutter: 16px; --gap: 8px; --target: 64px; --card-h: 112px; --next-h: 72px;
+  --lip-h: 4px; --ring: 3px; --ring-strong: 4px; --r-panel: 28px; --r-button: 24px; --r-card: 22px; --r-chip: 12px;
+  --font: 'Rubik', system-ui, sans-serif;
+  --fs-eq: clamp(28px, 11vw, 48px); --fs-card: 36px; --fs-next: 28px; --fs-title: 30px; --fs-label: 16px;
+  --t-press: 100ms; --t-move: 250ms; --t-beam: 500ms; --t-blink: 600ms; --t-display: 1000ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+/* Pinch zoom works everywhere; only double-tap zoom is off. No zoom-lock script. */
+html { touch-action: manipulation; }
+body { margin: 0; font-family: var(--font); color: var(--ink); background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size); }
+[data-math], button { font-variant-numeric: tabular-nums; }
+.btn { --lip-c: var(--lip); box-shadow: 0 var(--lip-h) 0 var(--lip-c); transition: transform var(--t-press), box-shadow var(--t-press); }
+.btn-action { --lip-c: var(--lip-action); }
+.btn:active, .btn.is-pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--lip-c); }
+:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+/* The unknown is drawn from the start in its colour, invisible until revealed. */
+[data-role="unknown"] { opacity: 0; background-color: var(--role-unknown); fill: var(--role-unknown); }
+[data-solved] [data-role="unknown"], [data-role="unknown"].is-shown { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- The shell's components (design 4-10). Nothing below changes a token. ---------- */
+@font-face {
+  font-family: 'Rubik'; font-style: normal; font-weight: 300 900; font-display: swap;
+  src: url('fonts/rubik-hebrew.woff2') format('woff2');
+  unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+@font-face {
+  font-family: 'Rubik'; font-style: normal; font-weight: 300 900; font-display: swap;
+  src: url('fonts/rubik-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { line-height: 1.5; }
+h2, h3, p { margin: 0; }
+button { margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+a { color: inherit; -webkit-tap-highlight-color: transparent; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+svg[data-icon] { display: block; width: 32px; height: 32px; }
+
+/* One centred column; the page scrolls down, never sideways (design 5). */
+main {
+  position: relative; display: grid; align-content: start; gap: 12px; width: 100%; max-width: calc(560px + 2 * var(--gutter));
+  min-height: 100dvh; margin: 0 auto; padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+}
+@media (min-height: 700px) { main { gap: 16px; } }
+
+/* Top bar (design 6.2): home at the start, progress in the middle, the hand at the end. */
+.bar { display: grid; grid-template-columns: var(--target) minmax(0, 1fr) var(--target); align-items: center; min-height: var(--target); }
+.ctl { display: grid; place-items: center; width: var(--target); height: var(--target); border-radius: var(--r-card); background: var(--surface); color: var(--action); }
+.progress { justify-self: center; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: var(--grid); }
+.progress > span { display: block; width: calc(var(--done, 0) * 100%); height: 100%; border-radius: 4px; background: var(--frame); }
+
+/* The picture panel (design 6.3). */
+.panel {
+  position: relative; display: grid; place-items: center; height: clamp(200px, 40dvh, 380px); padding: clamp(8px, 3vw, 16px);
+  overflow: hidden; border-radius: var(--r-panel); background: var(--panel);
+}
+.ctl-picture { width: 96px; height: 96px; }
+.ctl-picture svg { width: 48px; height: 48px; }
+
+/* The equation row (design 6.4). */
+.equation { display: grid; place-items: center; min-height: calc(var(--fs-eq) * 1.3); }
+.eq {
+  display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 0.25em; width: 100%;
+  font-size: var(--fs-eq); font-weight: 800; line-height: 1.2; white-space: nowrap;
+}
+.eq.is-wrapped { flex-wrap: wrap; }
+.eq-op { color: var(--ink-soft); }
+.eq-slot { position: relative; display: inline-grid; place-items: center; min-width: 1.3em; height: 1.3em; }
+.eq-answer { opacity: 0; color: var(--role-unknown); }
+[data-solved] .eq-answer { opacity: 1; }
+
+/* The one cover (design 6.6): a dome; it lifts 60% of its height and fades in 250ms. */
+.cover {
+  position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50% 50% 20% 20% / 80% 80% 20% 20%;
+  background: var(--role-unknown); color: var(--on-unknown); font-size: min(var(--cover-fs, 0.78em), 38px); font-weight: 800; line-height: 1;
+}
+.cover::after { content: attr(data-mark); }
+.cover.is-lifted { opacity: 0; transform: translateY(-60%); pointer-events: none; animation: cover-lift var(--t-move) var(--ease); }
+@keyframes cover-lift { from { opacity: 1; transform: none; } }
+
+/* Answer cards (design 6.5): smallest to largest, left to right. */
+.choices { display: grid; align-items: center; min-height: var(--card-h); }
+.cards { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--gap); }
+.card {
+  display: grid; place-content: center; justify-items: center; gap: 6px; height: var(--card-h); padding: 0 4px;
+  border-radius: var(--r-card); background: var(--surface); color: var(--ink); font-weight: 800;
+}
+.card-number { font-size: var(--fs-card); line-height: 1.2; }
+.card-number[data-len="3"] { font-size: 28px; }
+.card-number[data-len="4"] { font-size: 20px; }
+.card-dots { display: grid; grid-template-columns: repeat(5, 8px); gap: 3px; width: 52px; }
+.card-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.card.is-retired { background: var(--slot); box-shadow: none; transform: none; }
+.card.is-retired > * { visibility: hidden; animation: card-out var(--t-move) var(--ease); }
+@keyframes card-out { from { visibility: visible; } to { visibility: visible; opacity: 0; transform: translateY(40%); } }
+.card.is-correct { background: var(--role-unknown-tint); box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown); transform: none; }
+.card.is-shown { box-shadow: 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
+.card.is-shown.is-correct { box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown), 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
+
+/* "הַבָּא" (design 6.9): in the cards' place, the arrow after the word. */
+.next {
+  display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; height: var(--next-h);
+  border-radius: var(--r-button); background: var(--action); color: var(--on-action); font-size: var(--fs-next); font-weight: 800;
+}
+.next svg[data-icon] { width: 36px; height: 36px; color: var(--accent); stroke-width: 3; }
+
+/* Home (design 6.1). */
+.brand { display: flex; align-items: center; gap: 10px; font-size: var(--fs-title); font-weight: 800; }
+.brand-dots { display: flex; gap: 4px; }
+.brand-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+.brand-dots i:nth-child(2) { background: var(--role-added); }
+.brand-dots i:nth-child(3) { background: var(--role-unknown); }
+.next-step { display: grid; gap: 12px; padding: 24px; border-radius: var(--r-panel); background: var(--action); color: var(--on-action); text-decoration: none; }
+.next-step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: var(--fs-title); font-weight: 800; }
+.next-step-go { display: grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--action); }
+.next-step-go svg[data-icon] { stroke-width: 3; }
+.next-step-body { display: grid; gap: 8px; }
+.next-step-body > .thumb { padding: 8px; border-radius: 20px; background: var(--panel); }
+.next-step-game { color: var(--on-action-soft); font-size: 18px; font-weight: 500; }
+@media (max-width: 359px) { .next-step { padding: 16px; } .next-step-head { font-size: 26px; } }
+.all { font-size: 20px; font-weight: 700; }
+.games { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.game-card {
+  display: grid; align-content: start; gap: 8px; min-height: 150px; padding: 12px; border-radius: var(--r-button);
+  background: var(--surface); color: var(--ink); font-size: 18px; font-weight: 700; text-decoration: none;
+}
+.thumb { position: relative; display: grid; place-items: center; height: 96px; overflow: hidden; pointer-events: none; }
+[data-thumb] *, [data-thumb] *::before, [data-thumb] *::after { animation: none !important; transition: none !important; }
+.parents-link { display: flex; align-items: center; min-height: var(--target); color: var(--ink-soft); font-size: 16px; font-weight: 500; }
+
+/* The end screen: the rounds played, solved (R10, pedagogy 5.10). */
+.end-thumbs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.end-thumbs > .thumb { padding: 8px; border-radius: var(--r-button); background: var(--panel); }
+.end-home { display: grid; }
+.error-text { padding: 24px 0; font-size: var(--fs-title); font-weight: 700; text-align: center; }
+
+/* Parents page (design 6.1, 3.10): links only. */
+.parents-title { font-size: 20px; font-weight: 700; }
+.topic h3 { font-size: 18px; font-weight: 700; }
+.topic ul { margin: 0; padding: 0; list-style: none; }
+.topic a { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; min-height: 56px; color: var(--action); font-weight: 500; }
+.who { color: var(--ink-soft); font-size: 16px; }
+
+/* The demo (R9): a hand over the round; slower motion is allowed only here. */
+.demo { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hand { position: absolute; bottom: 24px; left: calc(50% - 32px); width: 64px; height: 64px; color: var(--ink); transition: transform 700ms var(--ease); }
+.hand svg[data-icon] { width: 64px; height: 64px; filter: drop-shadow(0 0 2px var(--surface)); }
+.hand.is-tapping { animation: hand-tap 300ms var(--ease); }
+@keyframes hand-tap { 50% { scale: 0.8; } }
+
+/* #/dev (a tool for the owner, not a child's screen). */
+.dev-list { margin: 0; padding: 0 1em 0 0; }
+.dev-list a { display: inline-block; padding: 8px 0; color: var(--action); }
+.dev-json { margin: 0; padding: 12px; overflow-wrap: anywhere; white-space: pre-wrap; border-radius: 12px; background: var(--panel); font-size: 12px; line-height: 1.3; }

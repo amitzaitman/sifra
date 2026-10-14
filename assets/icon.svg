@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- sifra: notebook paper, the magenta cover of the unknown, and the three dots of the home page. -->
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#E9E1CF" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" fill="#FAF6EC"/>
+  <rect width="512" height="512" fill="url(#grid)"/>
+  <path d="M136 310V270a120 120 0 0 1 240 0v40q0 40-40 40H176q-40 0-40-40Z" fill="#D6336C"/>
+  <path d="M220 230c0-28 18-46 38-46s38 16 38 38c0 30-38 32-38 64" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="258" cy="318" r="16" fill="#FFFFFF"/>
+  <circle cx="200" cy="404" r="20" fill="#FFC233"/>
+  <circle cx="256" cy="404" r="20" fill="#1FA2E6"/>
+  <circle cx="312" cy="404" r="20" fill="#0E3A8A"/>
+</svg>
