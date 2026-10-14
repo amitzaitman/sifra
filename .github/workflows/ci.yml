@@ -54,7 +54,7 @@ jobs:
         run: |
           mkdir _site
           touch _site/.nojekyll
-          cp -r index.html manifest.webmanifest app.js app.css lib data games fonts assets _site/
+          cp -r index.html manifest.webmanifest app.js app.css shell lib data games fonts assets _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

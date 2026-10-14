@@ -1,7 +1,7 @@
-// lib/ladder.js: each rule of architecture 3.4 alone (4.3), pedagogy 5.3-5.4.
+// shell/ladder.js: each rule of architecture 3.4 alone (4.3), pedagogy 5.3-5.4.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveTo, needsDemo, sawDemo, startLadder, step } from '../lib/ladder.js';
+import { moveTo, needsDemo, sawDemo, startLadder, step } from '../shell/ladder.js';
 
 const levels = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({ id, skill: 'num.parts.split', demo: i % 2 === 0 }));
 /** A ladder out of its fast climb, at a level. */

@@ -8,10 +8,10 @@ import * as registry from '../games/registry.js';
 import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 import {
   CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectTouchTargets,
-  ladderAt, roundOf, seedStore, skillState, storeWith, stored,
+  ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
 } from './helpers.js';
 
 const SITES = [
@@ -31,11 +31,13 @@ async function open(page, url) {
   await page.goto(url);
 }
 
-/** Solves the round on screen and waits for "הַבָּא". */
+/** Solves the round on screen as a child does: looks, taps the answer, and looks at the solved round and "הַבָּא". */
 async function solve(page) {
+  await look(page);
   const { answerAt } = await roundOf(page);
   await page.locator(`button[data-index="${answerAt}"]`).click();
   await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
 }
 
 test('home: the next-step card, a card per game, and no parents link while the links are unverified', async ({ page }) => {
@@ -73,7 +75,8 @@ test('next step: a passed skill opens the next one, in another game when it come
 test('the level is kept after a reload: one first try climbs to level 2', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, `${FIXTURE}#/play/parts`);
-  await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+  await expect(page.locator('main[data-screen="demo"] [data-next]')).toBeVisible();
+  await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
   await solve(page);
@@ -113,11 +116,14 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   let { child } = await stored(page);
   expect(child.attempts).toEqual([]);
   expect(child.games.parts.demoSeen).toEqual(['split-5']);
+  await look(page);
   await page.locator('[data-next]').click();
   const seed = await page.locator('main[data-screen="round"]').getAttribute('data-seed');
+  await look(page);
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', seed);
   await solve(page);
@@ -127,20 +133,34 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   expect(child.attempts[0]).toMatchObject({ outcome: 'help', help: ['how'], demo: ['auto', 'how'], wrong: [] });
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"] [role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+  await look(page);
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"] [role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
   await page.locator('[data-next]').click();
   await solve(page);
   expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
 
-// The shell tells a double tap's second tap by click.detail (architecture 3.2). In WebKit, both
-// Playwright's and iOS Safari's, every tap's click has detail 1 when the page has no dblclick
-// listener, so the guard cannot work there and these tests would fail on the webkit project. They
-// run on Chromium only until the owner decides how the iPhone gets the guard (architecture 6).
-const ONLY_CHROMIUM = 'WebKit gives every tap\'s click detail 1: the double-tap guard is an open question on iOS (architecture 6)';
+// The double-tap window (design 6.9, shell/taps.js): the shell drops a tap that comes within 300 ms
+// of a new screen or of "הַבָּא" appearing, by the events' timeStamps. The page's clock stamps the
+// events (page.clock fakes Event.timeStamp along with performance.now), so on a paused clock every
+// tap carries the same time until runFor moves it: the window is exact, and the same in Chromium
+// and WebKit (iOS Safari counts no taps in click.detail; the window counts none).
 
-/** Two touchscreen taps at the middle of an element, as fast as the protocol sends them: one double tap. */
+/**
+ * Opens a URL at "today", then pauses the clock a minute on: events get one time stamp until runFor.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} url
+ */
+async function openPaused(page, url) {
+  await open(page, url);
+  await expect(page.locator('main')).toBeVisible();
+  await page.clock.pauseAt(new Date(NOW.getTime() + 60000));
+}
+
+/** Two touchscreen taps at the middle of an element, at one time on the paused clock: one double tap. */
 async function doubleTap(page, locator) {
   const box = await locator.boundingBox();
   const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
@@ -148,39 +168,103 @@ async function doubleTap(page, locator) {
   await page.touchscreen.tap(x, y);
 }
 
-test('a double tap on the right card with reduced motion: "הַבָּא" is born under the finger, and the second tap does not skip the solved round (design 6.9)', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium', ONLY_CHROMIUM);
+/** The index of the card now under the middle of a box (-1 for none). */
+const cardAt = (page, box) => page.evaluate(([x, y]) =>
+  Number(document.elementFromPoint(x, y)?.closest('button[data-index]')?.getAttribute('data-index') ?? -1), [box.x + box.width / 2, box.y + box.height / 2]);
+
+test('a double tap on the right card with reduced motion: "הַבָּא" is born under the finger, and the second tap does not skip the solved round (design 6.9)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
-  await open(page, `${FIXTURE}#/play/parts`);
+  await openPaused(page, `${FIXTURE}#/play/parts`);
+  await look(page);
   const { answerAt, data } = await roundOf(page);
   await doubleTap(page, page.locator(`button[data-index="${answerAt}"]`));
   await expect(page.locator('[data-next]')).toBeVisible();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', data.seed);
   await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '0');
-  // A tap of its own is taken.
+  // After the window a tap is taken, on "הַבָּא": it is still there, so the second tap left it.
+  await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
 });
 
 for (const [name, route] of [['a session', '#/play/parts'], ['#/dev', '#/dev/parts/2/1']]) {
-  test(`${name}: a double tap on "הַבָּא" starts the next round, and the second tap does not answer it (design 6.9)`, async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'chromium', ONLY_CHROMIUM);
+  test(`${name}: a double tap on "הַבָּא" starts the next round, and the second tap does not answer it (design 6.9)`, async ({ page }) => {
     await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
-    await open(page, `${FIXTURE}${route}`);
+    await openPaused(page, `${FIXTURE}${route}`);
     await solve(page);
     const before = await page.locator('main[data-screen="round"]').getAttribute('data-seed');
-    await doubleTap(page, page.locator('[data-next]'));
+    const next = page.locator('[data-next]');
+    const box = await next.boundingBox();
+    await doubleTap(page, next);
     await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-seed', before);
     await expect(page.locator('[data-choices]')).toBeVisible();
-    await expect(page.locator('button[data-index].is-retired')).toHaveCount(0);
-    await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved', '');
-    expect((await stored(page)).child.attempts).toHaveLength(route.startsWith('#/play') ? 1 : 0);
-    // The next tap is taken.
-    await solve(page);
+    // After the window, a wrong card that was not under the finger: the only card retired, and the
+    // round's only miss, so the second tap answered nothing (had it, this tap would find no cards).
+    await look(page);
+    const { round, answerAt } = await roundOf(page);
+    const under = await cardAt(page, box);
+    const wrong = round.choices.findIndex((c, i) => c.rule && i !== under);
+    await page.locator(`button[data-index="${wrong}"]`).click();
+    await expect(page.locator(`button[data-index="${wrong}"]`)).toHaveClass(/is-retired/);
+    await expect(page.locator('button[data-index].is-retired')).toHaveCount(1);
+    await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked');
+    await look(page);
+    await page.locator(`button[data-index="${answerAt}"]`).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    if (route.startsWith('#/play')) {
+      expect((await stored(page)).child.attempts.at(-1)).toMatchObject({ outcome: 'help', wrong: [round.choices[wrong].rule], taps: { picture: 0, equation: 0, other: 0 } });
+    }
   });
 }
+
+test('the window\'s edge: a tap 299 ms after "הַבָּא" or a new round appears is dropped, at 300 ms it is taken (design 6.9)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await openPaused(page, `${FIXTURE}#/play/parts`);
+  await look(page);
+  let { answerAt } = await roundOf(page);
+  await page.locator(`button[data-index="${answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  // Each tap finds what it taps only if the one 1 ms before it was dropped.
+  await page.clock.runFor(299);
+  await page.locator('[data-next]').click();
+  await page.clock.runFor(1);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+  ({ answerAt } = await roundOf(page));
+  await page.clock.runFor(299);
+  await page.locator(`button[data-index="${answerAt}"]`).click();
+  await page.clock.runFor(1);
+  await page.locator(`button[data-index="${answerAt}"]`).click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  expect((await stored(page)).child.attempts.map((a) => a.outcome)).toEqual(['first', 'first']);
+});
+
+test('a double tap on the end screen\'s home button opens home and stays there (design 6.9)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await openPaused(page, `${FIXTURE}?seed=1#/play/parts`);
+  const screen = page.locator('main[data-screen]');
+  for (let n = 0; n < 20; n++) {
+    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
+    const name = await screen.getAttribute('data-screen');
+    if (name === 'end') break;
+    if (name === 'round') await solve(page);
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+  await expect(page.locator('main[data-screen="end"]')).toBeVisible();
+  await look(page);
+  await doubleTap(page, page.locator('[data-home]'));
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  // After the window a game card is taken: home was still on screen, so the second tap opened nothing.
+  await look(page);
+  await page.locator('[data-card]').first().click();
+  await expect(page).toHaveURL(/#\/play\/parts$/);
+});
 
 test('parents page: plain links that open YouTube in a new tab, and the home button', async ({ page }) => {
   await open(page, `${INDEX}#/parents`);
@@ -192,6 +276,7 @@ test('parents page: plain links that open YouTube in a new tab, and the home but
     await expect(link).toHaveAttribute('href', /^https:\/\/www\.youtube\.com\/watch\?v=/);
   }
   await expect(page.locator('iframe')).toHaveCount(0);
+  await look(page);
   await page.locator('[data-home]').click();
   await expect(page.locator('main[data-screen="home"]')).toBeVisible();
 });
@@ -208,6 +293,8 @@ test('#/dev/export: one button downloads the stored value as is, named by the lo
   // 00:30 in Israel, still the day before in UTC.
   await page.clock.install({ time: new Date('2026-10-14T00:30:00+03:00') });
   await page.goto(`${FIXTURE}#/dev/export`);
+  await expect(page.locator('[data-export]')).toBeVisible();
+  await look(page);
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-export]').click()]);
   expect(download.suggestedFilename()).toBe(`sifra-${CHILD}-2026-10-14.json`);
   const file = JSON.parse(readFileSync(await download.path(), 'utf8'));

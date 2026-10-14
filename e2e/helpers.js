@@ -3,7 +3,8 @@
 import { expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
+import { WINDOW } from '../shell/taps.js';
 
 export const FIXTURE = '/e2e/fixture.html';
 export const INDEX = '/index.html';
@@ -25,6 +26,15 @@ export async function gameOf(id) {
   }
   throw new Error(`no game ${id}`);
 }
+
+/**
+ * The child looks before the next tap. The shell drops a tap that comes within 300 ms of a new
+ * screen or of "הַבָּא" appearing (design 6.9, shell/taps.js), and a test taps faster than any
+ * child, so after such a change it moves the page's clock past the window. Nothing waits: the
+ * clock (installed before goto) stamps the events, and only the stamps move.
+ * @param {import('@playwright/test').Page} page
+ */
+export const look = (page) => page.clock.runFor(WINDOW);
 
 /** The games of games/registry.js, imported in Node. */
 export async function registered() {

@@ -1,7 +1,7 @@
-// lib/store.js (architecture 3.9, 4.3): no throw on a broken storage, migrate, caps, quota, export.
+// shell/store.js (architecture 3.9, 4.3): no throw on a broken storage, migrate, caps, quota, export.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CAPS, KEY, SCHEMA, capped, childOf, exportFile, load, migrate, newChild, save } from '../lib/store.js';
+import { CAPS, KEY, SCHEMA, capped, childOf, exportFile, load, migrate, newChild, save } from '../shell/store.js';
 
 const newId = () => 'c0000abcd';
 const DAY = '2026-10-14';
@@ -28,7 +28,7 @@ function memory(initial = {}, failWith = null) {
 const throwing = new Proxy({}, { get() { throw new Error('SecurityError: storage is off'); } });
 
 test('importing and loading with a storage that throws on any access does not throw', async () => {
-  await import('../lib/store.js?again');
+  await import('../shell/store.js?again');
   const store = load(throwing, newId, DAY);
   assert.equal(store.data.current, 'c0000abcd');
   assert.deepEqual(childOf(store), newChild(DAY));

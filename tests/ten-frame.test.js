@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import * as game from '../games/ten-frame/game.js';
 import { disc, domeOver, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
 import { pictureOf } from '../games/ten-frame/picture.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 
 const SEEDS = 200;
 const level = (id) => game.levels.find((l) => l.id === id);

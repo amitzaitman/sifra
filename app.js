@@ -1,13 +1,14 @@
 // The sifra shell (docs/architecture.md section 3): routes, screens, sessions, the round runner,
 // demos and the error screen. The shell owns levels, storage and records; games only draw.
-import { drawCards } from './lib/cards.js';
+import { drawCards } from './shell/cards.js';
 import { cover } from './lib/cover.js';
-import { drawEquation, fitEquation, solveEquation } from './lib/equation.js';
-import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './lib/ladder.js';
-import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './lib/planner.js';
-import { demoSeed, rng, seedFrom } from './lib/rng.js';
+import { drawEquation, fitEquation, solveEquation } from './shell/equation.js';
+import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
+import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
+import { demoSeed, rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
-import { CAPS, capped, childOf, exportFile, load, save } from './lib/store.js';
+import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
+import { byPointer, tapWindow } from './shell/taps.js';
 import { RULES } from './data/errors.js';
 import { SKILLS } from './data/skills.js';
 import { TOPICS, VERIFIED } from './data/videos.js';
@@ -37,6 +38,8 @@ const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'obj
 const today = () => dayOf(S.now());
 const child = () => childOf(S.store);
 const persist = () => save(S.store);
+/** Records a change under the finger, on the clock events are stamped with (shell/taps.js). */
+const changed = () => S.taps.changed(new Event('change').timeStamp);
 const event = (e) => capped(child().events, { t: S.now().toISOString(), day: today(), ...e }, CAPS.events);
 /** A round's record until it is solved: what the attempt logs (3.9). */
 const blank = () => ({ wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 }, t0: performance.now(), firstMs: null, ms: null, tour: false });
@@ -74,7 +77,7 @@ function screen(name, title, attrs = {}) {
   S.ctl?.abort();
   S.ctl = new AbortController();
   S.thumbs.length = 0;
-  S.swapped = true;
+  changed();
   const main = h('main', { 'data-screen': name, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
@@ -284,8 +287,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     const label = `<span>${T.next}</span>${svg('next')}`;
     const button = h('button', { type: 'button', class: 'next btn btn-action', 'data-next': true, 'data-control': true, html: label });
     button.addEventListener('click', next, { signal });
-    S.swapped = true;
     cardsArea.replaceChildren(button);
+    changed();
     button.focus({ preventScroll: true });
   };
   if (mode !== 'demo') cards.buttons[0]?.focus({ preventScroll: true });
@@ -405,14 +408,12 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   }
   const ordered = homeOrder(games, SKILLS);
   S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [],
-    seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]), swapped: false };
-  // The second tap of a double tap never acts on what the first one put under the finger: a new
-  // screen, or "הַבָּא" in the cards' place (design 6.9). The browser counts the taps in
-  // click.detail; this is no clock and locks nothing, and the next tap is taken.
-  root.addEventListener('click', (e) => {
-    if (S.swapped && e.detail > 1) return void (e.preventDefault(), e.stopImmediatePropagation());
-    S.swapped = false;
-  }, { capture: true });
+    seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]), taps: tapWindow() };
+  // A tap within 300 ms of a new screen or of "הַבָּא" appearing never acts on what the change put
+  // under the finger (design 6.9): event times, no timer, nothing locked; the next tap is taken.
+  const drop = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  root.addEventListener('pointerdown', (e) => S.taps.down(e.timeStamp) && drop(e), { capture: true });
+  root.addEventListener('click', (e) => S.taps.click(e.timeStamp, byPointer(e)) && drop(e), { capture: true });
   errorScreen();
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, newId, today());

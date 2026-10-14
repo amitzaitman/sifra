@@ -4,8 +4,8 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
-import { rng } from '../lib/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { rng } from '../shell/rng.js';
+import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';
@@ -36,6 +36,7 @@ async function playAt(page, level, over = {}) {
   await page.clock.install({ time: NOW });
   await page.goto(`${INDEX}#/play/balance`);
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
+  await look(page);
   return roundOf(page);
 }
 
@@ -52,6 +53,7 @@ async function devAt(page, level, seed) {
   // A new query each time, so the page loads afresh even on the same round.
   await page.goto(`${INDEX}?v=${visits}#/dev/balance/${number(level)}/${seed}`);
   await expect(page.locator('[data-choices]')).toBeVisible();
+  await look(page);
   return roundOf(page);
 }
 
@@ -558,6 +560,7 @@ for (const level of ['same', 'missing-right', 'both-sides', 'true-false']) {
     await expect(page.locator('[data-next]')).toBeVisible();
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     expect((await stored(page)).child.attempts).toEqual([]);
+    await look(page);
     await page.locator('[data-next]').click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', String(number(level)));
   });
@@ -599,11 +602,13 @@ test('a round after "show me how": the demo, then the same round from the start;
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
   await page.locator('[data-next]').click();
   const main = page.locator('main[data-screen="round"]');
   await expect(main).toHaveAttribute('data-seed', data.seed);
   await expect(page.locator('.card.is-retired')).toHaveCount(0);
   await expect(page.locator('[data-display]')).toHaveCount(0);
+  await look(page);
   await card(page, answerAt).click();
   await expect(main).toHaveAttribute('data-solved', '');
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', wrong: [round.choices[i].rule], help: ['how'], demo: ['how'] });
@@ -761,9 +766,12 @@ test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
     const name = await screen.getAttribute('data-screen');
     if (name === 'end') break;
     if (name === 'round') {
+      await look(page);
       const { answerAt } = await roundOf(page);
       await card(page, answerAt).click();
     }
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
     await page.locator('[data-next]').click();
   }
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
