@@ -515,7 +515,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     for (let j = 0; j < steps.length && !signal.aborted; j += pace) {
       const digits = steps.slice(j, j + pace).map(([target, n]) => {
         const last = j + pace >= steps.length ? ' is-last' : '';
-        const digit = put(target, `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`, undefined, n);
+        const wide = n > 9 ? ' is-wide' : '';
+        const digit = put(target, `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}${wide}`, undefined, n);
         digit.dataset.tour = String(n);
         return digit;
       });

@@ -79,6 +79,10 @@
 [data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); }
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 [data-game="balance"] .bl-digit.is-last { transform: scale(1.3); }
+/* Two digits are wider than the cube at 14px: centred on it, and the last one smaller before its
+   1.3, so it stays inside the cube and off the tour ring's halo (14px as seen). */
+[data-game="balance"] .bl-digit.is-wide { justify-content: center; }
+[data-game="balance"] .bl-digit.is-last.is-wide { font-size: max(calc(14px / 1.3), calc(var(--cube) * .56)); }
 
 [data-game="balance"] .bl-set {
   --len: 10; --rows: 1; --cell: min(48px, calc((100cqw - 8px) / var(--len)), calc((100cqh - 8px) / (var(--rows) + 1.6)));

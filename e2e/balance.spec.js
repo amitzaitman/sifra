@@ -619,6 +619,28 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
   }
 });
 
+test('320px: the tour\'s last number stays on its cube, two digits too, off the ring (design 7.2)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  // 6 + 4 = 10 (the ring on the right pan), and ? = 9 + 7 counting on to 16.
+  for (const [level, seed, last] of [['true-false', 2, '10'], ['missing-symbols-20', 10, '16']]) {
+    const { round } = await devAt(page, level, seed);
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]').last(), `${level} ${seed}`).toHaveText(last);
+    await expect(page.locator('[data-hint] .bl-ring.is-tour')).not.toHaveCount(0);
+    // How far each last number's text goes past its cube, on either side.
+    await expect.poll(() => page.evaluate(() => Math.max(...[...document.querySelectorAll('[data-tour].is-last')].map((digit) => {
+      const range = document.createRange();
+      range.selectNodeContents(digit);
+      const text = range.getBoundingClientRect();
+      const cube = digit.parentElement.getBoundingClientRect();
+      return Math.max(text.right - cube.right, cube.left - text.left);
+    }))), `${level} ${seed}`).toBeLessThanOrEqual(0.5);
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);
