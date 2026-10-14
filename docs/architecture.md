@@ -287,7 +287,9 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
 - Double tap (design 6.9): a capture-phase click listener on the root drops a click whose `detail` is over 1 when
   the screen, or the cards' place ("הַבָּא"), changed since the previous click. The browser counts the taps; there is
   no clock and nothing locks, and the next tap is taken. So the second tap of a double tap never answers a round
-  the child has not seen, and never skips the solved picture, also with reduced motion.
+  the child has not seen, and never skips the solved picture, also with reduced motion. This holds where the browser
+  counts taps: Chromium does, iOS Safari does not (every tap's click has `detail` 1), so on the iPhone the guard
+  drops nothing yet (section 6, open questions), and the double-tap tests run on Chromium only.
 
 ### 3.3 Session
 
@@ -593,7 +595,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |
 | End screen | Solved thumbs and home only | R10, §5.10; the next step on home starts the next session |
-| Double tap | The shell drops a click with `detail > 1` after the screen or the cards' place changed (3.2) | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once; a time window would be a clock (R5). Whether iOS Safari counts taps in `detail` is checked on the iPhone (`device-checks.md`) |
+| Double tap | The shell drops a click with `detail > 1` after the screen or the cards' place changed (3.2) | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once; a time window would be a clock (R5). iOS Safari does not count taps in `detail` (WebKit's source): how the iPhone gets the guard is an open question below |
 | 60 s test | One for the suite, all games in parallel pages | A.2 asks one per suite; one wait covers every game |
 | Parents labels | By hand with nikud; link hidden until `VERIFIED` | The doc's table has no nikud; decisions.md: every link is checked before the page goes live |
 | `meta` | No `topic`, no grade; `version` and `css` added | Owner decision 2026-10-14: nothing at run time uses a grade, so the review pool needs none; `version` marks a changed generator |
@@ -650,6 +652,19 @@ Until then these are not choices made. One list for both games.
   the game makes it two levels (`missing-symbols`, `missing-symbols-20`), so §6.3's levels 6-10 are the game's 7-11
   (levels are named by id here). Either keep two levels and number §6.3 the same way, or make row 5 one level with
   `max: 20`.
+- **The double tap on the iPhone** (design 6.9, section 3.2). The shell drops a double tap's second tap by the
+  click's `detail`, and iOS Safari never sets it above 1. WebKit (Safari 16.4 to 18) sends every tap's click with
+  `detail` 1; it counts a second tap only for a `dblclick` listener on a node whose `touch-action`, and every
+  ancestor's, is `auto`, and `html { touch-action: manipulation; }` (CLAUDE.md, design 10) rules that out.
+  Playwright's WebKit does the same, so the three double-tap tests run on Chromium only. On the iPhone the second
+  tap still answers the next round with a card the child never saw (a wrong card is recorded with its rule),
+  skips the solved picture with reduced motion, and on the end screen opens a game from home; the double-tap item
+  of `device-checks.md` would fail. Either the shell drops a click that comes within about 300 ms of a swap (it
+  reads the event's time, with no timer; it works in every browser and CI can test it on WebKit, but it is a short
+  clock, which design 6.9 and the "Double tap" row above ruled out), or the guard stays Chromium-only and design
+  6.9, `device-checks.md` and 3.2 say so, or a `dblclick` listener with `touch-action: auto` under it (iOS would
+  then send the second tap with `detail` 2; it breaks CLAUDE.md's one site-wide `touch-action`, and an iPhone must
+  show that double-tap zoom stays off and the second tap does not also arrive as a plain click).
 - **When a game goes live, and where the iPhone check runs.** decisions.md ("בדיקות"), CLAUDE.md, the README and
   section 7 say the iPhone check is logged before a game goes live, but `device-checks.md` checks the site at its
   GitHub Pages address, and CI deploys every push to main with every registered game. So a merge puts a game on
