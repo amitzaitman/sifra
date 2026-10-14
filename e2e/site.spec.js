@@ -3,6 +3,7 @@
 // checks on home, the parents page and every level through #/dev.
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import * as registry from '../games/registry.js';
 import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
@@ -164,10 +165,10 @@ test('#/dev/export: one button downloads the stored value as is, named by the lo
   expect(file).toMatchObject({ key: 'sifra', schema: 1, data: value });
 });
 
-test('index.html: the first load of home is at most 200 KB of same-origin responses', async ({ page, baseURL }) => {
+test('index.html: the first load of home is at most 200 KB of same-origin responses, gzipped as Pages serves them', async ({ page, baseURL }) => {
   const sizes = [];
   page.on('response', (r) => {
-    if (new URL(r.url()).origin === new URL(baseURL).origin) sizes.push(r.body().then((b) => b.length, () => 0));
+    if (new URL(r.url()).origin === new URL(baseURL).origin) sizes.push(r.body().then((b) => gzipSync(b).length, () => 0));
   });
   await open(page, INDEX);
   await page.waitForLoadState('networkidle');

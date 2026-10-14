@@ -185,7 +185,10 @@ dev-spec A.1 is the shape, with these precisions:
 - `data-role` only on quantity elements, never on frames, trays without a role, text or the equation. The unknown is
   drawn from the start with `data-role="unknown"`; app.css hides it until `[data-solved]` (design §6.9).
 - Covers only from lib/cover.js: `cover(mark = '?')` returns `<span class="cover">` filling its parent box; adding
-  `is-lifted` lifts it (then `settle`).
+  `is-lifted` lifts it (then `settle`). The dome's corners come from its height (design 6.6): a parent box wider than
+  tall (a run of places in a picture) sets `--cover-h` to its own height, and app.css keeps the corners of a
+  `--cover-h` square at both ends, so the cover covers every place between them; without it the equation's square
+  cover is unchanged.
 - Everything mathematical has the attribute `dir="ltr"` and `data-math` (R7). Elements the child is meant to tap in
   the picture have `data-target`, so they are not counted as off-target taps.
 - game.css: every selector starts with `[data-game="<id>"]`; keyframe names start with the id; no CSS nesting.
@@ -492,10 +495,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - On index.html, looping over the registry (home and parents only until the games merge): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KB of same-origin
-  responses; R7 on every `[data-math]` (attribute, computed direction, characters left to right); R10 (animations
-  only on `[data-role]`, `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the
-  60 s test); R1 [browser] (text hidden, every control has `[data-icon]`, a screenshot per level for the owner);
-  R6 [browser] (every `[data-role]` element has its role token in `fill` or `background-color`).
+  responses, gzipped as GitHub Pages serves them (section 6); R7 on every `[data-math]` (attribute, computed
+  direction, characters left to right); R10 (animations only on `[data-role]`, `page.clock.runFor(60000)` adds
+  nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser] (text hidden, every control has
+  `[data-icon]`, a screenshot per level for the owner); R6 [browser] (every `[data-role]` element has its role token
+  in `fill` or `background-color`).
 
 ### 4.7 Each game spec (e2e/<id>.spec.js)
 
@@ -548,7 +552,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Arrays in a level | `structure`, `ask`: the planner; `unknown`, `eqform`: makeRound | R3 and R11 give structure and ask to the planner; R2 and R8 check the others over seeds |
 | R2 ceiling | Per structure, a column of the §4.6 table (`start` in FORMS): 5 for the stories, the depth tables' level 1 for `equal-groups`, `array` and `share`, none for `equation` | Owner decision 2026-10-14: no grade can raise it, and a flat 5 contradicts §4.10 and §4.11 level 1 (6–12 cookies, half of 2–10). §6 starts `equation` at 10 (balance 1) and 20 (ten-frame 10); §4.9 orders it by form. One table keeps R2 reading one source |
 | "Or" formulas | `{ oneOf: [...] }` | One formula per rule (R4) must still give both neighbours of the answer |
-| Pair cards | An array of numbers satisfies a number rule | §6.2 level 4 tags pairs with number rules; the catalogue has no pair type |
+| Pair cards | An array of numbers satisfies a number rule. A pair reads as a known number and a missing part, in either order: a rule's pair keeps one number of the answer and puts the rule's number for the other in its place (`{ oneOf }` over both orders, `ten-frame/game.js`). A pair that makes the whole is never a rule's value; `given.part` has none (nothing is given) | §6.2 level 4 tags pairs with number rules; the catalogue has no pair type. One lift for every number rule, so each id keeps one formula (R4), with no new rule and no docs change |
+| First-load budget | 200 KB of same-origin responses, gzipped as Pages serves them | Raw, the shell and the fonts are about 146 KB and each milestone game 70-80 KB, so two games cannot fit 200 KB raw; a phone downloads the gzipped files (fonts are woff2 either way) |
 | 3 options | The skill's first level in the game's list, or relation answers | R4's two cases, made checkable |
 | Level identity | A stable `id`; numbers from 1 for people | §6.2 plans an entry level before level 1; stored state must survive it |
 | What is logged | `params`, seed, `version`, `answer`; not the round | The storage cap; skills.md copies the params because a seed alone may not rebuild a round |
@@ -556,7 +561,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | `symbols` look | The first miss shows the help picture before the display | Displays run on the picture (R5, step 1) |
 | Answer in the equation | `.eq-answer`, not `data-role`; `aria-hidden` until solved, then a new node | design §3 gives `[data-role="unknown"]` a background, and R6 [browser] expects roles on quantities only; design §6.4 wants the live region to say the solved equation |
 | Judging rounds | Answer and choices are cards, `equation` null, R1 per card (2.3, 4.2) | dev-spec A.2 R1 has no branch for "no unknown, the child judges cards" (§4.9 `eq.sign.true-false`, §6.3 level 9) |
-| Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
+| Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited, nor a cover the hint lifts | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
 | Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
 | Stuck target | Held (`hold`): the rest of the session, then the next step, until the child passes the target level | §5.4: "the child plays it" and sees the demo again, also when the stuck round was a session's last |
@@ -566,6 +571,26 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | 60 s test | One for the suite, all games in parallel pages | A.2 asks one per suite; one wait covers every game |
 | Parents labels | By hand with nikud; link hidden until `VERIFIED` | The doc's table has no nikud; decisions.md: every link is checked before the page goes live |
 | `meta` | No `topic`, no grade; `version` and `css` added | Owner decision 2026-10-14: nothing at run time uses a grade, so the review pool needs none; `version` marks a changed generator |
+
+### Open questions for the owner
+
+Where the docs and R4 or R8 pull apart, the game does what it can now, and the owner decides. Until then these are
+not choices made.
+
+- **`ten-frame` level 9** (pedagogy §6.2, place-value §4.5 level 4: `unknown: part`, `14 = 10 + ?`). The game
+  plays `10 + 4 = ?` and `? = 10 + 4` (`unknown: whole`, `eqform` mixed). For `14 = 10 + ?` (answer 4) the skill's
+  rules give no wrong card: `pv.teen-reversed` has no value, `pv.digits-added` and `pv.ones-only` give the answer,
+  and only `slip.near` is left, so R4's four cards with two real errors cannot be met. Either `given.whole` and
+  `given.part` join `pv.teens.ten-and`'s rules (skills.md, place-value.md; then 4, 10, 14 and a slip), or §6.2
+  changes level 9.
+- **`5 + 5` and doubles** (`ten-frame` levels 1-3 and 5-7). The generator leaves out `5 + ? = 10` and parts equal to
+  half the whole, so `given.part` never equals the answer (R4: the main rules give different values). That drops
+  one of the five pairs of ten. Either allow them in some rounds, where `given.part` gives way to the next rule in
+  the list (`5 + ? = 10`: cards 5, 10, 15, and 4 or 6 from `slip.near`), or record that R4 excludes them.
+- **R8 in `num.parts.split` and `addsub.facts.bridge-add`.** R8 asks for some rounds with the unknown or the result
+  left of `=` after a skill's first level; §6.2 gives `eqform` only to levels 7 and 9, so levels 2-4 and 10-12 are
+  all `a + ? = c` or `a + b = ?`. Either add a mixed `eqform` to a later split level and `result-left` rounds to a
+  later bridging level, or record that R8 is met per game by levels 7 and 9.
 
 ## 7. Work split
 

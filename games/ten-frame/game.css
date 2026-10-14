@@ -1,0 +1,150 @@
+/* The ten-frame game (design 6.6, 6.7, 7). Every selector starts with [data-game="ten-frame"].
+   A drawing is measured in units (--u): the stage is a size container, and the unit is the
+   largest that fits the drawing's --dw x --dh units, in a round, a thumb or a growing display. */
+[data-game="ten-frame"] .tf-stage { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; container-type: size; }
+[data-game="ten-frame"] .tf-draw {
+  --u: min(calc(100cqw / var(--dw)), calc(100cqh / var(--dh)));
+  position: relative; width: calc(var(--dw) * var(--u)); height: calc(var(--dh) * var(--u));
+}
+[data-game="ten-frame"] .tf-base, [data-game="ten-frame"] .tf-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+[data-game="ten-frame"] .tf-layer { pointer-events: none; }
+[data-game="ten-frame"] .tf-at, [data-game="ten-frame"] .tf-span {
+  position: absolute; box-sizing: border-box; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u));
+  width: calc(var(--dx) * var(--u)); height: calc(var(--dy) * var(--u));
+}
+
+/* Ten-frame (6.7): the tray is the whole (navy) only in make-ten; elsewhere --frame. */
+[data-game="ten-frame"] .tf-tray { border-radius: calc(var(--u) * 0.4); }
+[data-game="ten-frame"] .tf-tray[data-role="whole"] { background-color: var(--role-whole); }
+[data-game="ten-frame"] .tf-tray.is-frame { background-color: var(--frame); }
+[data-game="ten-frame"] .tf-tray.is-hypo { background-color: var(--tray-ghost); outline: 3px dashed var(--role-whole); outline-offset: -3px; }
+[data-game="ten-frame"] .tf-tray.is-hypo.is-frame { background-color: transparent; outline-color: var(--frame); }
+[data-game="ten-frame"] .tf-cell { border-radius: calc(var(--u) * 0.22); background: var(--surface); }
+[data-game="ten-frame"] .tf-disc, [data-game="ten-frame"] .tf-dot, [data-game="ten-frame"] .tf-circle { border-radius: 50%; }
+[data-game="ten-frame"] .tf-disc[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="ten-frame"] .tf-disc.is-moving { transition: left var(--t-move) var(--ease), top var(--t-move) var(--ease); }
+[data-game="ten-frame"] [data-role="unknown"] { pointer-events: none; }
+
+/* The whole's tag (num.parts.split): a white chip on the top edge, the digit in --role-whole. */
+[data-game="ten-frame"] .tf-chip {
+  display: grid; place-items: center; border-radius: calc(var(--u) * 0.2); background: var(--surface); color: var(--ink);
+  font-size: max(14px, calc(var(--u) * 0.48)); font-weight: 800; line-height: 1;
+}
+[data-game="ten-frame"] .tf-tag { color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
+
+/* The number bond (tree): circles and their dots in role colours, stems in --frame. */
+[data-game="ten-frame"] .tf-circle { display: grid; place-items: center; font-size: calc(var(--u) * 1.3); font-weight: 800; line-height: 1; }
+[data-game="ten-frame"] .tf-circle[data-role="whole"] { background-color: var(--role-whole); color: var(--on-action); }
+[data-game="ten-frame"] .tf-circle[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); color: var(--ink); }
+[data-game="ten-frame"] .tf-circle[data-role="unknown"] { color: var(--on-unknown); }
+[data-game="ten-frame"] .tf-dot[data-role="whole"] { background-color: var(--role-whole); }
+[data-game="ten-frame"] .tf-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+
+/* Bundles (place value 4.5): ten sticks tied with a band, and loose sticks; veils show the whole. */
+[data-game="ten-frame"] .tf-bundle, [data-game="ten-frame"] .tf-stick { border-radius: calc(var(--u) * 0.2); }
+[data-game="ten-frame"] .tf-bundle[data-role="part"] {
+  background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge);
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-part-edge) calc(10% - 2px) 10%);
+}
+[data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+[data-game="ten-frame"] .tf-band { position: absolute; left: -8%; right: -8%; top: 42%; height: 14%; border-radius: 4px; background: var(--frame); }
+[data-game="ten-frame"] .tf-veil { position: absolute; inset: 0; border-radius: inherit; }
+
+/* Covers (6.6): the shared .cover in a box, with --halo; a run over two rows is joined by a bridge.
+   --cover-h is the box's height: app.css sizes the dome's corners from it, so a cover over a run
+   of cells covers every one of them. */
+[data-game="ten-frame"] .tf-lid { --cover-h: calc(var(--dy) * var(--u)); }
+[data-game="ten-frame"] .tf-lid > .cover { --cover-fs: calc(var(--u) * 0.6); box-shadow: 0 0 0 3px var(--halo); }
+[data-game="ten-frame"] .tf-lid.is-small > .cover { --cover-fs: calc(var(--u) * 0.42); }
+[data-game="ten-frame"] .tf-lid.is-round > .cover { --cover-fs: calc(var(--u) * 1.3); }
+[data-game="ten-frame"] .tf-span { background: var(--role-unknown); }
+[data-game="ten-frame"] .tf-span.is-bar { width: 4px; margin-left: -2px; }
+[data-game="ten-frame"] .tf-lid.is-up > .tf-span { opacity: 0; animation: ten-frame-out var(--t-move) var(--ease); }
+
+/* Lines: outlines with a white halo (6.6), drawn at a constant 3px whatever the unit. */
+[data-game="ten-frame"] .tf-svg { overflow: visible; pointer-events: none; }
+[data-game="ten-frame"] .tf-svg path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+[data-game="ten-frame"] .tf-svg .tf-halo { stroke: var(--halo); stroke-width: 9px; }
+[data-game="ten-frame"] .tf-svg .tf-line { stroke-width: 3px; }
+[data-game="ten-frame"] .tf-line-unknown .tf-line { stroke: var(--role-unknown); }
+[data-game="ten-frame"] .tf-line-whole .tf-line { stroke: var(--role-whole); }
+[data-game="ten-frame"] .tf-line-part .tf-line { stroke: var(--role-part-edge); }
+[data-game="ten-frame"] .tf-line-frame .tf-line { stroke: var(--frame); }
+[data-game="ten-frame"] .tf-bracket.is-gone { opacity: 0; animation: ten-frame-out var(--t-move) var(--ease); }
+
+/* Displays (7.1): ghosts, rings and digits in --role-added-edge; what is chosen, never the answer. */
+[data-game="ten-frame"] .tf-ghost { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost); }
+[data-game="ten-frame"] .tf-ghost.is-dot { border-width: 2px; }
+[data-game="ten-frame"] .tf-ghost.is-bundle, [data-game="ten-frame"] .tf-ghost.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
+[data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-added-edge) calc(10% - 2px) 10%); }
+[data-game="ten-frame"] .tf-place { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--surface); }
+[data-game="ten-frame"] .tf-place.is-target { border-color: var(--role-part-edge); background: none; }
+[data-game="ten-frame"] .tf-gone { border: 3px solid var(--role-removed); border-radius: 50%; background: var(--surface); }
+[data-game="ten-frame"] .tf-ring { border: 3px solid var(--role-added-edge); border-radius: calc(var(--u) * 0.3); box-shadow: 0 0 0 3px var(--halo), inset 0 0 0 3px var(--halo); }
+[data-game="ten-frame"] .tf-ring.is-round { border-radius: 50%; }
+[data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
+[data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
+[data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
+[data-game="ten-frame"] .tf-ring.is-unknown { border-color: var(--role-unknown); }
+/* The hint (7.2): a 4px ring in the colour of what it marks, kept to the end of the round. */
+[data-game="ten-frame"] .tf-ring.is-hint { border-color: var(--role-unknown); }
+[data-game="ten-frame"] .tf-ring.is-cell.is-hint { box-shadow: inset 0 0 0 4px var(--role-unknown); }
+[data-game="ten-frame"] .tf-digit {
+  display: grid; place-items: center; font-size: max(14px, calc(var(--u) * 0.45)); font-weight: 800; line-height: 1;
+  color: var(--role-added-edge); animation: ten-frame-digit 150ms var(--ease) both; animation-delay: var(--d, 0ms);
+}
+[data-game="ten-frame"] .tf-digit.on-ghost { font-size: max(19px, calc(var(--u) * 0.45)); }
+[data-game="ten-frame"] .tf-digit.is-small { font-size: max(14px, calc(var(--u) * 0.62)); }
+/* On a ghost the contrast is 3.44, so a digit there is at least 19px (design 4); a two-digit
+   number does not fit a dot at 19px, so it sits on a white label over the ghost instead (5.47). */
+[data-game="ten-frame"] .tf-digit.is-small.on-ghost { font-size: max(19px, calc(var(--u) * 0.62)); }
+[data-game="ten-frame"] .tf-digit.is-label {
+  width: auto; height: auto; padding: 1px 0; border-radius: 4px; background: var(--surface);
+  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+}
+[data-game="ten-frame"] .tf-digit.is-above { font-size: max(14px, calc(var(--u) * 0.5)); }
+[data-game="ten-frame"] .tf-digit.is-big { font-size: calc(var(--u) * 1.3); }
+[data-game="ten-frame"] .tf-digit.on-disc::before {
+  content: ''; position: absolute; inset: 14%; z-index: -1; border-radius: 50%; background: var(--surface);
+}
+[data-game="ten-frame"] .tf-digit.on-disc { z-index: 0; }
+/* The tour (7.2): digits in --role-unknown (white on a shown unknown), the last one grown. */
+[data-game="ten-frame"] .tf-tour { color: var(--role-unknown); }
+[data-game="ten-frame"] .tf-tour.on-unknown, [data-game="ten-frame"] .is-solved .tf-tour.on-cell { color: var(--on-unknown); }
+[data-game="ten-frame"] .tf-tour.is-chip { border-radius: calc(var(--u) * 0.2); background: var(--surface); box-shadow: 0 0 0 3px var(--role-unknown); }
+[data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
+[data-game="ten-frame"] .tf-tour.is-last.is-chip { transform: none; }
+/* In a row of digits above sticks the last grows to the right and up, away from the digit
+   before it and from the outline below. */
+[data-game="ten-frame"] .tf-tour.is-last.is-above { transform-origin: left bottom; }
+
+/* Touch marks (6.3): an ink dot with a white edge, once per thing. */
+[data-game="ten-frame"] .tf-mark {
+  position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
+  background: var(--ink); box-shadow: 0 0 0 2px var(--surface); pointer-events: none;
+}
+
+/* Motion (7.1, 8): everything ends in its quiet state, which is the base style; reduced motion
+   shows that state at once. Entries are at most 0.3 s apart, in order. */
+[data-game="ten-frame"] .tf-enter { animation: ten-frame-in var(--t-move) var(--ease) both; animation-delay: var(--d, 0ms); }
+[data-game="ten-frame"] .tf-blink-in { animation: ten-frame-blink-in var(--t-blink) var(--ease) both; animation-delay: var(--d, 0ms); }
+[data-game="ten-frame"] .tf-blink { animation: ten-frame-blink var(--t-blink) var(--ease); }
+[data-game="ten-frame"] .tf-layer[data-hint] { animation: ten-frame-blink-in var(--t-blink) var(--ease); }
+/* A display that leaves (the 2nd and 3rd miss, 7.2) ends with the longest display motion, 0.3 s of
+   entries and a 600ms blink, so the cards lock under a second. */
+[data-game="ten-frame"] .tf-layer[data-display].is-leaving { opacity: 0; animation: ten-frame-leave 900ms linear; }
+[data-game="ten-frame"] [data-role="unknown"].is-shown { animation: ten-frame-in 150ms var(--ease) both; animation-delay: var(--d, 0ms); }
+[data-game="ten-frame"] .is-solved [data-role="unknown"]:not(.is-shown) { animation: ten-frame-in var(--t-move) var(--ease) both; animation-delay: var(--d, 0ms); }
+
+/* Pair cards (level 4): two numbers and a bar, smaller when they are longer. */
+[data-game="ten-frame"] .tf-pair { display: flex; align-items: center; gap: 3px; font-size: 30px; font-weight: 800; line-height: 1.2; }
+[data-game="ten-frame"] .tf-pair[data-len="3"] { font-size: 22px; }
+[data-game="ten-frame"] .tf-pair[data-len="4"] { font-size: 18px; }
+[data-game="ten-frame"] .tf-pair i { align-self: stretch; width: 3px; border-radius: 2px; background: var(--ink-soft); }
+
+@keyframes ten-frame-in { from { opacity: 0; transform: scale(0.6); } }
+@keyframes ten-frame-digit { from { opacity: 0; transform: scale(0.4); } }
+@keyframes ten-frame-blink { 50% { opacity: 0.3; } }
+@keyframes ten-frame-blink-in { 0% { opacity: 0; } 1% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+@keyframes ten-frame-leave { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ten-frame-out { from { opacity: 1; } }
