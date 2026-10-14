@@ -1,0 +1,154 @@
+// The ten-frame game's own unit tests (architecture 4.1): the layouts (R6 [unit], dev-spec A.2),
+// what each round draws, and the rule formulas, including the pair cards of level 4.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as game from '../games/ten-frame/game.js';
+import { layoutBundles, layoutFrame, layoutTree, pictureOf, runPath } from '../games/ten-frame/layout.js';
+import { rng } from '../lib/rng.js';
+
+const SEEDS = 200;
+const level = (id) => game.levels.find((l) => l.id === id);
+const rounds = (id, n = SEEDS) => Array.from({ length: n }, (_, i) => game.makeRound(level(id), rng(i + 1)));
+const sum = (pair) => pair[0] + pair[1];
+
+test('R6: frame cells go left to right, top row first, five to a row; past the frames they go on below', () => {
+  for (const [frames, rows] of [[1, 1], [1, 2], [2, 2]]) {
+    const L = layoutFrame({ frames, rows });
+    assert.equal(L.cells.length, frames * rows * 5);
+    L.cells.forEach((c, i) => {
+      assert.equal(c.i, i);
+      assert.deepEqual([c.frame, c.row, c.col], [Math.floor(i / (rows * 5)), Math.floor((i % (rows * 5)) / 5), i % 5]);
+      const prev = L.cells[i - 1];
+      if (!prev) return;
+      if (prev.frame === c.frame && prev.row === c.row) {
+        assert.ok(c.x > prev.x, 'left to right in a row');
+        assert.equal(c.y, prev.y);
+      } else {
+        assert.ok(c.y > prev.y, 'the next row (or frame) is lower');
+        assert.ok(c.x < prev.x, 'and starts again on the left');
+      }
+    });
+    const next = L.place(L.cells.length);
+    assert.ok(next.y > L.cells.at(-1).y && next.x === L.cells[0].x, 'a hypothetical frame starts under the last one, on the left');
+    assert.ok(L.height(L.cells.length + 1) > L.dh, 'and makes the drawing taller');
+  }
+});
+
+test('R6: a ten-frame tray is the whole only in num.parts.make-ten; otherwise it has no role', () => {
+  for (const [i, base] of game.levels.entries()) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const round = game.makeRound(base, rng(seed));
+      const { kind, data } = pictureOf(round);
+      const make = base.skill === 'num.parts.make-ten';
+      if (kind === 'frame') {
+        const L = layoutFrame({ rows: data.rows, whole: data.whole });
+        assert.ok(L.trays.every((t) => t.role === (make ? 'whole' : null)), `level ${i + 1}`);
+        assert.equal(data.tag === null, make, 'the whole is a tag on the frame when the frame is not the whole');
+      } else if (kind === 'bridge') {
+        assert.ok(layoutFrame({ frames: 2 }).trays.every((t) => t.role === null));
+      } else assert.ok(!make);
+    }
+  }
+});
+
+test('the pictures: a five-frame at level 1, a cover or the bracket, two frames for bridging ten', () => {
+  assert.ok(rounds('split-5').every((r) => pictureOf(r).data.rows === 1));
+  assert.ok(rounds('split-10').every((r) => pictureOf(r).data.rows === 2 && pictureOf(r).data.covered));
+  assert.ok(rounds('ten-empty').every((r) => !pictureOf(r).data.covered), 'level 5: the empty cells are seen, wrapped by the ? bracket');
+  assert.ok(rounds('ten-cover').every((r) => pictureOf(r).data.covered));
+  assert.ok(rounds('bridge-move').every((r) => pictureOf(r).data.move));
+  assert.ok(rounds('bridge-frames').every((r) => !pictureOf(r).data.move));
+  for (const id of ['ten-symbols', 'teen-symbols', 'bridge-symbols']) {
+    assert.ok(rounds(id).every((r) => r.picture.length === 0 && pictureOf(r).kind !== undefined), `${id}: the picture is the help picture`);
+  }
+  const zero = rounds('split-10').filter((r) => r.answer === 0);
+  assert.ok(zero.length >= 10, 'about one round in ten covers nothing (number sense 4.4, level 2)');
+  assert.ok(rounds('ten-empty').some((r) => r.answer === 0), 'level 5 sometimes shows a full frame');
+  assert.ok(rounds('teen-bundle').some((r) => r.answer === 10), 'ten and none');
+});
+
+test('runPath: one rectangle in a row, a stepped outline over two rows, two rectangles when the rows do not meet', () => {
+  const L = layoutFrame({ rows: 2 });
+  const shapes = (from, n) => runPath(L.cells.slice(from, from + n), 0.1).split('M').length - 1;
+  const corners = (from, n) => runPath(L.cells.slice(from, from + n), 0.1).match(/[HV]/g).length;
+  assert.equal(shapes(6, 3), 1);
+  assert.equal(corners(6, 3), 3);
+  assert.equal(shapes(3, 7), 1, 'cells 3-9: one outline');
+  assert.equal(corners(3, 7), 7, 'with a step');
+  assert.equal(shapes(4, 2), 2, 'cell 4 and cell 5 only touch at a corner');
+});
+
+test('R6, R7: the bond has the whole on top and the parts below it; bundles keep the ten left of the ones', () => {
+  const T = layoutTree({ whole: 7 });
+  assert.ok(T.left.y > T.top.y + T.top.h && T.right.y === T.left.y && T.left.x < T.right.x);
+  const dots = Array.from({ length: 7 }, (_, i) => T.wholeAt(i));
+  assert.ok(dots.slice(0, 5).every((d, i) => i === 0 || d.x > dots[i - 1].x), 'rows of five, left to right');
+  assert.ok(dots[5].y > dots[0].y && dots[5].x === dots[0].x);
+  const B = layoutBundles({ ones: 4 });
+  assert.ok(B.bundle.x + B.bundle.w < B.stick(0).x);
+  assert.ok(B.stick(1).x > B.stick(0).x);
+  assert.ok(B.stick(4).x + B.stick(4).w <= B.dw, 'room for one more stick (count-up)');
+});
+
+test('the rules give the catalogue formulas (docs/depth/errors.md)', () => {
+  const byEq = (id, left, right) => rounds(id).find((r) => JSON.stringify(r.equation) === JSON.stringify({ left, right }));
+  const ten = byEq('ten-cover', [7, '+', '?'], [10]);
+  assert.deepEqual(['given.whole', 'given.part', 'op.other'].map((id) => game.rules[id](ten)), [10, 7, 17]);
+  assert.equal(game.rules['zero.counted-as-one'](ten), null);
+  const teen = byEq('teen-bundle', [10, '+', 4], ['?']);
+  assert.deepEqual(['pv.teen-reversed', 'pv.digits-added', 'pv.ones-only'].map((id) => game.rules[id](teen)), [41, 5, 4]);
+  assert.equal(game.rules['given.whole'](teen), null, 'nothing is given when the whole is the unknown');
+  const bridge = byEq('bridge-frames', [8, '+', 5], ['?']);
+  assert.deepEqual(['bridge.whole-second', 'bridge.leftover-only', 'bridge.stopped-at-ten', 'count.start-included']
+    .map((id) => game.rules[id](bridge)), [15, 3, 10, 12]);
+  assert.deepEqual(game.rules['slip.near'](bridge), { oneOf: [12, 14] });
+  const zero = rounds('split-10').find((r) => r.answer === 0);
+  assert.equal(game.rules['zero.counted-as-one'](zero), 1);
+  assert.ok(zero.choices.some((c) => c.rule === 'zero.counted-as-one' && c.value === 1));
+});
+
+test('pair cards: a rule keeps one number of the answer and replaces the other; no wrong pair makes the whole', () => {
+  const all = rounds('split-pairs');
+  for (const r of all) {
+    const [a, b] = r.answer;
+    const whole = a + b;
+    assert.equal(game.rules['given.part'](r), null, 'a pair round has no given part');
+    for (const { value, rule } of r.choices.filter((c) => c.rule)) {
+      assert.notEqual(sum(value), whole, `${JSON.stringify(value)} (${rule}) would be right too`);
+      assert.ok(value[0] === a || value[1] === b, `${JSON.stringify(value)} keeps a number of ${JSON.stringify(r.answer)}`);
+    }
+  }
+  const r = all.find((x) => x.answer[0] === 2 && x.answer[1] === 6);
+  assert.deepEqual(game.rules['given.whole'](r), { oneOf: [[2, 8], [8, 6]] });
+  assert.deepEqual(game.rules['op.other'](r), { oneOf: [[2, 10], [14, 6]] });
+  assert.equal(game.rules['zero.counted-as-one'](r), null);
+  const z = all.find((x) => x.answer[1] === 0);
+  assert.deepEqual(game.rules['zero.counted-as-one'](z), { oneOf: [[z.answer[0], 1], [z.answer[0] - 1, 0]] });
+  assert.ok(all.some((x) => x.answer.includes(0)), '7 | 0 and 0 | 7 are pairs too');
+  const values = all.flatMap((x) => x.choices.map((c) => c.value));
+  assert.ok(values.every((v) => v.join('').length <= 4), 'a pair card fits a 64px card');
+});
+
+test('choices: real errors before slips, and pairs sorted by their first then second number', () => {
+  for (const id of ['split-10', 'ten-empty', 'teen-bundle', 'bridge-move']) {
+    for (const r of rounds(id)) {
+      const rules = r.choices.map((c) => c.rule).filter(Boolean);
+      assert.ok(rules.filter((x) => x.startsWith('slip.')).length <= 1, `${id}: one slip at most`);
+    }
+  }
+  for (const r of rounds('split-pairs')) {
+    const keys = r.choices.map((c) => c.value[0] * 100 + c.value[1]);
+    assert.deepEqual(keys, [...keys].sort((x, y) => x - y));
+  }
+  assert.ok(rounds('teen-bundle').filter((r) => r.answer === 10).every((r) => r.choices.every((c) => c.rule !== 'slip.near' || c.value === 11)),
+    'counting on from the bundle never counts down below it');
+});
+
+test('R8: the mixed levels write the unknown left of = in a third of the rounds', () => {
+  for (const id of ['ten-symbols', 'teen-symbols']) {
+    const reversed = rounds(id).filter((r) => r.eqform === 'reversed').length;
+    assert.ok(reversed >= SEEDS / 4 && reversed <= SEEDS / 2, `${id}: ${reversed}`);
+  }
+  const forms = new Set(rounds('ten-symbols').map((r) => [...r.equation.left, '=', ...r.equation.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ')));
+  assert.deepEqual([...forms].sort(), ['n + ? = n', 'n = n + ?', 'n − n = ?'], 'pedagogy 6.2 level 7: 7 + ? = 10, 10 − 7 = ?, 10 = 7 + ?');
+});
