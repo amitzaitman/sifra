@@ -5,7 +5,8 @@ Grades 1-2 first, growing game by game to grade 6. Static site on GitHub Pages: 
 server, no build step, no audio.
 
 Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, two games (`ten-frame`,
-`balance`), the tests and CI. A game goes live after the owner's iPhone check is logged in `docs/device-checks.md`.
+`balance`), the tests and CI. CI puts every merge to main on GitHub Pages; a game goes live (its link is shared
+with children) only after the owner's iPhone check there is logged in `docs/device-checks.md`.
 
 ## Where things are
 
@@ -63,7 +64,9 @@ Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשו�
 - `data/` is generated from the docs by `npm run gen` and never edited by hand, except `data/videos.js`; `tests/sync.test.js` fails when it is stale.
 - `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
 - One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit and deploys to Pages.
-- Before a new game goes live: a manual iPhone check, logged with a date in `docs/device-checks.md`.
+- Right after a merge to main: the owner's manual iPhone check on the GitHub Pages address, logged with a date in
+  `docs/device-checks.md`. Until it is logged the link is not shared with children ("goes live"); a failed check is
+  fixed or reverted on main at once.
 
 ## Reuse from AlefBet
 

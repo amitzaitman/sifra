@@ -1,5 +1,5 @@
 // The balance (pedagogy 6.3, depth 4.9): "=" as "the same as"; each side of the exercise is a pan,
-// left to right (R7). A level per row of the 6.3 table; row 5 is two (max 10, then 20).
+// left to right (R7). A level per row of the 6.3 table.
 import { SKILLS } from '../../data/skills.js';
 import { drawFace, renderBalance } from './view.js';
 

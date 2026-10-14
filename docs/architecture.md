@@ -289,7 +289,8 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
   no clock and nothing locks, and the next tap is taken. So the second tap of a double tap never answers a round
   the child has not seen, and never skips the solved picture, also with reduced motion. This holds where the browser
   counts taps: Chromium does, iOS Safari does not (every tap's click has `detail` 1), so on the iPhone the guard
-  drops nothing yet (section 6, open questions), and the double-tap tests run on Chromium only.
+  drops nothing yet, and the double-tap tests run on Chromium only. The owner chose a 0.3 s window instead (section
+  6, "Double tap"); this item changes with its code.
 
 ### 3.3 Session
 
@@ -445,9 +446,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - R4: the answer in `[min ?? 0, max]`; rules in the skill's SKILLS list and in RULES; `oneOf` accepted;
   `choices.length === options`; 3 only on the skill's first level in the game's list or for relation answers; at
   least `min(2, wrong choices)` non-`slip.*` rules when the skill lists two or more; numbers ascending; no
-  `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except that in a
-  reversed form (the lone number or the result left of `=`) the `equal.*` rules come first (depth §4.9,
-  `eq.sign.missing`; section 6). Every formula stays the catalogue's, whatever the form.
+  `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except where a
+  depth section sets the order for one form (R4): in a reversed form of `eq.sign.missing` (the lone number or the
+  result left of `=`) the `equal.*` rules come first (depth §4.9; section 6). Every formula stays the catalogue's,
+  whatever the form.
 - R5 (auto): every rule used has a display in RULES. R8: levels whose `eqform` is an array are 25% non-standard.
 
 ### 4.3 Units
@@ -587,7 +589,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | `symbols` look | The first miss shows the help picture before the display | Displays run on the picture (R5, step 1) |
 | Answer in the equation | `.eq-answer`, not `data-role`; `aria-hidden` until solved, then a new node | design §3 gives `[data-role="unknown"]` a background, and R6 [browser] expects roles on quantities only; design §6.4 wants the live region to say the solved equation |
 | Judging rounds | Answer and choices are cards, `equation` null, R1 per card (2.3, 4.2) | dev-spec A.2 R1 has no branch for "no unknown, the child judges cards" (§4.9 `eq.sign.true-false`; the §6.3 row of that skill, the balance's `true-false` level) |
-| Ties in a reversed form | `equal.*` first, then the skills.md order; the generic test (4.2) checks it | R4 keeps "the rule first in skills.md", depth §4.9 (`eq.sign.missing`) says "in the reversed form the `equal.*` rules come first". The more specific sentence is applied until the owner decides between it and a per-form order in skills.md |
+| Ties in a reversed form | `equal.*` first, then the skills.md order; the generic test (4.2) checks it. R4 lets a depth section set the order for one form, and depth §4.9 (`eq.sign.missing`) does. Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | R4 gave the rule first in skills.md, depth §4.9 the `equal.*` rules in the reversed form. There, in `7 = 3 + ?`, 10 is both `op.other` and `equal.add-all`, and 7 both `given.whole` and `equal.copy`: reading `=` as "the answer goes here" is the likelier error, and the log should name it. A per-form order in skills.md would be a new column for one sentence |
 | Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited, nor a cover the hint lifts | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
 | Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
@@ -595,85 +597,29 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |
 | End screen | Solved thumbs and home only | R10, §5.10; the next step on home starts the next session |
-| Double tap | The shell drops a click with `detail > 1` after the screen or the cards' place changed (3.2) | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once; a time window would be a clock (R5). iOS Safari does not count taps in `detail` (WebKit's source): how the iPhone gets the guard is an open question below |
+| Double tap | The shell drops a tap that comes within 300 ms of a screen change or of "הַבָּא" appearing or moving: it compares the event's `timeStamp` with the time it recorded at the change, with no `setTimeout` or `setInterval`. It replaces the click `detail` guard of 3.2, which changes with the code, and its tests run on every Playwright project. Decided 2026-10-14, see decisions.md | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once. iOS Safari sends every tap's click with `detail` 1 (WebKit's source), so the `detail` guard dropped nothing on the iPhone: the second tap answered the next round with a card the child never saw, skipped the solved picture with reduced motion, and opened a game from the end screen. The owner allowed the window: the child never sees it, so it is not a visible clock (design 6.9 changes with the code) |
 | 60 s test | One for the suite, all games in parallel pages | A.2 asks one per suite; one wait covers every game |
 | Parents labels | By hand with nikud; link hidden until `VERIFIED` | The doc's table has no nikud; decisions.md: every link is checked before the page goes live |
 | `meta` | No `topic`, no grade; `version` and `css` added | Owner decision 2026-10-14: nothing at run time uses a grade, so the review pool needs none; `version` marks a changed generator |
+| `ten-frame` level 9 | `unknown: part`, `14 = 10 + ?`: cards 4, 10 (`given.part`), 14 (`given.whole`) and a `slip.near`, as pedagogy §6.2 says; `given.whole` and `given.part` join `pv.teens.ten-and`'s rules (skills.md, depth §4.5) and data/ is regenerated. Decided 2026-10-14, see decisions.md | With the skill's rules before, `14 = 10 + ?` had only `slip.near` as a wrong card (`pv.teen-reversed` has no value there, `pv.digits-added` and `pv.ones-only` give the answer), short of R4's two real errors, so the game played `10 + 4 = ?` and `? = 10 + 4` |
+| `5 + 5` and doubles (`ten-frame`) | About one round in five of a `num.parts.split` level is a double, and of a `num.parts.make-ten` level `5 + ? = 10`; there `given.part` equals the answer, so its card gives way to a slip card (the answer plus or minus 1). Depth §4.4 states this R4 exception. Decided 2026-10-14, see decisions.md | Leaving them out kept `given.part` off the answer (R4: the main rules give different values), but dropped `5 + 5`, one of the five pairs of ten, and every double |
+| R8 in `num.parts.split` and `addsub.facts.bridge-add` | `ten-frame` level 3 (the bond) also gets reversed forms (`9 = 3 + ?`), level 12 also `result-left` rounds (`? = 8 + 5`); pedagogy §6.2 changes with them. Decided 2026-10-14, see decisions.md | R8 asks for some rounds with the unknown or the result left of `=` after a skill's first level, and §6.2 gave `eqform` only to levels 7 and 9 |
+| Two known numbers in one picture (`balance`) | A second part colour, light yellow: a lighter shade of the part yellow with a visible edge, for the second of two known numbers in one picture. The colour, not a new row, keeps them apart: piles go back to continuous rows of five, so design 6.8's rows of five compare the pans again; `same` shows two colours, and in `turn` the colours change sides. The token joins design §3 (its role, contrast on `--paper`, its edge and a digit on it, a colour-blind check against the part yellow), R6 and every list of role colours (CLAUDE.md and decisions.md condition 6, this file), and replaces the row per number. Decided 2026-10-14, see decisions.md | Pedagogy §6.3 row 1 and depth §4.9 ask for two colours, and `turn` is about the colours changing sides; with one part colour the game started each known number on a new row, so `5 + 3` was a row of five and a row of three |
+| The step-3 tour in `same`, `relational` and `turn` | R5's tour, ending on the answer: `same` counts on over the left pan's second group to the total; `relational` and `turn` count the unknown from 1. Depth §4.9's help (3) lines of `eq.sign.same-as`, `eq.sign.relational` and `eq.props.commutative` say so. Decided 2026-10-14, see decisions.md | Counting both pans, both sides or both colours ends on a side's total, not on the answer, and R5 ends every tour on the answer |
+| The judging round's cards (`balance` `true-false`) | The true card varies among the forms `7 = 7`, `5 + 2 = 7` and `7 = 5 + 2`, and the false cards take the same forms, so a card's shape tells nothing. The catalogue rules the false cards need join §4.2, depth §4.9 and `eq.sign.true-false`'s rules in skills.md, keeping R4: every wrong card has a rule, real errors before slips. Decided 2026-10-14, see decisions.md | The true card was always `c = a + b` and `7 = 7` never appeared; two cards had a lone number on the left, one of them true, so the shape alone narrowed four cards to two. `equal.reject-reversed` has a value only when the true card is reversed (§4.2), so a true card in another form needs another real error for R4's two |
+| `balance` level numbers | Pedagogy §6.3 has 11 rows, one per level: row 5's `max: 10` and then `max: 20` are levels 5 and 6 (`missing-symbols`, `missing-symbols-20`), and §6.3's level n is `levels[n - 1]`. Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | The game built two levels, so from level 6 on the doc's numbers missed `#/dev` and the records; two levels keep the step from 10 to 20 a rung of the ladder |
+| When a game goes live | "Live" means "shared with children". CI deploys every merge to main to Pages, the owner's iPhone check runs there right after the merge, and the link is not shared with children until its row in `device-checks.md` is logged; a failed check is fixed or reverted on main at once (section 7). Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | A merge puts a game on the public site before its check can be done, and the saving checks need Pages: `start.js` listens on 127.0.0.1 only, and plain http on a home network is not a secure context (no storage manager) |
 
 ### Open questions for the owner
 
-Where the docs pull apart, or leave a drawing or a count open, the game does what it can now, and the owner decides.
-Until then these are not choices made. One list for both games.
-
-- **`ten-frame` level 9** (pedagogy §6.2, place-value §4.5 level 4: `unknown: part`, `14 = 10 + ?`). The game
-  plays `10 + 4 = ?` and `? = 10 + 4` (`unknown: whole`, `eqform` mixed). For `14 = 10 + ?` (answer 4) the skill's
-  rules give no wrong card: `pv.teen-reversed` has no value, `pv.digits-added` and `pv.ones-only` give the answer,
-  and only `slip.near` is left, so R4's four cards with two real errors cannot be met. Either `given.whole` and
-  `given.part` join `pv.teens.ten-and`'s rules (skills.md, place-value.md; then 4, 10, 14 and a slip), or §6.2
-  changes level 9.
-- **`5 + 5` and doubles** (`ten-frame` levels 1-3 and 5-7). The generator leaves out `5 + ? = 10` and parts equal to
-  half the whole, so `given.part` never equals the answer (R4: the main rules give different values). That drops
-  one of the five pairs of ten. Either allow them in some rounds, where `given.part` gives way to the next rule in
-  the list (`5 + ? = 10`: cards 5, 10, 15, and 4 or 6 from `slip.near`), or record that R4 excludes them.
-- **R8 in `num.parts.split` and `addsub.facts.bridge-add`.** R8 asks for some rounds with the unknown or the result
-  left of `=` after a skill's first level; §6.2 gives `eqform` only to levels 7 and 9, so levels 2-4 and 10-12 are
-  all `a + ? = c` or `a + b = ?`. Either add a mixed `eqform` to a later split level and `result-left` rounds to a
-  later bridging level, or record that R8 is met per game by levels 7 and 9.
-- **Ties in a reversed form** (`balance`, `eq.sign.missing`). R4 tags a value two rules give with the rule first in
-  skills.md; depth §4.9 says the `equal.*` rules come first in the reversed form (`c = a + ?`, `? = a + b`). The game
-  and the generic test follow §4.9 (the "Ties in a reversed form" row above). Either keep §4.9's sentence, or give
-  skills.md a per-form order and drop it.
-- **Two known numbers in one picture** (`balance`: `a + b` on a pan, or both sides; and the turned rows of `turn`).
-  Design §6.8 draws a pan as rows of five and does not say how two parts of one colour stay apart. The game starts
-  each known number on a new row, so `5 + 3` is a row of five and a row of three; in the turned rows (`model: set`)
-  the groups are apart by a gap, and every known group is `--role-part`. Other docs ask for two colours: pedagogy
-  §6.3 row 1 and depth §4.9 `eq.sign.same-as` ("cubes in two colours on the left pan"), and depth §4.9
-  `eq.props.commutative` ("a row of dots in two colours", "the colours change sides" when it turns, help (3) "both
-  colours are counted"), so the colour swap the turn level is about cannot be seen. R6 has one part colour. Either
-  add a second part colour token (a change to R6 and decisions.md condition 6), or reword §6.3 and §4.9 to "two
-  groups, apart by a new row or a gap" ("the groups change sides" for the turn), or leave a gap of one place on a
-  pan too.
-- **The step-3 tour in three `balance` levels** (R5 against depth §4.9 help (3)). R5 ends the tour on the answer:
-  `same` counts on over the left pan's second group to the total; `relational` and `turn` count the unknown from 1.
-  Depth §4.9 asks for more: `eq.sign.same-as` "the cubes in both pans are counted", `eq.sign.relational` "both sides
-  are built and counted", `eq.props.commutative` "both colours are counted". Either keep R5's tour and reword the
-  three help (3) lines, or count both sides first and end on the unknown (for `same`, pair by pair as the judging
-  tour does; for `turn`, the matching group on the first row, then the unknown; `relational` needs a new design,
-  since counting the sides ends on the total).
-- **The judging round's true card** (`balance` `true-false`, depth §4.9 `eq.sign.true-false` level 1: `7 = 7`,
-  `5 + 2 = 7`, `7 = 5 + 2`). The true card is always the reversed form `c = a + b`, and `7 = 7` never appears;
-  the wrong cards are `a + b` equal to one more than `c` (`equal.reject-reversed`), `a + b = c + a`
-  (`equal.accepts-chain`), and `c` equal to `a` plus one more than `b` (`slip.card`). So two cards always have a lone number on the left, one of them true: the shape
-  alone narrows four cards to two. `equal.reject-reversed` has a value only when the true card is reversed (errors.md),
-  so a standard or `7 = 7` true card leaves one real error, short of R4's two. Either record the reversed-only true
-  card in §4.9 and drop `7 = 7`, or vary the true card and say how R4's two real errors apply then (a new rule for a
-  false reversed card, or one real error and slips in those rounds).
-- **Eleven `balance` levels for the ten rows of §6.3.** Row 5 says `look: symbols`, `max: 10` and then `max: 20`;
-  the game makes it two levels (`missing-symbols`, `missing-symbols-20`), so §6.3's levels 6-10 are the game's 7-11
-  (levels are named by id here). Either keep two levels and number §6.3 the same way, or make row 5 one level with
-  `max: 20`.
-- **The double tap on the iPhone** (design 6.9, section 3.2). The shell drops a double tap's second tap by the
-  click's `detail`, and iOS Safari never sets it above 1. WebKit (Safari 16.4 to 18) sends every tap's click with
-  `detail` 1; it counts a second tap only for a `dblclick` listener on a node whose `touch-action`, and every
-  ancestor's, is `auto`, and `html { touch-action: manipulation; }` (CLAUDE.md, design 10) rules that out.
-  Playwright's WebKit does the same, so the three double-tap tests run on Chromium only. On the iPhone the second
-  tap still answers the next round with a card the child never saw (a wrong card is recorded with its rule),
-  skips the solved picture with reduced motion, and on the end screen opens a game from home; the double-tap item
-  of `device-checks.md` would fail. Either the shell drops a click that comes within about 300 ms of a swap (it
-  reads the event's time, with no timer; it works in every browser and CI can test it on WebKit, but it is a short
-  clock, which design 6.9 and the "Double tap" row above ruled out), or the guard stays Chromium-only and design
-  6.9, `device-checks.md` and 3.2 say so, or a `dblclick` listener with `touch-action: auto` under it (iOS would
-  then send the second tap with `detail` 2; it breaks CLAUDE.md's one site-wide `touch-action`, and an iPhone must
-  show that double-tap zoom stays off and the second tap does not also arrive as a plain click).
-- **When a game goes live, and where the iPhone check runs.** decisions.md ("בדיקות"), CLAUDE.md, the README and
-  section 7 say the iPhone check is logged before a game goes live, but `device-checks.md` checks the site at its
-  GitHub Pages address, and CI deploys every push to main with every registered game. So a merge puts a game on
-  the public site before its check can be done. `start.js` listens on 127.0.0.1 only, and a phone on the local
-  network would load plain http, which is not a secure context (no storage manager), so the saving checks would not
-  match Pages. Either "live" means "shared with children" and the check runs on Pages right after the merge
-  (decisions.md's milestone list already plans it so), or a per-game flag keeps a merged game off the home page
-  until its row is logged (as `VERIFIED` does for the parents link; `#/play/<id>` still reaches it on Pages), or the
-  check runs before the merge from a local server (a host option for `start.js`; the saving checks still need Pages).
+None open. On 2026-10-14 the owner answered the questions this list held, and engineering decisions closed the rest
+(ties in a reversed form, the balance's level numbers, when a game goes live; the owner may reverse them); each is a
+row of the table above, and decisions.md records them all. The rows that change code (the double tap, ten-frame
+level 9, `5 + 5` and doubles, R8, the second part colour, the judging round's cards) are built on their own
+branches, which change the sections that describe the code with it. So is the owner's choice to move the shell's
+own logic out of lib/ into a new shell/ folder (decisions.md, 2026-10-14), which replaces the "What lib/ holds" row
+and changes section 1. A new gap, where the docs pull apart or leave a drawing or a count open, goes in this list
+with its options until the owner decides.
 
 ## 7. Work split
 
@@ -683,4 +629,6 @@ Until then these are not choices made. One list for both games.
   tests/<id>.test.js and one registry line. They do not edit lib/, app.* or data/. A game that needs a shell change,
   or finds a doc gap (a level needing a parameter skills.md lacks), stops and reports.
 - **Done:** `npm test`, `npm run typecheck` and `npm run e2e -- --project=chromium` pass locally; CI passes both
-  projects. Before a game goes live, the owner's iPhone check is logged with a date in `docs/device-checks.md`.
+  projects. CI deploys the merge to Pages at once, and the owner's iPhone check runs there right after it. The game
+  goes live (its link is shared with children) only once the check is logged with a date in `docs/device-checks.md`;
+  a failed check is fixed or reverted on main at once (decisions.md, 2026-10-14).
