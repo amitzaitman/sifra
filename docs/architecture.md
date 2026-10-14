@@ -539,6 +539,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `npx playwright install --with-deps chromium webkit`, `npm run check`); job `deploy` (push to main, after `check`):
   the deployed files (section 1) to `_site` with `.nojekyll`, `actions/upload-pages-artifact@v3`,
   `actions/deploy-pages@v4`.
+- The Pages source must be "GitHub Actions" (Settings > Pages > Build and deployment > Source; only the owner can set
+  it). With "Deploy from a branch", GitHub's own `pages-build-deployment` also publishes the raw branch through
+  Jekyll on every push to main, within a minute and whatever the check's result. After a push to main, the Actions
+  list shows only the CI run for that commit, and the `github-pages` deployment comes from its `deploy` job.
 
 ## 6. Gaps in the docs, and the choice made
 
