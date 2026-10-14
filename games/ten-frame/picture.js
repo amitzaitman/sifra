@@ -5,7 +5,7 @@
  * What a round draws, read from its plain data (pure, so R6 is tested in Node): the kind of
  * picture and the data its draw function takes. The tray is the whole only in make-ten (R6).
  * @param {any} round
- * @returns {{ kind: 'frame' | 'tree' | 'pairs' | 'bundles' | 'bridge', data: any }}
+ * @returns {{ kind: 'frame' | 'tree' | 'pairs' | 'bundles' | 'bundles-part' | 'bridge', data: any }}
  */
 export function pictureOf(round) {
   const groups = (round.look === 'symbols' ? round.helpPicture : round.picture) ?? [];
@@ -18,6 +18,8 @@ export function pictureOf(round) {
   if (round.model === 'cards') {
     return { kind: 'pairs', data: { whole: count('whole'), left: { n: count('unknown'), known: false }, right: { n: count('unknown', 1), known: false } } };
   }
+  // Ten and a missing part (14 = 10 + ?): the bundle, the ones under the cover, the whole a tag over both.
+  if (round.model === 'bundles' && of('unknown')?.shown === 'covered') return { kind: 'bundles-part', data: { ones: count('unknown'), tag: count('whole') } };
   if (round.model === 'bundles') return { kind: 'bundles', data: { ones: count('part', 1) } };
   if (round.skill === 'addsub.facts.bridge-add') return { kind: 'bridge', data: { a: count('part'), b: count('part', 1), move: Boolean(stage.move) } };
   const whole = round.skill === 'num.parts.make-ten';

@@ -510,7 +510,7 @@ Gemini של הבלוג), ואיפה הם במסמך. הם מסומנים באו�
 | 6 | `num.parts.make-ten` | `unknown: part`, `look: dots` | שתי שורות של חמש, ומכסה `?` על חלק |
 | 7 | `num.parts.make-ten` | `look: symbols`, `eqform`: מעורב | `7 + ? = 10`, `10 − 7 = ?`, `10 = 7 + ?`. "תראו לי" = עזרה |
 | 8 | `pv.teens.ten-and` | `structure: part-whole`, `max: 20`, `unknown: whole`, `model: bundles`, `look: dots`, `demo: true` | צרור של עשר ועוד קשיות, ובוחרים מספר |
-| 9 | `pv.teens.ten-and` | `look: symbols`, `unknown: part` | `10 + 4`, `14 = 10 + ?` |
+| 9 | `pv.teens.ten-and` | `look: symbols`, `unknown: part`, `eqform: reversed` | `14 = 10 + ?`, והכרטיסים 4, 10, 14 וטעות מקרית. "תראו לי" = עזרה: הצרור, מכסה `?` על הקשיות, ותג 14 מעל שניהם |
 | 10 | `addsub.facts.bridge-add` | `structure: equation`, `unknown: result-right`, `max: 20`, `bridge: ten`, `model: frame`, `look: dots`, `demo: true` | שתי מסגרות. כל נגיעה במונה מעבירה אותו למסגרת הראשונה, עד שהיא מלאה, והתרגיל נכתב מחדש כ-`10 + 3` |
 | 11 | `addsub.facts.bridge-add` | `look: dots` | מסגרות קבועות, בוחרים |
 | 12 | `addsub.facts.bridge-add` | `look: symbols` | תרגיל בלבד, התמונה בעזרה |
@@ -522,6 +522,10 @@ Gemini של הבלוג), ואיפה הם במסמך. הם מסומנים באו�
 - **צרורות ברמות 8–9:** `pv.teens.ten-and` היא מיומנות של ערך המקום, ולכן היא מצוירת בצרור ולא
   במסגרת (החלטת הבעלים, [§4.5](depth/place-value.md)). זה הציור הראשון של צרור. הוא עובר ל-`lib/` כשמשחק ערך המקום (§6.1)
   יצטרך אותו.
+- **רמה 9, `14 = 10 + ?`** (החלטת הבעלים, 2026-10-14, "להוסיף טעויות"): הנעלם הוא האחדות, 1 עד 9. הכרטיסים הם
+  התשובה, 10 (`given.part`), 14 (`given.whole`) וטעות מקרית (`slip.near`), כי `given.whole` ו-`given.part` נכנסו
+  לכללים של `pv.teens.ten-and` ([§4.5](depth/place-value.md)). בעזרה המכסה מתרומם, והקשיות שמתחתיו נספרות מ-1
+  (R5).
 - **אחרי אבן הדרך:** `addsub.facts.bridge-sub` ו-`addsub.facts.doubles` כרמות נוספות, ו-`num.subitize.patterns`
   כרמת כניסה.
 

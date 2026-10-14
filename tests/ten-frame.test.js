@@ -163,11 +163,51 @@ test('choices: real errors before slips, and pairs sorted by their first then se
     'counting on from the bundle never counts down below it');
 });
 
-test('R8: the mixed levels write the unknown left of = in a third of the rounds', () => {
-  for (const id of ['ten-symbols', 'teen-symbols']) {
-    const reversed = rounds(id).filter((r) => r.eqform === 'reversed').length;
-    assert.ok(reversed >= SEEDS / 4 && reversed <= SEEDS / 2, `${id}: ${reversed}`);
-  }
-  const forms = new Set(rounds('ten-symbols').map((r) => [...r.equation.left, '=', ...r.equation.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ')));
+/** An equation as its shape: numbers as n (tests read forms this way, like the generic test's R2). */
+const shape = (r) => [...r.equation.left, '=', ...r.equation.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ');
+
+test('R8: the mixed level writes the unknown left of = in a third of the rounds', () => {
+  const reversed = rounds('ten-symbols').filter((r) => r.eqform === 'reversed').length;
+  assert.ok(reversed >= SEEDS / 4 && reversed <= SEEDS / 2, `ten-symbols: ${reversed}`);
+  const forms = new Set(rounds('ten-symbols').map(shape));
   assert.deepEqual([...forms].sort(), ['n + ? = n', 'n = n + ?', 'n − n = ?'], 'pedagogy 6.2 level 7: 7 + ? = 10, 10 − 7 = ?, 10 = 7 + ?');
+});
+
+test('level 9 (14 = 10 + ?): the ones unknown, cards 4, 10, 14 and a slip, the ones covered in the help picture', () => {
+  const all = rounds('teen-symbols');
+  for (const r of all) {
+    const k = r.answer;
+    const where = JSON.stringify(r.equation);
+    assert.ok(Number.isInteger(k) && k >= 1 && k <= 9, where);
+    assert.equal(r.unknown, 'part');
+    assert.equal(r.eqform, 'reversed');
+    assert.deepEqual(r.equation, { left: [10 + k], right: [10, '+', '?'] });
+    const rules = Object.fromEntries(r.choices.map((c) => [c.rule ?? 'answer', c.value]));
+    assert.deepEqual(Object.keys(rules).sort(), ['answer', 'given.part', 'given.whole', 'slip.near'], where);
+    assert.deepEqual([rules.answer, rules['given.part'], rules['given.whole']], [k, 10, 10 + k], where);
+    assert.ok([k - 1, k + 1].includes(rules['slip.near']) && rules['slip.near'] !== 10, where);
+    assert.deepEqual(r.choices.map((c) => c.value), r.choices.map((c) => c.value).sort((x, y) => x - y));
+    assert.deepEqual(pictureOf(r), { kind: 'bundles-part', data: { ones: k, tag: 10 + k } });
+  }
+  assert.deepEqual([...new Set(all.map((r) => r.answer))].sort((x, y) => x - y), [1, 2, 3, 4, 5, 6, 7, 8, 9], 'every ones digit');
+  // Level 8 keeps the whole unknown, and its cards: nothing is given there.
+  for (const r of rounds('teen-bundle')) assert.ok(r.choices.every((c) => !c.rule?.startsWith('given.')));
+});
+
+test('bundles with the ones unknown: the tag sits over the bundle and the cover, above the digits; the cover holds every stick', () => {
+  for (const ones of [1, 4, 9]) {
+    const B = layoutBundles({ ones, tag: true });
+    const sticks = Array.from({ length: ones }, (_, j) => B.stick(j));
+    for (const s of sticks) assert.ok(s.x >= B.places.x && s.x + s.w <= B.places.x + B.places.w && s.y === B.places.y && s.h === B.places.h, `${ones}: under the cover`);
+    assert.ok(B.places.x > B.bundle.x + B.bundle.w, 'the cover leaves the bundle seen');
+    const centre = (B.tag.x + B.tag.w / 2);
+    assert.ok(Math.abs(centre - (B.bracket.l + B.bracket.r) / 2) < 1e-9, 'the tag on the middle of its bracket');
+    assert.ok(B.bracket.l <= B.bundle.x && B.bracket.r >= B.places.x + B.places.w, 'the bracket spans the bundle and the cover');
+    // The digits of count-up and the tour (above each stick) stay under the bracket's ends.
+    const digits = [...sticks, B.stick(ones)].map((s) => B.above(s));
+    assert.ok(digits.every((d) => d.y >= B.bracket.end + 0.2), `${ones}: digits clear of the bracket`);
+    assert.ok(B.stick(ones).x + B.stick(ones).w <= B.dw, 'room for one more stick (count-up)');
+    assert.ok(B.tag.y >= 0 && B.tag.x >= 0 && B.tag.x + B.tag.w <= B.dw);
+  }
+  assert.equal(layoutBundles({ ones: 4 }).tag, null, 'level 8 draws no tag');
 });

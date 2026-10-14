@@ -104,12 +104,23 @@ const PITCH = 1.1;
 /** Room above the sticks for a row of digits clear of the group's outline and its halo. */
 const LIFT = 1.4;
 
+/** Room above the digits for the whole's tag on its bracket (14 = 10 + ?), clear of a grown last digit. */
+const TAG_BAND = 1.2;
+/**
+ * The whole's tag over bundles: wider and taller than on a frame, because nine sticks make the
+ * unit small (about 22px at 320px), and two digits at 14px still need room inside a ring.
+ */
+const BUNDLE_TAG = { w: 1.5, h: 0.85 };
+
 /**
  * A bundle of ten and loose sticks, the ten left of the ones (R7, place value 4.5), with room
  * above for digits. row(t, o, y) lays out another row (t bundles and o sticks), for the build display.
- * @param {{ ones: number }} data the loose sticks
+ * With tag (14 = 10 + ?, the ones unknown): a band on top for the whole's tag, centred on a bracket
+ * over the bundle and the ones, and the box of the ones' places, which the cover covers.
+ * @param {{ ones: number, tag?: boolean }} data the loose sticks
  */
-export function layoutBundles({ ones }) {
+export function layoutBundles({ ones, tag = false }) {
+  const top = (tag ? TAG_BAND : 0) + LIFT;
   /** @param {number} t bundles @param {number} o sticks @param {number} y top */
   const row = (t, o, y) => {
     const bundles = Array.from({ length: t }, (_, j) => ({ x: 0.3 + j * (BUNDLE + 0.3), y, w: BUNDLE, h: STICK.h }));
@@ -119,16 +130,27 @@ export function layoutBundles({ ones }) {
   };
   // As wide as the bundle, the sticks and room for one more, and never narrower than 7.5 units,
   // so a round with few sticks is not drawn huge.
-  const base = row(1, ones + 1, LIFT);
-  const below = LIFT + STICK.h + 0.7;
+  const base = row(1, ones + 1, top);
+  const below = top + STICK.h + 0.7;
+  /** @param {number} i */
+  const stick = (i) => row(1, i + 1, top).sticks[i];
+  // The ones' places: a pitch each, so the cover covers every stick and the gaps between (design 6.6).
+  const first = stick(0).x - (PITCH - STICK.w) / 2;
+  const places = { x: first, y: top, w: Math.max(1, ones) * PITCH, h: STICK.h };
+  const l = base.bundles[0].x;
+  const r = places.x + places.w;
+  const chip = { x: (l + r) / 2 - BUNDLE_TAG.w / 2, y: 0.2, ...BUNDLE_TAG };
   return {
-    dw: Math.max(7.5, base.right + 0.3), dh: LIFT + STICK.h + 0.3, bundle: base.bundles[0], stick: (i) => row(1, i + 1, LIFT).sticks[i],
+    dw: Math.max(7.5, base.right + 0.3), dh: top + STICK.h + 0.3, bundle: base.bundles[0], stick,
     /** @param {Box} b a digit's box above a stick or bundle, above the halo of an outline around them */
     above: (b) => ({ x: b.x + b.w / 2 - 0.5, y: b.y - 1.2, w: 1, h: 0.76 }),
     row, below, belowH: below + STICK.h + 0.3,
+    places: tag ? places : null,
+    tag: tag ? chip : null,
+    /** The bracket over the whole: down at both ends, the tag on its middle. */
+    bracket: tag ? { l, r, y: chip.y + chip.h / 2, end: chip.y + chip.h / 2 + 0.35 } : null,
   };
 }
-
 
 /**
  * An SVG path around a run of cells of one frame in fill order (at most two rows), padded: one
@@ -422,12 +444,26 @@ export function drawTree(host, d) {
 
 /**
  * A bundle of ten and loose sticks (place value: bundles only, place-value 4.5). Every stick and
- * the bundle carry a veil: the unknown whole, shown when solved.
+ * the bundle carry a veil: the unknown whole, shown when solved. With a tag (14 = 10 + ?, the
+ * ones unknown): the bundle is the known part, the ones are the unknown under the cover, and the
+ * whole is a tag on a bracket over both (a white chip, the digit in --role-whole, as on a frame).
  * @param {HTMLElement} host
- * @param {{ ones: number }} d
+ * @param {{ ones: number, tag?: number | null, solved?: boolean, cover?: (mark?: string) => HTMLElement }} d
  */
 export function drawBundles(host, d) {
-  const L = layoutBundles(d);
+  const tagged = d.tag !== undefined && d.tag !== null;
+  const L = layoutBundles({ ones: d.ones, tag: tagged });
+  if (tagged) {
+    const { l, r, y, end } = L.bracket;
+    outline(host, L, [`M${n(l)} ${n(end)}V${n(y)}H${n(r)}V${n(end)}`], 'tf-line-frame tf-bracket-whole', false);
+    const chip = at(host, 'tf-chip tf-tag', L.tag, String(d.tag));
+    const bundle = countable(at(host, 'tf-bundle', L.bundle));
+    bundle.dataset.role = 'part';
+    bundle.append(el('span', 'tf-band'));
+    const sticks = Array.from({ length: d.ones }, (_, i) => unknown(at(host, 'tf-stick', L.stick(i)), i, d.ones));
+    const covers = d.solved ? [] : [lid(host, L.places, d.cover, '?', 'is-tall')];
+    return { L, bundle, sticks, chip, covers };
+  }
   const veiled = (node, j, n) => {
     node.dataset.role = 'part';
     countable(node).append(unknown(el('span', 'tf-veil'), j, n));
@@ -436,7 +472,7 @@ export function drawBundles(host, d) {
   const bundle = veiled(at(host, 'tf-bundle', L.bundle), 0, d.ones + 1);
   bundle.append(el('span', 'tf-band'));
   const sticks = Array.from({ length: d.ones }, (_, i) => veiled(at(host, 'tf-stick', L.stick(i)), i + 1, d.ones + 1));
-  return { L, bundle, sticks };
+  return { L, bundle, sticks, chip: null, covers: [] };
 }
 
 /**

@@ -11,7 +11,7 @@ import { KINDS, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 1,
+  version: 2,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -26,6 +26,8 @@ const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'par
 const ten = { ...split, skill: 'num.parts.make-ten' };
 /** @type {Base} */
 const teen = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'whole', min: 10, max: 20, model: 'bundles', look: 'dots', options: 4, demo: false, terms: false };
+/** Ten and a missing part (level 9): the answer is the ones, 1 to 9, so the level has no min. @type {Base} */
+const teenPart = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'part', max: 20, model: 'bundles', look: 'symbols', options: 4, demo: false, terms: false };
 /** @type {Base} */
 const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false };
 
@@ -39,9 +41,7 @@ export const levels = [
   { id: 'ten-cover', ...ten },
   { id: 'ten-symbols', ...ten, look: 'symbols', eqform: ['standard', 'reversed'] },
   { id: 'teen-bundle', ...teen, demo: true },
-  // Pedagogy 6.2 gives level 9 `unknown: part` (14 = 10 + ?); the skill's rules cannot tag its
-  // wrong cards (R4), so it asks for the whole until the owner decides (architecture 6, open questions).
-  { id: 'teen-symbols', ...teen, look: 'symbols', eqform: ['standard', 'reversed'] },
+  { id: 'teen-symbols', ...teenPart, eqform: 'reversed' },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
   { id: 'bridge-symbols', ...bridge, look: 'symbols' },
@@ -154,8 +154,8 @@ function choose(round, level, rng) {
   for (const [i, id] of order.entries()) {
     if (wrong.length === level.options - 1) break;
     const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
-    // Counting on from a bundle never counts down below it (the count-up display).
-    const drawable = (v) => !(round.model === 'bundles' && id === 'slip.near' && v < 10);
+    // Counting on from a bundle never counts down below it (the count-up display of the whole).
+    const drawable = (v) => !(round.model === 'bundles' && round.unknown === 'whole' && id === 'slip.near' && v < 10);
     const fits = options(rules[id](round)).filter((v) => ok(v) && drawable(v) && !taken.some((t) => same(t, v)) && !earlier.some((e) => same(e, v)));
     if (!fits.length) continue;
     const value = fits.length > 1 ? rng.pick(fits) : fits[0];
@@ -189,7 +189,8 @@ function roundOf(level, groups, equation, answer, eqform = 'standard') {
 }
 
 /** @type {(level: Level, rng: Rng) => string} a mixed eqform: 'reversed' in a third of the rounds (R8: 25% at least) */
-const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard') : 'standard');
+const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard')
+  : level.eqform ?? 'standard');
 
 /**
  * The parts of a number: part + ? = whole. In the ten-frame level about one round in ten covers
@@ -241,8 +242,22 @@ function tenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 - k, eqform);
 }
 
-/** Ten and some more: 10 + k = ?, and in symbols also ? = 10 + k (k is 0 in about one round in ten). @param {Level} level @param {Rng} rng */
+/**
+ * Ten and some more: 10 + k = ? (k is 0 in about one round in ten). With the part unknown (level 9,
+ * pedagogy 6.2): 14 = 10 + ?, the whole a tag over the bundle and the ones under the cover; k is
+ * never 0 there, where the whole and the ten would be one card.
+ * @param {Level} level
+ * @param {Rng} rng
+ */
 function teenRound(level, rng) {
+  if (level.unknown === 'part') {
+    const k = rng.int(1, 9);
+    const groups = [{ role: 'whole', count: 10 + k, shown: 'tag' }, { role: 'part', count: 10, shown: 'items' },
+      { role: 'unknown', count: k, shown: 'covered' }];
+    const eqform = eqformOf(level, rng);
+    const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] } : { left: [10, '+', '?'], right: [10 + k] };
+    return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), k, eqform);
+  }
   const k = rng.next() < 0.1 ? 0 : rng.int(1, 9);
   const eqform = eqformOf(level, rng);
   const sum = [10, '+', k];
@@ -293,6 +308,8 @@ const LABEL = {
   bond: (w, p) => `קֶשֶׁר מִסְפָּרִים: ${w}, ${p} וּמִכְסֶה`,
   /** @type {(w: number) => string} */
   pairs: (w) => `קֶשֶׁר מִסְפָּרִים: ${w} וּשְׁנֵי מִכְסִים`,
+  /** @type {(w: number) => string} */
+  teen: (w) => `צְרוֹר שֶׁל עֶשֶׂר וּמִכְסֶה, ${w} בְּסַךְ הַכֹּל`,
   /** @type {(k: number) => string} */
   bundle: (k) => (k === 0 ? 'צְרוֹר שֶׁל עֶשֶׂר' : k === 1 ? 'צְרוֹר שֶׁל עֶשֶׂר וְעוֹד קַשִּׁית אַחַת' : `צְרוֹר שֶׁל עֶשֶׂר וְעוֹד ${k} קַשִּׁיּוֹת`),
   /** @type {(a: number, b: number) => string} */
@@ -301,7 +318,7 @@ const LABEL = {
 
 /** @type {(p: { kind: string, data: any }) => string} the picture's label, from LABEL */
 const labelOf = ({ kind, data: d }) => (kind === 'tree' ? LABEL.bond(d.whole, d.left.n) : kind === 'pairs' ? LABEL.pairs(d.whole)
-  : kind === 'bundles' ? LABEL.bundle(d.ones) : kind === 'bridge' ? LABEL.frames(d.a, d.b)
+  : kind === 'bundles' ? LABEL.bundle(d.ones) : kind === 'bundles-part' ? LABEL.teen(d.tag) : kind === 'bridge' ? LABEL.frames(d.a, d.b)
   : !d.whole ? LABEL.split(d.tag, d.part) : d.covered ? LABEL.covered(d.part) : LABEL.open(d.part, d.unknown));
 
 /**
@@ -327,6 +344,9 @@ function drawRound(host, round, solved) {
   if (kind === 'tree' || kind === 'pairs') {
     const t = drawTree(base, { ...data, solved, cover });
     pic = { t, d: { whole: data.whole, part: data.left.n, unknown: data.right.n }, covers: [...t.left.covers, ...t.right.covers] };
+  } else if (kind === 'bundles-part') {
+    const t = drawBundles(base, { ...data, solved, cover });
+    pic = { t, d: data, covers: t.covers };
   } else if (kind === 'bundles') pic = { t: drawBundles(base, data), d: data, covers: [] };
   else if (kind === 'bridge') {
     const t = drawBridge(base, data);

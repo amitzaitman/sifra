@@ -96,7 +96,7 @@ for (const [level, kind] of KINDS) {
     await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)')).toHaveCount(0);
     await expectRoleColours(page);
     expect(await lastAttempt(page)).toMatchObject({
-      game: ID, levelId: level, outcome: 'first', wrong: [], help: [], kind: 'new', options: 4, answer: round.answer, version: 1,
+      game: ID, levelId: level, outcome: 'first', wrong: [], help: [], kind: 'new', options: 4, answer: round.answer, version: game.meta.version,
     });
   });
 
@@ -197,6 +197,7 @@ const DISPLAYS = [
   ['split-pairs', 'given.whole'], ['split-pairs', 'op.other'], ['split-pairs', 'zero.counted-as-one'], ['split-pairs', 'slip.near'],
   ['teen-bundle', 'pv.teen-reversed'], ['teen-bundle', 'pv.digits-added'], ['teen-bundle', 'pv.ones-only'], ['teen-bundle', 'slip.near'],
   ['bridge-frames', 'bridge.whole-second'], ['bridge-frames', 'bridge.leftover-only'], ['bridge-frames', 'bridge.stopped-at-ten'],
+  ['teen-symbols', 'given.whole'], ['teen-symbols', 'given.part'], ['teen-symbols', 'slip.near'],
 ];
 
 for (const [level, rule] of DISPLAYS) {
@@ -315,7 +316,7 @@ test('R6: the first dot is left of the second; the tray is navy only when the fr
 
 test('R7: the picture, its hint and its tour read left to right, line by line', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const level of ['split-10', 'split-bond', 'split-pairs', 'ten-empty', 'teen-bundle', 'bridge-move']) {
+  for (const level of ['split-10', 'split-bond', 'split-pairs', 'ten-empty', 'teen-bundle', 'teen-symbols', 'bridge-move']) {
     const { round, answerAt } = await devAt(page, level);
     await expectMathLeftToRight(page);
     for (const i of round.choices.keys()) {
@@ -547,4 +548,68 @@ test('the second miss locks the cards under a second, also where the cover lifts
   // Measured on frames: a frame or two late on a busy machine is not a longer display.
   expect(off.t - on.t).toBeGreaterThanOrEqual(on.end);
   expect(off.t - on.t).toBeLessThan(on.end + 250);
+});
+
+/** The equation row's text: the '?' cover adds none, and the hidden answer is in it. */
+const row = (page) => page.locator('[data-area="equation"] .eq');
+/** Waits out every finite animation (the answer card's ring too), so a calm check is not a race. */
+const quiet = (page) => page.evaluate(() => Promise.all(document.getAnimations()
+  .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).map((a) => a.finished.catch(() => null))));
+
+test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both; flash, flash, then the tour counts the ones from 1', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const { round, answerAt } = await devAt(page, 'teen-symbols', (r) => r.answer === 4);
+  const values = Object.fromEntries(round.choices.map((c) => [c.rule ?? 'answer', c.value]));
+  expect(values).toEqual({ answer: 4, 'given.part': 10, 'given.whole': 14, 'slip.near': values['slip.near'] });
+  expect([3, 5]).toContain(values['slip.near']);
+  expect(await said(row(page))).toBe(spoken(round.equation, []));
+  await page.locator('[data-show-picture]').click();
+  const picture = page.locator('[data-area="picture"]');
+  await expect(picture.locator('.tf-tag')).toHaveText('14');
+  await expect(picture.locator('.tf-bundle[data-role="part"]')).toBeVisible();
+  await expect(picture).toHaveAttribute('aria-label', /14/);
+  // The cover holds every one of the ones, and leaves the bundle seen.
+  const lid = await picture.locator('.tf-lid .cover').boundingBox();
+  const ones = picture.locator('.tf-stick[data-role="unknown"]');
+  await expect(ones).toHaveCount(4);
+  for (const stick of await ones.all()) {
+    const b = await stick.boundingBox();
+    expect(b.x >= lid.x - 1 && b.x + b.width <= lid.x + lid.width + 1 && b.y >= lid.y - 1 && b.y + b.height <= lid.y + lid.height + 1).toBe(true);
+  }
+  const bundle = await picture.locator('.tf-bundle').boundingBox();
+  expect(bundle.x + bundle.width).toBeLessThan(lid.x);
+  // The tag is over the bundle and the cover together.
+  const tag = await picture.locator('.tf-tag').boundingBox();
+  expect(tag.y + tag.height).toBeLessThan(bundle.y);
+  expect(tag.x).toBeGreaterThan(bundle.x);
+  expect(tag.x + tag.width).toBeLessThan(lid.x + lid.width);
+  await expectInPanel(page);
+  await expectRoleColours(page);
+  const at = (rule) => round.choices.findIndex((c) => c.rule === rule);
+  // 14: the tag blinks and stays ringed.
+  await card(page, at('given.whole')).click();
+  await unlocked(page);
+  await expect(page.locator('[data-display="flash"] .tf-ring.is-chip')).toBeVisible();
+  await expect(picture.locator('.tf-tag')).toHaveClass(/tf-blink/);
+  // 10: the bundle; then the hint: a 10 on the bundle, a ring on the cover, which stays down.
+  await card(page, at('given.part')).click();
+  await unlocked(page);
+  await expect(page.locator('[data-hint] .tf-chip')).toHaveText('10');
+  await expect(page.locator('[data-hint] .tf-ring.is-hint')).toBeVisible();
+  await expect(picture.locator('.tf-lid .cover:not(.is-lifted)')).toHaveCount(1);
+  // The slip: the tour lifts the cover and counts the ones from 1, ending on the answer (R5).
+  await card(page, at('slip.near')).click();
+  await unlocked(page);
+  await expect(page.locator('[data-tour]')).toHaveText(['1', '2', '3', '4']);
+  await expect(picture.locator('.tf-stick[data-role="unknown"].is-shown')).toHaveCount(4);
+  await expect(picture.locator('.tf-lid .cover.is-lifted')).toHaveCount(1);
+  await expectMathLeftToRight(page);
+  await quiet(page);
+  await expectCalm(page);
+  await expectInPanel(page);
+  await card(page, answerAt).click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  await expect(row(page)).toHaveText('14=10+4');
+  expect(await said(row(page))).toBe(spoken(round.equation, ['4']));
+  for (const stick of await ones.all()) await expect(stick).toHaveCSS('background-color', 'rgb(214, 51, 108)');
 });

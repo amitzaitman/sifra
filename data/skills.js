@@ -26,7 +26,7 @@ export const SKILLS = [
   {"id":"num.line.locate","requires":{"base":["count.sequence.next"],"when":[{"if":{"max":">20"},"add":["pv.numeral.read"]}]},"rules":["line.from-right","line.log","line.ones-only","line.ticks-as-ones","line.snapped-landmark","count.start-included","pv.reversed","line.estimate-off"]},
   {"id":"num.line.read","requires":{"base":["count.sequence.next"],"when":[]},"rules":["line.from-right","line.log","line.ones-only","line.ticks-as-ones","line.snapped-landmark","count.start-included","pv.reversed"]},
   {"id":"num.parts.make-ten","requires":{"base":["num.parts.split"],"when":[]},"rules":["given.whole","given.part","op.other","zero.counted-as-one","slip.near"]},
-  {"id":"pv.teens.ten-and","requires":{"base":["num.subitize.patterns","count.sequence.next"],"when":[]},"rules":["pv.teen-reversed","pv.digits-added","pv.ones-only","slip.near"]},
+  {"id":"pv.teens.ten-and","requires":{"base":["num.subitize.patterns","count.sequence.next"],"when":[]},"rules":["pv.teen-reversed","pv.digits-added","pv.ones-only","given.whole","given.part","slip.near"]},
   {"id":"addsub.meaning.part-whole","requires":{"base":["num.parts.split"],"when":[]},"rules":["op.other","given.whole","given.part","slip.near"]},
   {"id":"addsub.meaning.compare","requires":{"base":["num.compare.sets","addsub.meaning.change-take"],"when":[]},"rules":["given.larger","given.smaller","op.other","slip.near","keyword.added","keyword.inverted"]},
   {"id":"addsub.meaning.match-story","requires":{"base":["addsub.meaning.change-add","addsub.meaning.change-take"],"when":[]},"rules":["story.other-op","story.roles","story.other-numbers","story.result-form"]},
