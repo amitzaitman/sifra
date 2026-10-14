@@ -20,29 +20,31 @@ test('R6: a pan fills in rows of five, left to right, the bottom row first', () 
   assert.equal(slots, 7);
 });
 
-test('each known number is its own pile: a known group after another starts a row; the unknown follows on', () => {
-  // 7 + 2 (same-as, both-sides, relational): 7 on rows 0-1, 2 from row 2.
-  const two = layoutPan([{ role: 'part', count: 7 }, { role: 'part', count: 2, fresh: true }]);
-  assert.deepEqual(two.cubes.filter((c) => c.group === 1).map(({ col, row }) => [col, row]), [[0, 2], [1, 2]]);
-  assert.equal(rowsFor(two.slots), 3);
-  // 5 + 3: the second starts the next row anyway.
-  assert.deepEqual(layoutPan([{ role: 'part', count: 5 }, { role: 'part', count: 3, fresh: true }]).spans[1].runs, [{ start: 5, length: 3 }]);
-  // ? + 4 and 4 + ?: no new row next to the cover (design 7.3).
+test('two known numbers follow on in rows of five; the colour keeps them apart (owner decision 2026-10-14, design 6.8)', () => {
+  // 7 + 2 (same-as, both-sides, relational): 7 on row 0 and two places of row 1, 2 right after.
+  const two = layoutPan([{ role: 'part', count: 7 }, { role: 'part', count: 2, second: true }]);
+  assert.deepEqual(two.cubes.filter((c) => c.group === 1).map(({ col, row }) => [col, row]), [[2, 1], [3, 1]]);
+  assert.deepEqual(two.cubes.map((c) => c.second), [false, false, false, false, false, false, false, true, true]);
+  assert.equal(rowsFor(two.slots), 2);
+  // 5 + 3 and 3 + 5 fill the same places as 8: the rows of five compare across the pans.
+  const slots = (groups) => layoutPan(groups).cubes.map((c) => c.slot);
+  assert.deepEqual(slots([{ role: 'part', count: 5 }, { role: 'part', count: 3, second: true }]), slots([{ role: 'whole', count: 8 }]));
+  assert.deepEqual(slots([{ role: 'part', count: 3 }, { role: 'part', count: 5, second: true }]), slots([{ role: 'whole', count: 8 }]));
+  // ? + 4 and 4 + ?: the cover follows on too (design 7.3).
   assert.deepEqual(layoutPan([{ role: 'part', count: 4 }, { role: 'unknown', count: 3, cover: true }]).spans[1].places, [4, 5, 6]);
 });
 
-test('? = a + b: the result\'s places in the shape of the parts, the cover a piece per row', () => {
-  const { cubes, spans, slots } = layoutPan([{ role: 'unknown', count: 5, cover: true, blocks: [3, 2] }]);
-  assert.deepEqual(spans[0].runs, [{ start: 0, length: 3 }, { start: 5, length: 2 }]);
-  assert.deepEqual(cubes.map((c) => c.slot), [0, 1, 2, 5, 6]);
+test('? = a + b: the cover over the result\'s places in rows of five, as the parts lie on the other pan; a piece per row', () => {
+  const { cubes, spans, slots } = layoutPan([{ role: 'unknown', count: 7, cover: true }]);
+  assert.deepEqual(spans[0].runs, [{ start: 0, length: 7 }]);
+  assert.deepEqual(cubes.map((c) => c.slot), [0, 1, 2, 3, 4, 5, 6]);
   assert.equal(slots, 7);
   const pieces = spans[0].runs.flatMap((r) => rowPieces(r.start, r.length));
-  assert.deepEqual(pieces, [{ col: 0, row: 0, w: 3, h: 1 }, { col: 0, row: 1, w: 2, h: 1 }]);
+  assert.deepEqual(pieces, [{ col: 0, row: 0, w: 5, h: 1 }, { col: 0, row: 1, w: 2, h: 1 }]);
   assert.deepEqual(bridges(pieces), [{ from: 0, to: 2, row: 1, across: false }]);
-  // Ghosts fill its places in order: 3 copies the first part and leaves the second's empty.
-  const layout = layoutPan([{ role: 'unknown', count: 5, cover: true, blocks: [3, 2] }]);
-  assert.deepEqual(ghostSlots(layout, 0, 3), [0, 1, 2]);
-  assert.deepEqual(ghostSlots(layout, 0, 6), [0, 1, 2, 5, 6, 7]);
+  // Ghosts fill its places in order: 3 copies the first part and leaves the second's places empty.
+  assert.deepEqual(ghostSlots(layoutPan([{ role: 'unknown', count: 7, cover: true }]), 0, 3), [0, 1, 2]);
+  assert.deepEqual(ghostSlots(layoutPan([{ role: 'unknown', count: 5, cover: true }]), 0, 6), [0, 1, 2, 3, 4, 5]);
   assert.deepEqual(runsOf([2, 3, 4, 5, 9]), [{ start: 2, length: 4 }, { start: 9, length: 1 }]);
 });
 
@@ -71,9 +73,10 @@ test('ghosts fill the unknown\'s places, then go on after the pan\'s last place'
   assert.equal(rowsFor(16), 4);
 });
 
-test('R6: the turned rows go left to right, a group after the other', () => {
-  const { dots, blocks, length } = layoutLine([{ role: 'part', count: 3 }, { role: 'part', count: 5 }]);
+test('R6: the turned rows go left to right, a group after the other, the second in the light shade', () => {
+  const { dots, blocks, length } = layoutLine([{ role: 'part', count: 3 }, { role: 'part', count: 5, second: true }]);
   assert.ok(dots.every((d, i) => i === 0 || d.x > dots[i - 1].x), 'x grows');
+  assert.deepEqual(dots.map((d) => d.second), [false, false, false, true, true, true, true, true]);
   assert.deepEqual(blocks.map((b) => b.x), [0, 3.6]);
   assert.equal(length, 8.6);
   // Turned, the row is as long: the unknown's cover lies where the first group lands.
@@ -176,6 +179,9 @@ test('judging over 500 seeds: each form is sometimes true and sometimes false, a
 test('design 10: the unknown and the cover keep a --halo where they meet cubes and the frame; the frame has no role', () => {
   const css = readFileSync(new URL('../games/balance/game.css', import.meta.url), 'utf8');
   assert.match(css, /\.bl-cube\[data-role="unknown"\] \{ box-shadow: 0 0 0 3px var\(--halo\)/);
+  // The second of two known parts: the part's light shade, on cubes and on the turned rows' dots.
+  assert.match(css, /\.bl-cube\[data-role="part"\]\[data-second\] \{ background-color: var\(--role-part-2\); \}/);
+  assert.match(css, /\.bl-dot\[data-role="part"\]\[data-second\] \{ background-color: var\(--role-part-2\); \}/);
   assert.match(css, /\.bl-lid > \.cover \{[^}]*box-shadow: 0 0 0 3px var\(--halo\)/);
   for (const part of ['base', 'pole', 'beam', 'pivot']) assert.match(css, new RegExp(`\\.bl-${part} \\{[^}]*background: var\\(--frame\\)`));
   assert.doesNotMatch(css.match(/\.bl-(beam|bowl) \{[^}]*\}/g).join(''), /--role-/);

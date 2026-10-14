@@ -9,6 +9,9 @@ import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, readsLeftToRig
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';
+const YELLOW = 'rgb(255, 194, 51)';
+/** --role-part-2, the second of two known parts (design 3) */
+const LIGHT = 'rgb(255, 237, 184)';
 /** The real pan's stack (the display and hint layers have frameless pans of their own). */
 const stack = (page, side) => page.locator(`.bl-scene > .bl-pan[data-pan="${side}"] > .bl-stack`);
 const number = (id) => balance.levels.findIndex((l) => l.id === id) + 1;
@@ -346,11 +349,12 @@ test('judging: the cards read left to right on one line, two by two; the hint gi
   expect(await readsLeftToRight(page.locator('[data-area="equation"] .eq'))).toBe('');
 });
 
-/** The true card on the balance once solved: a lone number is its side's whole, a sum its parts. */
+/** The true card on the balance once solved: a lone number is its side's whole, a sum its parts, the second light. */
 async function expectCardOnPans(page, card) {
   for (const side of ['left', 'right']) {
     const tokens = card[side];
     await expect(stack(page, side).locator(`.bl-cube[data-role="${tokens.length === 1 ? 'whole' : 'part'}"]`), side).toHaveCount(total(tokens));
+    await expect(stack(page, side).locator('.bl-cube[data-second]'), side).toHaveCount(tokens.length === 1 ? 0 : tokens[2]);
   }
 }
 
@@ -402,6 +406,22 @@ test('the turned row (eq.props.commutative): it turns on mount; the hint turns i
   await expect(page.locator('.bl-set .bl-dot[data-role="unknown"]')).toHaveCount(round.answer);
 });
 
+test('the turned row in two colours: turned, the colours change sides (owner decision 2026-10-14)', async ({ page }) => {
+  const { round } = await devAt(page, 'turn', 1);
+  const [a, , b] = round.equation.left;
+  // The left row a + b, then the right row's b: drawn in that order.
+  const dots = page.locator('.bl-set > .bl-dot[data-role="part"]');
+  await expect(dots).toHaveCount(a + 2 * b);
+  for (let i = 0; i < a + 2 * b; i++) await expect(dots.nth(i)).toHaveCSS('background-color', i < a ? YELLOW : LIGHT);
+  // First row: yellow on the left, light on the right. Second row: light on the left, the cover where a lands.
+  const [yellow, light, turned, lid] = [dots.nth(0), dots.nth(a), dots.nth(a + b), page.locator('.bl-set > .bl-lid')].map((l) => l.boundingBox());
+  const [y, l, t, c] = await Promise.all([yellow, light, turned, lid]);
+  expect(y.x).toBeLessThan(l.x);
+  expect(t.x).toBeLessThan(c.x);
+  // The turning copy carries the colours: b's dots are light, and they land on the second row's b.
+  await expect(page.locator('.bl-turning:not([data-hint]) > .bl-twin[data-second]')).toHaveCount(b);
+});
+
 test('the turned row does not turn with reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await devAt(page, 'turn', 1);
@@ -415,12 +435,20 @@ test('relational: the hint moves the cubes that make a into c to the first group
     const [a, , b] = round.equation.left;
     const [c] = round.equation.right;
     await expect(stack(page, 'left')).toHaveAttribute('data-groups', `${a} ${b}`);
+    const cubes = stack(page, 'left').locator('.bl-cube');
+    await expect(cubes.nth(a - 1)).toHaveCSS('background-color', YELLOW);
+    await expect(cubes.nth(a)).toHaveCSS('background-color', LIGHT);
     const wrong = wrongOf(round).filter((i) => round.choices[i].rule !== 'equal.compensate-wrong');
     await card(page, wrong[0]).click();
     await unlocked(page);
     await card(page, wrong[1]).click();
     await unlocked(page);
     await expect(stack(page, 'left'), `seed ${seed}`).toHaveAttribute('data-groups', `${c} ${round.answer}`);
+    // The cubes that change group stay in place and take its colour: c yellow on each pan, in the same places.
+    await expect(cubes.nth(c - 1)).toHaveCSS('background-color', YELLOW);
+    await expect(cubes.nth(c)).toHaveCSS('background-color', LIGHT);
+    const [mine, theirs] = [await cubes.nth(c - 1).boundingBox(), await stack(page, 'right').locator('.bl-cube').nth(c - 1).boundingBox()];
+    expect(Math.abs(mine.y - theirs.y)).toBeLessThan(1);
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     // The second group, now the answer's size, is ringed in the part's colour; the cover in magenta.
     const part = page.locator('[data-hint] .bl-pan[data-pan="left"] .bl-ring.is-part');
@@ -430,12 +458,12 @@ test('relational: the hint moves the cubes that make a into c to the first group
   }
 });
 
-test('? = a + b: the cover in the shape of a and b; the tour counts on over what was under it, a + 1 to the answer', async ({ page }) => {
+test('? = a + b: the cover over the sum\'s places in rows of five; the tour counts on over what was under it, a + 1 to the answer', async ({ page }) => {
   const { round, answerAt } = await devAt(page, 'missing-reversed', 1);
   expect(round.unknown).toBe('result-left');
   const [a, , b] = round.equation.right;
-  // The cover: a piece for a's places, a piece for b's from the next row, one bridge.
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)')).toHaveCount(Math.ceil(a / 5) + Math.ceil(b / 5));
+  // The cover: a piece per row of the sum's places.
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)')).toHaveCount(Math.ceil((a + b) / 5));
   const wrong = wrongOf(round);
   for (const i of wrong) {
     await card(page, i).click();
@@ -588,18 +616,42 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover stretc
   await expect(page.locator('.bl-pan[data-pan="right"] .bl-cube').first()).toHaveCSS('background-color', 'rgb(14, 58, 138)');
   // The balance's frame has no role colour (R6, design 6.8).
   await expect(page.locator('.bl-beam')).toHaveCSS('background-color', 'rgb(122, 111, 92)');
-  // Each known number is its own pile: 2 + 6, the 6 from the next row up, at the left edge.
-  const same = await devAt(page, 'same', 1);
-  const a = same.round.picture[0].count;
-  const left = stack(page, 'left').locator('.bl-cube');
-  const [one, two] = [await left.nth(0).boundingBox(), await left.nth(a).boundingBox()];
-  expect(Math.abs(two.x - one.x)).toBeLessThan(1);
-  expect(two.y).toBeLessThan(one.y - one.height / 2);
+});
+
+test('two known numbers on a pan: one pile in rows of five, the second number in the part\'s light shade (owner decision 2026-10-14, "צבע שני")', async ({ page }) => {
+  // same-as: a + b on the left pan; its cubes fill places 0 to a + b - 1, a's yellow, b's light.
+  for (const seed of [1, 2, 3]) {
+    const { round } = await devAt(page, 'same', seed);
+    const [a, b] = round.picture.filter((g) => g.role === 'part').map((g) => g.count);
+    const cubes = stack(page, 'left').locator('.bl-cube');
+    await expect(cubes).toHaveCount(a + b);
+    const boxes = await Promise.all((await cubes.all()).map((c) => c.boundingBox()));
+    for (let i = 0; i < a + b; i++) {
+      // Rows of five from the bottom: the i-th cube is in column i % 5 of row i / 5.
+      expect(Math.abs(boxes[i].x - boxes[i % 5].x), `seed ${seed} cube ${i}`).toBeLessThan(1);
+      expect(Math.abs(boxes[i].y - boxes[5 * Math.floor(i / 5)].y), `seed ${seed} cube ${i}`).toBeLessThan(1);
+      await expect(cubes.nth(i)).toHaveCSS('background-color', i < a ? YELLOW : LIGHT);
+    }
+  }
+  // ? = a + b: a yellow and b light on the right pan, in one pile; the cover on the left over the
+  // places of the sum, in the same rows of five (design 6.8: the pans compare row by row).
+  const { round } = await devAt(page, 'missing-reversed', 2);
+  expect(round.unknown).toBe('result-left');
+  const [a, , b] = round.equation.right;
+  const right = stack(page, 'right').locator('.bl-cube');
+  await expect(stack(page, 'right').locator('.bl-cube[data-second]')).toHaveCount(b);
+  await expect(right.nth(a - 1)).toHaveCSS('background-color', YELLOW);
+  await expect(right.nth(a)).toHaveCSS('background-color', LIGHT);
+  const lids = stack(page, 'left').locator('.bl-lid:not(.bl-bridge)');
+  await expect(lids).toHaveCount(Math.ceil((a + b) / 5));
+  // The cover's first piece spans the first row, as the right pan's first five cubes do.
+  const [lid, c0, c1] = [await lids.first().boundingBox(), await right.nth(0).boundingBox(), await right.nth(1).boundingBox()];
+  expect(Math.abs(lid.width - ((Math.min(5, a + b) - 1) * (c1.x - c0.x) + c0.width))).toBeLessThan(2);
 });
 
 test('a cover over a run of places has the dome\'s corners at its ends, from its height, and covers each place (design 6.6)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
-  // 3 + ? = 10: a piece over two places and one over five; ? = 6 + 4: pieces in the shape of 6 and 4;
+  // 3 + ? = 10: a piece over two places and one over five; ? = 6 + 4: two pieces of five;
   // the turned rows: one piece over four dots.
   for (const [level, seed] of [['missing-right', 1], ['missing-reversed', 2], ['turn', 4]]) {
     await devAt(page, level, seed);

@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, panLayer, ringPieces, rowsFor, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringPieces, rowsFor, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -16,7 +16,7 @@ import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, panLayer, r
  * @property {HTMLElement} scene
  * @property {() => HTMLElement[]} lids the cover's pieces
  * @property {() => HTMLElement[]} unknowns the unknown's cubes or dots
- * @property {(closed?: boolean, animate?: boolean) => void} rest back to the start picture (level once closed)
+ * @property {(closed?: boolean) => void} rest back to the start picture (level once closed)
  * @property {() => void} close the closing's own part (judging: the true card's cubes)
  * @property {() => void} intro on mount, in play and demo
  * @property {(display: string, value: any, rule: string, lift: () => void) => Promise<HTMLElement>} show a display (step 1)
@@ -64,13 +64,14 @@ function labelOf(round) {
   return `${set ? WORDS.rows : WORDS.balance}: ${side('left')} ${WORDS.versus} ${side('right')}`;
 }
 
-/** @type {(tokens: any[], role: string) => PanGroup[]} a card side's numbers, a pile each */
-const piles = (tokens, role) => tokens.filter((t) => typeof t === 'number').map((count, i) => ({ role, count, fresh: i > 0 }));
+/** @type {(tokens: any[], role: string) => PanGroup[]} a card side's numbers in order, the second part in the light shade */
+const piles = (tokens, role) => tokens.filter((t) => typeof t === 'number').map((count, i) => ({ role, count, second: role === 'part' && i > 0 }));
 
 /**
  * The groups on each side: same-as leaves the right pan empty, the others cover the unknown, a
- * judging round's pans hold the true card once chosen. A known number after another starts a
- * row (its own pile); `? = a + b` covers places in the shape of a and b.
+ * judging round's pans hold the true card once chosen. Groups follow on in rows of five; the
+ * second of two known parts on a side takes the part's light shade (design 3, 6.8), and in the
+ * turned row each number keeps its colour, so the colours change sides (depth 4.9).
  * @param {Round} round
  * @param {boolean} solved
  * @returns {Record<Side, PanGroup[]>}
@@ -83,14 +84,14 @@ function sidesOf(round, solved) {
     return { left: piles(left, role(left)), right: piles(right, role(right)) };
   }
   const all = groupsOf(round);
+  // a + b = b + ?: the right row is the left one turned, its known part the left's second.
+  const turned = round.skill === 'eq.props.commutative';
   /** @type {(name: Side) => PanGroup[]} */
   const side = (name) => {
     const mine = all.filter((g) => g.side === name);
-    const shape = round.unknown === 'result-left' ? all.filter((g) => g.side !== name).map((g) => g.count) : [];
     return mine.map((g, i) => ({
       role: g.role, count: g.count, cover: round.unknown !== 'result-right' && !solved && g.role === 'unknown',
-      fresh: i > 0 && g.role !== 'unknown' && mine[i - 1].role !== 'unknown',
-      ...(g.role === 'unknown' && shape.length > 1 && { blocks: shape }),
+      second: g.role === 'part' && ((turned && name === 'right') || mine.slice(0, i).some((h) => h.role === 'part')),
     }));
   };
   return { left: side('left'), right: side('right') };
@@ -151,8 +152,7 @@ function balanceScene(host, round, solved, signal) {
     for (const side of /** @type {Side[]} */ (['left', 'right'])) {
       const layout = layoutPan(card[side]);
       pans[side].layout = layout;
-      pans[side].cubes = stagger(layout.cubes.map((spot) => put(pans[side].stack, 'bl-cube is-entering', spot)));
-      layout.cubes.forEach((spot, i) => { pans[side].cubes[i].dataset.role = spot.role; });
+      pans[side].cubes = stagger(layout.cubes.map((spot) => paint(put(pans[side].stack, 'bl-cube is-entering', spot), spot)));
     }
     tilt(scene.dataset.tilt);
   };
@@ -160,36 +160,21 @@ function balanceScene(host, round, solved, signal) {
   const moving = round.skill === 'eq.sign.relational' && { a: cubesOf(k, 0), b: cubesOf(k, 1), d: data[u][0].count - data[k][0].count };
   let hinted = 0; // cubes the hint moved; they stay moved to the end of the round
   /**
-   * Moves n cubes from the second group to the end of the first (n < 0: from the first back to
-   * the second), and lays both out again. With `animate` they slide there (FLIP), unless motion is
-   * reduced.
+   * Moves n cubes from the second group to the first (n < 0: from the first to the second). They
+   * are the cubes where the groups meet, and the groups follow on in rows of five, so none changes
+   * place: each takes its new group's colour (game.css fades it in the move time).
    * @param {number} n
-   * @param {boolean} [animate]
    */
-  const shift = (n, animate) => {
+  const shift = (n) => {
     if (!moving) return;
     const { a, b } = moving;
-    const first = n >= 0 ? [...a, ...b.slice(b.length - n)] : a.slice(0, a.length + n);
-    const second = n >= 0 ? b.slice(0, b.length - n) : [...b, ...a.slice(a.length + n)];
-    const layout = layoutPan([{ role: 'part', count: first.length }, { role: 'part', count: second.length, fresh: true }]);
+    const first = n >= 0 ? [...a, ...b.slice(0, n)] : a.slice(0, a.length + n);
+    const second = n >= 0 ? b.slice(n) : [...a.slice(a.length + n), ...b];
+    const layout = layoutPan([{ role: 'part', count: first.length }, { role: 'part', count: second.length, second: true }]);
     const cubes = [...first, ...second];
-    const slide = animate && !reduced();
-    const before = cubes.map((c) => slide && c.getBoundingClientRect());
-    cubes.forEach((cube, i) => {
-      cube.style.setProperty('--c', String(layout.cubes[i].col));
-      cube.style.setProperty('--r', String(layout.cubes[i].row));
-    });
+    cubes.forEach((cube, i) => paint(cube, layout.cubes[i]));
     Object.assign(pans[k], { layout, cubes });
     pans[k].stack.dataset.groups = `${first.length} ${second.length}`;
-    if (!slide) return;
-    // Each cube starts where it was and slides to its new place, in the design's move time.
-    const style = getComputedStyle(scene);
-    const timing = { duration: parseFloat(style.getPropertyValue('--t-move')) || 250, easing: style.getPropertyValue('--ease').trim() || 'ease' };
-    cubes.forEach((cube, i) => {
-      const after = cube.getBoundingClientRect();
-      const [x, y] = [before[i].left - after.left, before[i].top - after.top];
-      if (Math.abs(x) + Math.abs(y) > 0.5) cube.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'none' }], timing);
-    });
   };
   shift(0);
 
@@ -199,8 +184,8 @@ function balanceScene(host, round, solved, signal) {
     lids: () => [...pans.left.lids, ...pans.right.lids],
     unknowns: () => (ui < 0 ? [] : cubesOf(u, ui)),
     /** The start picture (level once closed); cubes the hint moved stay moved. */
-    rest: (closed = false, animate = false) => {
-      shift(hinted, animate);
+    rest: (closed = false) => {
+      shift(hinted);
       tilt(closed ? 'level' : restTilt);
     },
     close: () => judging && layCard(),
@@ -216,8 +201,8 @@ function balanceScene(host, round, solved, signal) {
       const layer = panLayer(scene);
       layer.el.dataset.display = display;
       if (judging) {
-        // The card goes up on the balance as ghosts, a pile per number.
-        const pile = (tokens) => layoutPan(piles(tokens, '')).cubes.map((c) => c.slot);
+        // The card goes up on the balance as ghosts, each side in rows of five.
+        const pile = (tokens) => Array.from({ length: total(tokens) }, (_, slot) => slot);
         const [left, right] = [pile(value.left), pile(value.right)];
         ghosts(layer.left, left);
         ghosts(layer.right, right);
@@ -250,7 +235,7 @@ function balanceScene(host, round, solved, signal) {
         // overflow, balance: ghosts in the unknown's pan.
         if (rule === 'equal.compensate-wrong' && moving) {
           // The cube goes the wrong way: the second group is the choice.
-          shift(-moving.d, true);
+          shift(-moving.d);
           tilt(restTilt);
           await settle(pans[k].stack, signal);
           if (signal.aborted) return layer.el;
@@ -283,7 +268,7 @@ function balanceScene(host, round, solved, signal) {
       } else if (moving) {
         // Cubes change group: a becomes c and the beam is level; what is left of b faces the
         // cover. Rings in the colours of the roles they mark (design 7.2).
-        shift(hinted = moving.d, true);
+        shift(hinted = moving.d);
         tilt(restTilt);
         rings(layer[k], pans[k].layout.spans[1].runs, 'is-hint is-part is-late');
         rings(layer[u], span.runs, 'is-hint is-late');
@@ -358,7 +343,7 @@ function rowsScene(host, round, solved) {
    * @returns {HTMLElement}
    */
   const turn = (root) => {
-    for (const dot of lines.left.layout.dots) put(root, 'bl-dot bl-twin', dot).dataset.role = dot.role;
+    for (const dot of lines.left.layout.dots) paint(put(root, 'bl-dot bl-twin', dot), dot);
     return root;
   };
   /** @type {(len: number | string, rows: number) => void} the set's size in cells */
@@ -512,7 +497,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
         // with the real ones. The cards lock only while the display runs (design 7.1): at step 2
         // the return is not awaited; the tour (step 3) follows it.
         hint ??= s.hint();
-        s.rest(false, true);
+        s.rest(false);
         const back = settle(s.scene, signal).then(() => { if (!signal.aborted) root.remove(); });
         if (step < 3) return;
         await back;
@@ -555,7 +540,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       s.close();
       lift();
       stagger(s.unknowns().filter((n) => !n.classList.contains('is-shown'))).forEach((n) => n.classList.add('is-entering'));
-      s.rest(true, true);
+      s.rest(true);
       await settle(s.scene, signal);
     },
     async demo(hand) {

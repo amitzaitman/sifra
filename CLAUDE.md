@@ -41,7 +41,7 @@ with children) only after the owner's iPhone check there is logged in `docs/devi
 3. Every attempt is recorded: child, game, level, skill, seed, day, outcome (`first` | `help` | `shown`), wrong rules chosen, ms. The storage key is versioned, with `migrate()`.
 4. Every level names a skill id from `docs/skills.md`.
 5. Every choice is `{ value, rule }`, and every wrong choice has a rule. One generic test runs every game x level x 200 seeds.
-6. Drawing code for a representation takes `(host, data)` only and uses the role colour tokens (whole, part, unknown, added, removed; `docs/design.md` §3), so it can move to `lib/` unchanged.
+6. Drawing code for a representation takes `(host, data)` only and uses the role colour tokens (whole, part, unknown, added, removed; the part has a light second shade, `--role-part-2`, for the second of two known parts in one picture; `docs/design.md` §3), so it can move to `lib/` unchanged.
 7. `#/dev/<game>/<level>/<seed>` shows any round.
 
 ## Shared code

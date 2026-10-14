@@ -6,6 +6,7 @@
   --action: #0E3A8A; --on-action: #FFFFFF; --on-action-soft: #C9D6F5; --accent: #FFC233;
   --lip: #8E8169; --lip-action: #082660;
   --role-whole: #0E3A8A; --role-part: #FFC233; --role-part-edge: #9E6C00;
+  --role-part-2: #FFEDB8;  /* light part: the second of two known parts in one picture, with the part edge */
   --role-unknown: #D6336C; --role-unknown-tint: #FBE3EC; --on-unknown: #FFFFFF;
   --role-added: #1FA2E6; --role-added-edge: #0B6FA6; --role-added-ghost: #9AD5F4;
   --role-removed: #544834; /* hollow 3px outline, never a fill */

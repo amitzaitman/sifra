@@ -36,7 +36,10 @@
 [data-game="balance"] .bl-layer.is-leaving { opacity: 0; animation: balance-out 200ms var(--ease); }
 
 [data-game="balance"] .bl-cube { width: var(--cube); height: var(--cube); border-radius: calc(var(--cube) * .25); }
-[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); transition: background-color var(--t-move) var(--ease); }
+/* The second of two known parts (design 3, 6.8): the part's light shade, the same edge. A cube that
+   changes group (relational) fades to its new colour. */
+[data-game="balance"] .bl-cube[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
@@ -86,6 +89,7 @@
 [data-game="balance"] .bl-set .bl-dot, [data-game="balance"] .bl-set .bl-lid, [data-game="balance"] .bl-set .bl-ring { position: absolute; left: calc(var(--cell) * var(--x) + var(--inset)); top: calc(var(--cell) * var(--y) + var(--inset)); bottom: auto; }
 [data-game="balance"] .bl-set .bl-dot { width: var(--dot); height: var(--dot); border-radius: 50%; }
 [data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="balance"] .bl-set .bl-dot[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
 [data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
