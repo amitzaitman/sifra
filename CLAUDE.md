@@ -25,7 +25,8 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 - Every round can be solved from the picture and the exercise. At most one short pointed sentence.
 - No timers inside games: the child taps "הַבָּא". No coins, streaks, stars or clocks as rewards or timers (reading a clock and counting coins are maths content).
 - No adult tools in v1, except one parents' page of links to Aharoni's videos (`docs/parents-videos.md`). It is reached by a small grey text link on the home page, with no gate. Videos open in YouTube itself; never embed them. No accounts, analytics or network service at play time.
-- Home page: one big "הַצַּעַד הַבָּא" button (the first skill in the Aharoni/Singapore order that isn't mastered and whose prerequisites are), and every game open below it. No locks ([§5.12](docs/pedagogy.md)).
+- Home page: one big "הַצַּעַד הַבָּא" button (the first skill in the learning order that a game offers, isn't mastered and whose prerequisites are; the order comes from the prerequisite graph in `docs/skills.md`), and every game open below it. No locks ([§5.12](docs/pedagogy.md)).
+- Levels and progression are independent of the child's school grade (owner decision 2026-10-14): nothing at run time uses a grade (next step, review pool, levels, shell, game meta), and no grade is shown. Review rounds come from any skill passed in any game. The grade column of `docs/skills.md` and the map are school information only.
 - sifra is practice after the child met a concept in class or with objects, not the first meeting: level 1 of a skill starts with pictures of real objects.
 - Tap input only, until a game needs dragging.
 - Target Safari 16.4+ and current Chrome. Nothing is transpiled, so don't use newer features.

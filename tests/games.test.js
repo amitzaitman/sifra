@@ -132,7 +132,9 @@ export function checkGame(game) {
   const fail = (msg) => problems.push(`${meta?.id}: ${msg}`);
   if (typeof meta?.id !== 'string' || !String(meta.css).endsWith(`/${meta.id}/game.css`)) fail('meta.id must be the folder name, meta.css its game.css');
   if (!/[א-ת]/.test(meta?.title ?? '') || meta.title.includes(METEG)) fail('meta.title: Hebrew with nikud, no meteg');
-  if (!Array.isArray(meta?.grades) || !meta.grades.length || !Number.isInteger(meta?.version)) fail('meta.grades and meta.version are required');
+  if (!Number.isInteger(meta?.version)) fail('meta.version is required');
+  // No grade anywhere at run time: levels and progression are independent of school grade (owner decision 2026-10-14).
+  if (Object.keys(meta ?? {}).some((k) => /grade/i.test(k))) fail('meta has no grade (architecture 2.1)');
   if (!Array.isArray(game.text) || typeof game.rules !== 'object') fail('text and rules must be exported');
   const ids = levels.map((l) => l.id);
   ids.forEach((id, i) => ids.indexOf(id) !== i && fail(`level id ${id} is used twice`));
@@ -237,11 +239,11 @@ export function checkRound(game, level, index, round) {
       if (!forms.some((form) => fits(left, form.left) && fits(right, form.right))) fail(`R2: ${show(equation)} is not a ${round.eqform ?? 'standard'} form of (${round.structure}, ${round.unknown})`);
     }
   }
-  // R2: a new story structure starts small: up to 5 in a grade 1 skill, 10 in grade 2 ("equation" is not a story).
+  // R2: a new story structure starts small, up to 5, whatever the skill ("equation" is not a story).
   const first = game.levels.findIndex((l) => [l.structure].flat().includes(round.structure)) === index;
   if (round.structure && round.structure !== 'equation' && first) {
     const numbers = equation ? [...equation.left, ...equation.right, ...[round.answer].flat()] : groups.map((g) => g.count);
-    const ceiling = skillOf(level.skill)?.grade === 1 ? 5 : 10;
+    const ceiling = 5;
     if (Math.max(...numbers.filter((n) => typeof n === 'number')) > ceiling) fail(`R2: the first level of ${round.structure} goes above ${ceiling}`);
   }
   // R4 and R5, choice rounds.
@@ -351,4 +353,5 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(problems, /colour is not a skills\.md parameter/);
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }, parts.levels[1]] }).join(), /model frame comes back after tree/);
   assert.match(checkGame({ ...parts, levels: [parts.levels[1], { ...parts.levels[1], id: 'x', look: 'objects' }] }).join(), /look objects comes back/);
+  assert.match(checkGame({ ...parts, meta: { ...parts.meta, grades: [1] } }).join(), /meta has no grade/);
 });

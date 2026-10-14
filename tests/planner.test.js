@@ -1,5 +1,5 @@
 // lib/planner.js: the dev-spec R3/R11 [unit] list (architecture 4.3), with the fixtures standing
-// for ten-frame (parts) and balance (scale), and the pedagogy 5.12 walk.
+// for ten-frame (parts) and balance (scale), the learning order, and the pedagogy 5.12 walk.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as parts from './fixtures/parts/game.js';
@@ -12,6 +12,8 @@ import {
 import { rng } from '../lib/rng.js';
 import { newChild } from '../lib/store.js';
 import { SKILLS } from '../data/skills.js';
+import { learningOrder } from '../scripts/gen-data.js';
+import { SKILLS as SKILLS_MD, parseSkills, parseStrands, read } from '../scripts/docs-parse.js';
 
 const GAMES = [parts, scale];
 const TODAY = '2026-10-14';
@@ -64,11 +66,28 @@ test('review: one when only one is due; nothing due takes the nearest due date',
   assert.deepEqual(plan(c).filter((r) => r.kind === 'review').map((r) => r.game), ['parts'], 'nearest due');
 });
 
-test('review: no history, played today, or another grade band: no review', () => {
+test('review: no history, or played today: no review', () => {
   assert.equal(plan(child()).filter((r) => r.kind === 'review').length, 0);
   assert.equal(plan(splitYesterday({ last: TODAY })).filter((r) => r.kind === 'review').length, 0);
-  const older = { ...parts, meta: { ...parts.meta, grades: [3] } };
-  assert.equal(planSession(splitYesterday(), [older, scale], scale, TODAY, SKILLS, rng(1), rng(2)).filter((r) => r.kind === 'review').length, 0);
+});
+
+test('review pool: any skill the child passed a level of, in any game; no grade band (R11)', () => {
+  // A game far along the map: its skill is reviewed like any other, from a session in another game.
+  const rows = { id: 'rows', skill: 'muldiv.meaning.array', demo: false, options: 4, model: 'array', look: 'dots', terms: true };
+  const later = { meta: { id: 'later', title: 'שׁוּרוֹת', version: 1, css: '' }, levels: [rows, { ...rows, id: 'rows-sym', look: 'symbols' }] };
+  const games = [parts, scale, later];
+  const c = child({ later: ladder(later, 'rows-sym', ['rows']) }, { 'muldiv.meaning.array': skill({ last: YESTERDAY, passedDay: YESTERDAY, due: TODAY }) });
+  const rounds = planSession(c, games, parts, TODAY, SKILLS, rng(1), rng(2));
+  assert.deepEqual([rounds[0].game, rounds[0].index, rounds[0].kind], ['later', 0, 'review']);
+  assert.ok(rounds.slice(1).every((r) => r.game === 'parts' && r.kind === 'new'));
+  // Two due, from two games: by due date, then the learning order.
+  c.games.parts = ladder(parts, 'split-sym', ['split-5', 'split-10']);
+  c.skills['num.parts.split'] = skill({ last: YESTERDAY, passedDay: YESTERDAY, due: TODAY });
+  assert.deepEqual(reviews(c, games, TODAY, SKILLS).map((r) => [r.game.meta.id, r.index]), [['parts', 1], ['later', 0]]);
+  c.skills['muldiv.meaning.array'].due = YESTERDAY;
+  assert.deepEqual(reviews(c, games, TODAY, SKILLS).map((r) => r.game.meta.id), ['later', 'parts']);
+  // A scheduled skill with no passed level in any registered game is not in the pool.
+  assert.deepEqual(reviews(c, [parts, scale], TODAY, SKILLS).map((r) => r.game.meta.id), ['parts']);
 });
 
 test('review: after a failed last review, one level lower with the same skill, model and look', () => {
@@ -138,6 +157,63 @@ test('prerequisites: base, then the conditions the level meets', () => {
   assert.ok(prereqs(SKILLS, 'eq.props.commutative', { op: 'mul' }).includes('muldiv.meaning.array'));
   assert.ok(prereqs(SKILLS, 'eq.props.commutative', { op: ['add', 'mul'] }).includes('muldiv.meaning.array'));
   assert.ok(!prereqs(SKILLS, 'eq.props.commutative', { op: 'add' }).includes('muldiv.meaning.array'));
+});
+
+/** A skills.md row as data/skills.js has it. */
+const row = (id, base = [], when = []) => ({ id, requires: { base, when }, rules: [] });
+/** A plain game: an id and levels of the given skills (nextStep needs no makeRound). */
+const plain = (id, ...levels) => ({ meta: { id, title: id, version: 1, css: '' }, levels: levels.map(([lid, skill, max = 10]) => ({ id: lid, skill, max })) });
+/** The next step as [game id, level index]. */
+const stepOf = (c, games, skills) => {
+  const next = nextStep(c, games, skills);
+  return [next.game.meta.id, next.index];
+};
+
+test('learning order: depth of base prerequisites, then row order; cycles throw', () => {
+  const rows = [row('t.c.c', ['t.b.b']), row('t.a.a'), row('t.b.b', ['t.a.a']), row('t.d.d'), row('t.e.e', ['t.a.a', 't.c.c']), row('t.f.f', ['t.a.a'])];
+  assert.deepEqual(learningOrder(rows).map((r) => r.id), ['t.a.a', 't.d.d', 't.b.b', 't.f.f', 't.c.c', 't.e.e']);
+  assert.deepEqual(learningOrder([row('t.b.b', ['t.x.x']), row('t.a.a')]).map((r) => r.id), ['t.b.b', 't.a.a'], 'unknown ids: depth 0');
+  assert.throws(() => learningOrder([row('t.a.a', ['t.b.b']), row('t.b.b', ['t.a.a'])]), /cycle/);
+});
+
+test('learning order in data/skills.js: every skill after its base prerequisites, ties by depth then skills.md rows', () => {
+  const text = read(SKILLS_MD);
+  const rows = [...parseSkills(text, parseStrands(text)).skills.keys()];
+  assert.deepEqual([...SKILLS.map((s) => s.id)].sort(), [...rows].sort(), 'every skills.md row, once');
+  const at = new Map(SKILLS.map((s, i) => [s.id, i]));
+  const depth = new Map();
+  for (const s of SKILLS) {
+    for (const p of s.requires.base) assert.ok(at.get(p) < at.get(s.id), `${s.id} comes before its prerequisite ${p}`);
+    depth.set(s.id, Math.max(0, ...s.requires.base.map((p) => depth.get(p) + 1)));
+  }
+  const key = (s) => [depth.get(s.id), rows.indexOf(s.id)];
+  SKILLS.slice(1).forEach((s, i) => {
+    const [[d0, r0], [d1, r1]] = [key(SKILLS[i]), key(s)];
+    assert.ok(d0 < d1 || (d0 === d1 && r0 < r1), `${SKILLS[i].id} then ${s.id}: not by depth, then row`);
+  });
+});
+
+test('next step: skills no game offers are skipped, and count as open when they are prerequisites', () => {
+  const skills = [row('t.a.a'), row('t.b.b', ['t.a.a']), row('t.c.c', ['t.b.b']), row('t.d.d', ['t.c.c'])];
+  const first = plain('first', ['b1', 't.b.b'], ['b2', 't.b.b']);
+  const second = plain('second', ['d1', 't.d.d']);
+  const games = [second, first];
+  assert.deepEqual(stepOf(child(), games, skills), ['first', 0], 't.a.a is offered by no game: skipped, and t.b.b is open');
+  const c = child({ first: ladder(first, 'b2', ['b1']) });
+  assert.deepEqual(stepOf(c, games, skills), ['first', 1], 'a skill is passed at its last level');
+  c.games.first.passed.push('b2');
+  assert.deepEqual(stepOf(c, games, skills), ['second', 0], 't.c.c is offered by no game: t.d.d is open after t.b.b');
+});
+
+test('next step: a skill waits for its offered prerequisites, conditional ones by the level it would open', () => {
+  const skills = [row('t.a.a', [], [{ if: { max: '>10' }, add: ['t.b.b'] }]), row('t.b.b'), row('t.c.c', ['t.a.a'])];
+  const big = plain('big', ['a20', 't.a.a', 20]);
+  const small = plain('small', ['a10', 't.a.a', 10]);
+  const other = plain('other', ['b1', 't.b.b'], ['c1', 't.c.c']);
+  assert.deepEqual(stepOf(child(), [big, other], skills), ['other', 0], 't.a.a at max 20 needs t.b.b first');
+  assert.deepEqual(stepOf(child(), [small, other], skills), ['small', 0], 't.a.a at max 10 does not');
+  const passedB = child({ other: ladder(other, 'c1', ['b1']) });
+  assert.deepEqual(stepOf(passedB, [big, other], skills), ['big', 0], 't.b.b passed: t.a.a opens before t.c.c');
 });
 
 test('next step: an empty store starts the first game at level 1; a passed skill opens the next', () => {

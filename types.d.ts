@@ -67,7 +67,8 @@ interface RenderContext {
   onAttempt(value: any): void;
 }
 
-interface GameMeta { id: string; title: string; grades: number[]; version: number; css: string }
+/** No grade: levels and progression are independent of school grade (owner decision 2026-10-14). */
+interface GameMeta { id: string; title: string; version: number; css: string }
 
 interface Game {
   meta: GameMeta;
@@ -80,10 +81,9 @@ interface Game {
   classify?(round: Round, value: any): string;
 }
 
-/** data/skills.js */
+/** data/skills.js, in the learning order (architecture 3.6) */
 interface Skill {
   id: string;
-  grade: number;
   requires: { base: string[]; when: { if: Record<string, string>; add: string[] }[] };
   rules: string[];
 }

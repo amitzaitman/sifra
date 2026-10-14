@@ -3,7 +3,7 @@
 // a judging level (2.3) whose answers are equation cards.
 import { choose, count, render as draw } from '../kit.js';
 
-export const meta = { id: 'scale', title: 'כַּפּוֹת', grades: [1, 2], version: 1, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'scale', title: 'כַּפּוֹת', version: 1, css: new URL('game.css', import.meta.url).href };
 
 const pans = { structure: 'equation', model: 'balance', look: 'dots', terms: false, max: 10, options: 4, demo: false };
 /** @type {Level[]} */

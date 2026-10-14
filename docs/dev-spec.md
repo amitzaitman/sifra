@@ -13,8 +13,8 @@
 // A level. skill and demo always; the rest are the parameters from skills.md.
 { skill: 'num.parts.make-ten', demo: true, structure: 'part-whole', unknown: 'part',
   max: 10, model: 'frame', look: 'dots', options: 4, terms: false, helpEstimate: false }
-// terms and helpEstimate are static per level (§4.1, §4.8): makeRound is pure and sees neither
-// the child's grade nor the child's history.
+// terms and helpEstimate are static per level (§4.1, §4.8): makeRound is pure and does not see
+// the child's history. There is no grade anywhere at run time (owner decision 2026-10-14).
 // needsReading stays false in v1: no reading-dependent rounds (owner decision 2026-10-14, §8.1 ט).
 
 // makeRound(level, rng) returns plain data. Every field is logged with each attempt.
@@ -79,8 +79,9 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   has an icon element (`[data-icon]`).
 - **R2 [auto]:** the [§4.6](depth/addsub-meaning.md) table is encoded as data. `(structure, unknown)` must be a row; the
   equation's shape must match the row's form (or its reversed form when `eqform: 'reversed'`).
-  Over 200 seeds every declared pair appears. On the first level of a structure,
-  `max(numbers) <= ceiling`. Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
+  Over 200 seeds every declared pair appears. On the first level of a story structure (not
+  `equation`) in a game's list, `max(numbers) <= 5`, whatever the skill: there is no grade to relax
+  it (owner decision 2026-10-14). Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
   return `equation: null`: R2 checks the structure and unknown only, and R1 uses the no-equation
   branch.
 - **R3 [auto]:** each skill's allowed model order (the "מודל" line of each skill in its strand file under `depth/`; the line is defined in [§4.1](depth/README.md)) is encoded as data.
@@ -89,10 +90,12 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   as range, like `max`. A level with `helpEstimate: true` has skill `addsub.multi.two-digit` or
   `addsub.multi.column`, and an earlier level in the same game has skill `addsub.multi.estimate`.
   A level with `terms: true` has a skill in `addsub.*`, `muldiv.*` or `frac.*` ([§4.1](depth/README.md)), and not
-  `addsub.multi.whole-tens`; whether it is a grade-2 level is a review question, because levels
-  carry no grade.
+  `addsub.multi.whole-tens`. `terms` is the level's own property: whether a level should have it
+  is a review question against its depth table, never a grade (levels and progression are
+  independent of grade, owner decision 2026-10-14).
 - **R3, R11 [unit]:** planner tests. With history from yesterday: 1–2 review rounds at the last
-  passed level or one below, drawn from every game of the grade band (grades 1–2). Nothing due:
+  passed level or one below, drawn from any skill the child passed a level of, in any game (no
+  grade band; a game far along the map is reviewed like the first two). Nothing due:
   the skill with the nearest due date. No history: no review. A failed review does not change the
   level. Mixed level: at least two structures (or `ask` values), and the switch rate between
   consecutive rounds is about 0.4 over many sessions. Levels: up after 4 first-try successes in

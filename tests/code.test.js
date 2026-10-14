@@ -47,6 +47,10 @@ test('games never touch storage, wait for animationend, or make their own cover'
   ]);
 });
 
+test('no grade at run time: lib/, app.js and data/skills.js never name one (owner decision 2026-10-14)', () => {
+  none(scan(['app.js', 'data/skills.js', ...lib], /(?<![a-z])grade/i, 'a grade: levels and progression are independent of grade'));
+});
+
 test('lib/ imports nothing and stays under 600 lines', () => {
   none(scan(lib, /^\s*import\b|\bimport\(/, 'an import'));
   const lines = lib.reduce((n, f) => n + read(f).split('\n').length - 1, 0);

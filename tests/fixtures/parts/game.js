@@ -2,7 +2,7 @@
 // in for ten-frame. Small, but it keeps the whole contract of docs/architecture.md section 2.
 import { choose, count, render as draw } from '../kit.js';
 
-export const meta = { id: 'parts', title: 'חֲלָקִים', grades: [1], version: 1, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'parts', title: 'חֲלָקִים', version: 1, css: new URL('game.css', import.meta.url).href };
 
 const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'part', model: 'frame', look: 'dots', terms: false };
 /** @type {Level[]} */

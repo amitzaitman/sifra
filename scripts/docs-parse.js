@@ -347,15 +347,6 @@ export function isEarly(skill) {
 }
 
 /**
- * The grade number of a grade cell: its first Hebrew letter, א = 1.
- * @param {string} cell e.g. 'א–ב [ת]'
- * @returns {number}
- */
-export function gradeOf(cell) {
-  return 'אבגדהוז'.indexOf(cell.trim()[0]) + 1;
-}
-
-/**
  * 'depth', 'map12' (grade 1-2 map), 'upper' (grade 3+ map) or 'other' (bad depth cell).
  * @param {SkillRow} skill
  * @returns {'depth' | 'map12' | 'upper' | 'other'}
