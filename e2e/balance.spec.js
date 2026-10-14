@@ -4,6 +4,7 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
+import { rng } from '../lib/rng.js';
 import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
@@ -339,10 +340,41 @@ test('judging: the cards read left to right on one line, two by two; the hint gi
   await expect(page.locator('[data-area="equation"] .eq > *')).toHaveCount(0);
   await card(page, answerAt).click();
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-cube[data-role="whole"]')).toHaveCount(total(round.answer.left));
+  await expectCardOnPans(page, round.answer);
   // The true card's exercise is written in the equation row (R5), left to right.
   await expect(page.locator('[data-area="equation"] .eq')).toHaveText([...round.answer.left, '=', ...round.answer.right].join(''));
   expect(await readsLeftToRight(page.locator('[data-area="equation"] .eq'))).toBe('');
+});
+
+/** The true card on the balance once solved: a lone number is its side's whole, a sum its parts. */
+async function expectCardOnPans(page, card) {
+  for (const side of ['left', 'right']) {
+    const tokens = card[side];
+    await expect(stack(page, side).locator(`.bl-cube[data-role="${tokens.length === 1 ? 'whole' : 'part'}"]`), side).toHaveCount(total(tokens));
+  }
+}
+
+/** The form of a card: 'standard' (5 + 2 = 7), 'reversed' (7 = 5 + 2) or 'same' (7 = 7). */
+const formOf = (card) => ({ 'n+n=n': 'standard', 'n=n+n': 'reversed', 'n=n': 'same' })[[...card.left, '=', ...card.right].map((t) => (typeof t === 'number' ? 'n' : t)).join('')];
+
+test('judging: the true card in each form (5 + 2 = 7, 7 = 5 + 2, 7 = 7) is the one that solves the round, next to cards of the other forms', async ({ page }) => {
+  const level = balance.levels.find((l) => l.id === 'true-false');
+  for (const form of ['standard', 'reversed', 'same']) {
+    let seed = 1;
+    while (formOf(balance.makeRound(level, rng(seed)).answer) !== form) seed += 1;
+    const { round, answerAt } = await devAt(page, 'true-false', seed);
+    // Every form is on the cards: two standard, one reversed, one without an operation.
+    expect(round.choices.map((c) => formOf(c.value)).sort(), form).toEqual(['reversed', 'same', 'standard', 'standard']);
+    const wrong = wrongOf(round);
+    await card(page, wrong[0]).click();
+    await expect(page.locator('[data-display] .bl-ghost'), form).toHaveCount(total(round.choices[wrong[0]].value.left) + total(round.choices[wrong[0]].value.right));
+    await unlocked(page);
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]'), form).toHaveAttribute('data-solved', '');
+    await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
+    await expectCardOnPans(page, round.answer);
+    await expect(page.locator('[data-area="equation"] .eq')).toHaveText([...round.answer.left, '=', ...round.answer.right].join(''));
+  }
 });
 
 test('the turned row (eq.props.commutative): it turns on mount; the hint turns it again with a ring in each role\'s colour; the tour counts the unknown', async ({ page }) => {

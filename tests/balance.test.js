@@ -1,5 +1,5 @@
 // The balance's own tests (architecture 4.1): the layout functions (R6 [unit]), the reversed-form
-// precedence of the equal.* rules (depth 4.9), the judging cards, and the halos of design 10.
+// precedence of the equal.* rules (depth 4.9), the judging cards and their forms, and the halos of design 10.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -129,14 +129,48 @@ test('the zero round: 1 is zero.counted-as-one, and nothing else is offered twic
   for (const round of zeros) assert.deepEqual(round.choices.map((c) => c.rule), [null, 'zero.counted-as-one', 'given.whole', 'op.other']);
 });
 
-test('judging: one true card c = a + b; the others false, and each says its error', () => {
+/** A card's form: 'standard' (5 + 2 = 7), 'reversed' (7 = 5 + 2), 'same' (7 = 7), else its shape. */
+const formOf = (card) => {
+  const shape = [...card.left, '=', ...card.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ');
+  return { 'n + n = n': 'standard', 'n = n + n': 'reversed', 'n = n': 'same' }[shape] ?? shape;
+};
+const sum = (side) => side.reduce((n, t, i) => (typeof t === 'number' ? (side[i - 1] === '−' ? n - t : n + t) : n), 0);
+
+test('judging: one true card, the others false, each with its rule; every card made of the round\'s exercise', () => {
   for (const round of rounds('true-false')) {
-    const sum = (side) => side.reduce((n, t, i) => (typeof t === 'number' ? (side[i - 1] === '−' ? n - t : n + t) : n), 0);
     const truth = round.choices.map((c) => sum(c.value.left) === sum(c.value.right));
-    assert.deepEqual(truth.filter(Boolean).length, 1);
-    assert.equal(round.answer.left.length, 1);
-    assert.deepEqual(new Set(round.choices.map((c) => c.rule)), new Set([null, 'equal.reject-reversed', 'equal.accepts-chain', 'slip.card']));
+    assert.equal(truth.filter(Boolean).length, 1);
+    assert.ok(round.choices.every((c, i) => truth[i] === (c.rule === null)));
+    const [a, b] = round.fact;
+    const numbers = new Set([a, b, a + b, a + b + 1, Math.abs(a - b)]);
+    assert.ok(round.choices.every((c) => [...c.value.left, ...c.value.right].every((t) => typeof t !== 'number' || numbers.has(t))), JSON.stringify(round.choices));
+    // Real errors first: a slip only in a form no real error fills (R4, depth 4.9).
+    assert.ok(round.choices.filter((c) => c.rule && !c.rule.startsWith('slip.')).length >= 2);
+    assert.ok(!round.choices.some((c) => c.rule === 'equal.accepts-chain'), 'its form (an operation on both sides) is not a level 1 form');
   }
+});
+
+test('judging over 500 seeds: each form is sometimes true and sometimes false, and a card\'s form does not tell the true card', () => {
+  const level1 = level('true-false');
+  const seen = { standard: { cards: 0, true: 0 }, reversed: { cards: 0, true: 0 }, same: { cards: 0, true: 0 } };
+  const rules = new Set();
+  for (let seed = 1; seed <= 500; seed++) {
+    const round = balance.makeRound(level1, rng(seed));
+    // Every round shows the three forms, two of them standard: the shape of the row of cards is always the same.
+    const forms = round.choices.map((c) => formOf(c.value));
+    assert.deepEqual([...forms].sort(), ['reversed', 'same', 'standard', 'standard'], `seed ${seed}: ${forms}`);
+    round.choices.forEach((c, i) => {
+      seen[forms[i]].cards += 1;
+      if (c.rule === null) seen[forms[i]].true += 1;
+      else rules.add(c.rule);
+    });
+  }
+  for (const [form, { cards, true: right }] of Object.entries(seen)) {
+    // The share of the cards of this form that are true: never 0 or 1, and near a quarter, as any card's.
+    const share = right / cards;
+    assert.ok(share > 0.18 && share < 0.32, `${form}: ${right} of ${cards} cards true (${share.toFixed(2)})`);
+  }
+  assert.deepEqual([...rules].sort(), ['equal.copy', 'equal.reject-reversed', 'op.other', 'slip.card']);
 });
 
 test('design 10: the unknown and the cover keep a --halo where they meet cubes and the frame; the frame has no role', () => {

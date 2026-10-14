@@ -78,7 +78,9 @@ const piles = (tokens, role) => tokens.filter((t) => typeof t === 'number').map(
 function sidesOf(round, solved) {
   if (round.model === 'cards') {
     const { left, right } = solved ? round.answer : { left: [], right: [] };
-    return { left: piles(left, 'whole'), right: piles(right, 'part') };
+    // A lone number is its side's whole (7 = 7); a side with an operation holds parts.
+    const role = (tokens) => (tokens.length === 1 ? 'whole' : 'part');
+    return { left: piles(left, role(left)), right: piles(right, role(right)) };
   }
   const all = groupsOf(round);
   /** @type {(name: Side) => PanGroup[]} */

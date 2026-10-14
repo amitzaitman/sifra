@@ -540,7 +540,7 @@ Gemini של הבלוג), ואיפה הם במסמך. הם מסומנים באו�
 | 7 | `eq.sign.both-sides` | `unknown: both-sides`, `max: 10`, `look: dots`, `demo: true` | `a + b = ? + c` במאזניים |
 | 8 | `eq.sign.both-sides` | `look: symbols`, `max: 20` | תרגיל בלבד |
 | 9 | `eq.props.commutative` | `op: add`, `unknown: both-sides`, `max: 10`, `model: set`, `look: dots` | `3 + 5 = 5 + ?`, שורה שמסתובבת |
-| 10 | `eq.sign.true-false` | `model: cards`, `max: 10`, `demo: true` | ארבעה כרטיסים, אחד נכון |
+| 10 | `eq.sign.true-false` | `model: cards`, `max: 10`, `demo: true` | ארבעה כרטיסים, אחד נכון. בכל סיבוב שלוש הצורות, `5 + 2 = 7` (פעמיים), `7 = 5 + 2` ו-`7 = 7`, והנכון יכול להיות כל אחד מהם ([§4.9](depth/equality.md)) |
 | 11 | `eq.sign.relational` | `unknown: both-sides`, `max: 20` | `8 + 5 = 9 + ?` |
 
 - **הדגמה:** ברמות שמסומנות `demo: true` (1, 2, 7 ו-10).

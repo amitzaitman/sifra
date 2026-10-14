@@ -3,7 +3,7 @@
 import { SKILLS } from '../../data/skills.js';
 import { drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 1, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 2, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
 const pans = {
@@ -66,20 +66,27 @@ const copy = (r) => {
   const other = onSide(r, u.side === 'left' ? 'right' : 'left');
   return (other[onSide(r, u.side).indexOf(u)] ?? other.at(-1))?.count ?? null;
 };
-/** @type {(f: (card: any) => Equation) => (r: Round) => Equation | null} a rule on a judging round's answer card */
-const onCard = (f) => (r) => (Array.isArray(r.answer?.left) ? f(r.answer) : null);
+/** @type {(r: Round) => number[] | null} a judging round's exercise a + b, which its cards are made of (depth 4.9) */
+const factOf = (r) => (r.model === 'cards' && Array.isArray(r.fact) ? r.fact : null);
 
 /** The §4.2 formulas on this game's rounds (one per rule). @type {Record<string, (r: Round) => any>} */
 export const rules = {
   'given.whole': (r) => whole(r),
   'given.part': (r) => part(r),
   'op.other': (r) => {
+    // Judging: the exercise with the difference as its result, 5 + 2 = 3.
+    const fact = factOf(r);
+    if (fact) return { left: [fact[0], '+', fact[1]], right: [Math.abs(fact[0] - fact[1])] };
     const parts = partsOf(r);
     if (isPart(r)) return whole(r) + part(r);
     return isResult(r) && parts.length === 2 ? Math.abs(parts[0].count - parts[1].count) : null;
   },
   'equal.add-all': (r) => addAll(r),
-  'equal.copy': (r) => copy(r),
+  // Judging: the reversed card with the lone number copied from the other side, 5 = 5 + 2.
+  'equal.copy': (r) => {
+    const fact = factOf(r);
+    return fact ? { left: [fact[0]], right: [fact[0], '+', fact[1]] } : copy(r);
+  },
   'equal.add-to-equal': (r) => {
     const u = unknownOf(r);
     return u?.side === 'right' ? onSide(r, 'left').reduce((n, g) => n + g.count, 0) : null;
@@ -97,10 +104,17 @@ export const rules = {
   // The landing (a result) one short; a number of steps (a part) one more.
   'count.start-included': (r) => (isResult(r) ? r.answer - 1 : isPart(r) ? r.answer + 1 : null),
   'slip.near': (r) => (typeof r.answer === 'number' ? { oneOf: [r.answer - 1, r.answer + 1] } : null),
-  // Judging rounds: the answer card is c = a + b.
-  'equal.reject-reversed': onCard((c) => ({ left: [...c.right], right: [c.left[0] + 1] })),
-  'equal.accepts-chain': onCard((c) => ({ left: [...c.right], right: [c.left[0], '+', c.right[0]] })),
-  'slip.card': onCard((c) => ({ left: [...c.left], right: [c.right[0], '+', c.right[2] + 1] })),
+  // Judging rounds (depth 4.9): a true card with a lone number on the left (7 = 5 + 2, 7 = 7) is
+  // turned down for the standard form, 5 + 2 = 8.
+  'equal.reject-reversed': (r) => {
+    const fact = factOf(r);
+    return fact && r.answer.left.length === 1 ? { left: [fact[0], '+', fact[1]], right: [fact[0] + fact[1] + 1] } : null;
+  },
+  // A card without an operation, the exercise's result and the next number: 7 = 8.
+  'slip.card': (r) => {
+    const fact = factOf(r);
+    return fact ? { left: [fact[0] + fact[1]], right: [fact[0] + fact[1] + 1] } : null;
+  },
 };
 
 /** @type {(side: 'left' | 'right', role: Group['role'], count: number) => Piece} */
@@ -226,27 +240,41 @@ function draw(level, rng) {
   return { unknown, eqform, groups, equation: { left: [a, '+', b], right: [a + d, '+', '?'] }, answer: b - d };
 }
 
+/** The false cards beside each form of the true card (depth 4.9): real errors, a slip only where a form has none. */
+const FALSE_CARDS = {
+  standard: ['op.other', 'equal.copy', 'slip.card'],
+  reversed: ['equal.reject-reversed', 'op.other', 'slip.card'],
+  same: ['equal.reject-reversed', 'op.other', 'equal.copy'],
+};
+
 /**
- * A judging round (architecture 2.3): four cards, the true one c = a + b (the form a child who
- * reads "=" as "write the answer" rejects); no equation row; an empty balance.
+ * A judging round (architecture 2.3): four cards of one exercise a + b = c, no equation row, an
+ * empty balance. Every round shows the three forms of level 1, two standard cards (5 + 2 = 7),
+ * one reversed (7 = 5 + 2) and one without an operation (7 = 7), and the true card is any of the
+ * four alike, so a card's form tells nothing (owner decision 2026-10-14).
  * @param {Level} level
  * @param {Rng} rng
  * @returns {Round}
  */
 function judge(level, rng) {
-  let c;
   let a;
+  let b;
   do {
-    c = rng.int(5, level.max);
+    const c = rng.int(5, level.max);
     a = rng.int(1, c - 1);
-  } while (a * 2 === c);
+    b = c - a;
+    // No equal parts, and neither twice the other: 5 + 2 = 3 then never reads as a part copied.
+  } while (a === b || a === 2 * b || b === 2 * a);
+  const c = a + b;
+  const form = /** @type {keyof typeof FALSE_CARDS} */ (rng.pick(['standard', 'standard', 'reversed', 'same']));
+  const answer = { standard: { left: [a, '+', b], right: [c] }, reversed: { left: [c], right: [a, '+', b] }, same: { left: [c], right: [c] } }[form];
   /** @type {Round} */
   const round = {
     skill: level.skill, structure: /** @type {string} */ (level.structure), look: level.look, model: level.model, eqform: 'standard',
-    picture: [], helpPicture: null, equation: null, text: '', terms: [], answer: { left: [c], right: [a, '+', c - a] }, choices: [],
+    picture: [], helpPicture: null, equation: null, text: '', terms: [], answer, fact: [a, b], choices: [],
   };
-  const wrong = ['equal.reject-reversed', 'equal.accepts-chain', 'slip.card'].map((rule) => ({ value: rules[rule](round), rule }));
-  round.choices = rng.shuffle([{ value: round.answer, rule: null }, ...wrong]);
+  const wrong = FALSE_CARDS[form].map((rule) => ({ value: rules[rule](round), rule }));
+  round.choices = rng.shuffle([{ value: answer, rule: null }, ...wrong]);
   return round;
 }
 
