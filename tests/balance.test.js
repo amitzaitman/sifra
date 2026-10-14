@@ -147,7 +147,7 @@ test('judging: one true card, the others false, each with its rule; every card m
     const [a, b] = round.fact;
     const numbers = new Set([a, b, a + b, a + b + 1, Math.abs(a - b)]);
     assert.ok(round.choices.every((c) => [...c.value.left, ...c.value.right].every((t) => typeof t !== 'number' || numbers.has(t))), JSON.stringify(round.choices));
-    // Real errors first: a slip only in a form no real error fills (R4, depth 4.9).
+    // Two real errors at least (R4); the slip beside a reversed true card is an open owner question (depth 4.9).
     assert.ok(round.choices.filter((c) => c.rule && !c.rule.startsWith('slip.')).length >= 2);
     assert.ok(!round.choices.some((c) => c.rule === 'equal.accepts-chain'), 'its form (an operation on both sides) is not a level 1 form');
   }

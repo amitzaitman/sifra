@@ -240,7 +240,10 @@ function draw(level, rng) {
   return { unknown, eqform, groups, equation: { left: [a, '+', b], right: [a + d, '+', '?'] }, answer: b - d };
 }
 
-/** The false cards beside each form of the true card (depth 4.9): real errors, a slip only where a form has none. */
+/**
+ * The false cards beside each form of the true card (depth 4.9): real errors, and a slip in the form no real
+ * error fills. Reversed: equal.copy gives way to it, an open owner question (depth 4.9, pedagogy 8.1).
+ */
 const FALSE_CARDS = {
   standard: ['op.other', 'equal.copy', 'slip.card'],
   reversed: ['equal.reject-reversed', 'op.other', 'slip.card'],
