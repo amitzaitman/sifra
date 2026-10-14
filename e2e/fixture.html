@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>סִפְרָה</title>
+  <link rel="preload" href="../fonts/rubik-hebrew.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/rubik-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../app.css">
+</head>
+<body>
+  <!-- index.html with the two fixture games of tests/fixtures instead of the registry. -->
+  <div id="app"></div>
+  <script type="module">
+    import { start } from '../app.js';
+    import * as parts from '../tests/fixtures/parts/game.js';
+    import * as scale from '../tests/fixtures/scale/game.js';
+    start({ root: document.getElementById('app'), games: [parts, scale] });
+  </script>
+</body>
+</html>
