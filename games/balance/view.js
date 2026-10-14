@@ -515,8 +515,13 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     for (let j = 0; j < steps.length && !signal.aborted; j += pace) {
       const digits = steps.slice(j, j + pace).map(([target, n]) => {
         const last = j + pace >= steps.length ? ' is-last' : '';
-        const wide = n > 9 ? ' is-wide' : '';
-        const digit = put(target, `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}${wide}`, undefined, n);
+        const kind = `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`;
+        // A two-digit last number, grown 1.3, is wider than a small cube: it goes on a pill of its
+        // own in the hint's pan, at its cube's place, above the ring that follows (design 7.2).
+        const side = last && n > 9 ? /** @type {Side | undefined} */ (target.closest('.bl-pan')?.getAttribute('data-pan')) : undefined;
+        const digit = side
+          ? put(hint[side], `${kind} is-over${target.dataset.role === 'whole' ? ' on-whole' : ''}`, { col: target.style.getPropertyValue('--c'), row: target.style.getPropertyValue('--r') }, n)
+          : put(target, kind, undefined, n);
         digit.dataset.tour = String(n);
         return digit;
       });

@@ -623,25 +623,44 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
   }
 });
 
-test('320px: the tour\'s last number stays on its cube, two digits too, off the ring (design 7.2)', async ({ page }) => {
+test('320px: the tour\'s last number grows 1.3 over the one before it; two digits widen their cube, above the ring (design 7.2)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
-  // 6 + 4 = 10 (the ring on the right pan), and ? = 9 + 7 counting on to 16.
-  for (const [level, seed, last] of [['true-false', 2, '10'], ['missing-symbols-20', 10, '16']]) {
+  // 6 + 4 = 10 on known cubes (the ring on the right pan), and ? = 9 + 7 counting on to 16 on the unknown's.
+  for (const [level, seed, last] of [['true-false', 2, 10], ['missing-symbols-20', 10, 16]]) {
     const { round } = await devAt(page, level, seed);
     for (const i of wrongOf(round)) {
       await card(page, i).click();
       await unlocked(page);
     }
-    await expect(page.locator('[data-tour]').last(), `${level} ${seed}`).toHaveText(last);
+    await expect(page.locator('[data-tour]').last(), `${level} ${seed}`).toHaveText(String(last));
     await expect(page.locator('[data-hint] .bl-ring.is-tour')).not.toHaveCount(0);
-    // How far each last number's text goes past its cube, on either side.
-    await expect.poll(() => page.evaluate(() => Math.max(...[...document.querySelectorAll('[data-tour].is-last')].map((digit) => {
-      const range = document.createRange();
-      range.selectNodeContents(digit);
-      const text = range.getBoundingClientRect();
-      const cube = digit.parentElement.getBoundingClientRect();
-      return Math.max(text.right - cube.right, cube.left - text.left);
-    }))), `${level} ${seed}`).toBeLessThanOrEqual(0.5);
+    const measured = () => page.evaluate((n) => {
+      const text = (node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return range.getBoundingClientRect();
+      };
+      // The layers take no taps; for this read they do, so the point finds what is drawn on top.
+      const style = document.head.appendChild(document.createElement('style'));
+      style.textContent = '[data-game] * { pointer-events: auto !important; }';
+      const before = text(document.querySelector(`[data-tour="${n - 1}"]`)).height;
+      const out = [...document.querySelectorAll(`[data-tour="${n}"]`)].map((digit) => {
+        const t = text(digit);
+        const own = digit.getBoundingClientRect();
+        const [x, y] = [own.left + own.width / 2, own.top + own.height / 2];
+        const cube = document.elementsFromPoint(x, y).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube')).getBoundingClientRect();
+        return {
+          grows: Math.round((t.height / before) * 100) / 100,
+          inside: t.left >= own.left - 0.5 && t.right <= own.right + 0.5,
+          onTop: [t.left + 1, t.right - 1].every((at) => document.elementFromPoint(at, t.top + t.height / 2) === digit),
+          onCube: Math.abs(cube.left + cube.width / 2 - x) < 1 && Math.abs(cube.top + cube.height / 2 - y) < 1,
+        };
+      });
+      style.remove();
+      return out;
+    }, last);
+    const one = { grows: expect.closeTo(1.3, 1), inside: true, onTop: true, onCube: true };
+    await expect.poll(measured, `${level} ${seed}`).toEqual(level === 'true-false' ? [one, one] : [one]);
   }
 });
 
