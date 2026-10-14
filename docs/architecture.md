@@ -622,9 +622,9 @@ Two questions are open (pedagogy §8.1 has them in Hebrew, for the owner):
   here give `--role-part-2` to the second of two known parts in one picture, in the general words of the owner's
   answer (decisions.md, "צבע שני"); the question was asked about the balance. The ten-frame still draws both known
   parts in part yellow: `addsub.facts.bridge-add` (levels 10-12, `8 + 3` in two frames; level 10 moves counters
-  into the first frame; level 12 in its help picture) and `pv.teens.ten-and` (levels 8-9, a bundle and loose sticks;
-  level 9 in its help picture). R6's table marks both as pending. The R6 [browser] check only looks at elements that
-  carry `data-second`, so it cannot see a missing mark.
+  into the first frame; level 12 in its help picture) and `pv.teens.ten-and` (level 8, a bundle and loose sticks;
+  level 9's `14 = 10 + ?` has one known part, the bundle, and its ones are the unknown). R6's table marks both as
+  pending. The R6 [browser] check only looks at elements that carry `data-second`, so it cannot see a missing mark.
   - (A) ★★★★ recommended: bridging takes the shade. The second addend's counters carry `data-second` in
     `--role-part-2` with the part edge, also after they move into the first frame (8 + 2 + 1 in two colours) and
     in the help pictures. The bundle and its loose sticks stay part yellow: a bundle is ten of the same sticks
