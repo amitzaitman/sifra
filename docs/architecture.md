@@ -419,7 +419,9 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
 - `tests/docs.test.js` as today, importing its parsers from scripts/docs-parse.js; `tests/sync.test.js` regenerates
   data/ in memory and compares byte for byte (and the videos.js URLs with the doc's); `tests/games.test.js` (4.2);
   `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js` (4.3);
-  `tests/code.test.js` (4.4); `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
+  `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3 and 10: the colour tokens measured from app.css, the
+  role fills, `--role-removed` and the part's second shade apart, text and graphics contrast); `tests/<id>.test.js`
+  per game, from its branch (layout functions, R6 [unit]).
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
   `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
   `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`

@@ -1,4 +1,4 @@
-// The role colours of design.md section 3, measured from app.css (design 10 [unit]): contrast by
+// The colour tokens of design.md section 3, measured from app.css (design 10 [unit]): contrast by
 // WCAG, and CIEDE2000 distances in normal vision and in the three colour-blind simulations of
 // Machado, Oliveira & Fernandes 2009 at full severity, applied to linear RGB.
 import { test } from 'node:test';
@@ -85,7 +85,7 @@ test('design 3: the part\'s light shade (--role-part-2) is apart from the part y
   const [light, edge] = [token('--role-part-2'), token('--role-part-edge')];
   // Two known parts side by side read as two colours, also colour-blind: 15 at least.
   assert.ok(nearest('--role-part-2', '--role-part') >= 15, `from the part yellow: ${nearest('--role-part-2', '--role-part').toFixed(1)}`);
-  for (const other of ['--role-whole', '--role-unknown', '--role-added', '--role-added-ghost']) {
+  for (const other of ['--role-whole', '--role-unknown', '--role-added', '--role-added-ghost', '--role-removed']) {
     assert.ok(nearest('--role-part-2', other) >= 18, `from ${other}: ${nearest('--role-part-2', other).toFixed(1)}`);
   }
   // The fill is pale on the paper and the panel, so the edge carries it (3:1 for graphics).
@@ -94,4 +94,36 @@ test('design 3: the part\'s light shade (--role-part-2) is apart from the part y
   // A touch mark (--ink) on it, and a tour digit (--role-unknown on a --surface disc).
   assert.ok(contrast(token('--ink'), light) >= 4.5);
   assert.ok(contrast(token('--role-unknown'), token('--surface')) >= 4.5);
+});
+
+test('design 3: removed, a hollow outline, stays 20 from every role and from the ink, in every vision', () => {
+  for (const other of ['--role-whole', '--role-part', '--role-part-2', '--role-unknown', '--role-added', '--role-added-ghost', '--ink']) {
+    assert.ok(nearest('--role-removed', other) >= 20, `from ${other}: ${nearest('--role-removed', other).toFixed(1)}`);
+  }
+  // The nearest is the unknown's magenta, 20.1 (design 3).
+  assert.equal(nearest('--role-removed', '--role-unknown').toFixed(1), '20.1');
+});
+
+test('design 3 and 10: text 4.5 on its background (3 for large text), graphics 3', () => {
+  /** @type {[string, string, number][]} text or graphic, its background, the least contrast */
+  const pairs = [
+    // Text: numbers, labels, the answer's digit, a wrong choice's digits, a tour digit on its disc.
+    ['--ink', '--paper', 4.5], ['--ink', '--panel', 4.5], ['--ink', '--surface', 4.5],
+    ['--ink-soft', '--paper', 4.5], ['--ink-soft', '--panel', 4.5],
+    ['--on-action', '--action', 4.5], ['--on-action-soft', '--action', 4.5],
+    ['--on-unknown', '--role-unknown', 4.5], ['--role-unknown', '--surface', 4.5],
+    ['--role-added-edge', '--surface', 4.5], ['--role-added-edge', '--paper', 4.5],
+    // Large text only: --ink-soft on a grid line from 24px, a digit on a ghost from 19px bold.
+    ['--ink-soft', '--grid', 3], ['--role-added-edge', '--role-added-ghost', 3],
+    // Graphics: edges, outlines, the frame, the cover, rings, the lip, the focus ring.
+    ['--role-part-edge', '--surface', 3], ['--role-part-edge', '--paper', 3], ['--role-removed', '--paper', 3],
+    ['--frame', '--paper', 3], ['--frame', '--panel', 3], ['--frame', '--surface', 3], ['--lip', '--paper', 3],
+    ['--role-whole', '--paper', 3], ['--role-unknown', '--paper', 3], ['--role-unknown', '--role-unknown-tint', 3],
+    ['--accent', '--action', 3], ['--focus', '--paper', 3], ['--role-whole', '--tray-ghost', 3],
+    ['--ink', '--role-part', 3], ['--ink', '--role-part-2', 3],
+  ];
+  for (const [fore, back, least] of pairs) {
+    const ratio = contrast(token(fore), token(back));
+    assert.ok(ratio >= least, `${fore} on ${back}: ${ratio.toFixed(2)}, ${least} at least`);
+  }
 });
