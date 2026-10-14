@@ -448,10 +448,14 @@ test('relational: the hint moves the cubes that make a into c to the first group
     await expect(cubes.nth(c - 1)).toHaveCSS('background-color', YELLOW);
     await expect(cubes.nth(c)).toHaveCSS('background-color', LIGHT);
     // The cards unlock while the beam still swings back (the return is not awaited at step 2): the
-    // pans move in opposite directions, so the rows line up only once it rests.
-    const theirs = stack(page, 'right').locator('.bl-cube').nth(c - 1);
-    await expect.poll(async () => Math.abs((await cubes.nth(c - 1).boundingBox()).y - (await theirs.boundingBox()).y)).toBeLessThan(1);
+    // pans move in opposite directions, so their gap passes through every value on the way. Wait
+    // until the scene and both real pans have stopped, then compare the rows once.
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
+    await expect.poll(() => page.locator('.bl-scene').evaluate((scene) => [scene, ...scene.querySelectorAll(':scope > .bl-pan')]
+      .flatMap((el) => el.getAnimations({ subtree: el !== scene })).length)).toBe(0);
+    const theirs = stack(page, 'right').locator('.bl-cube').nth(c - 1);
+    const [mine, other] = await Promise.all([cubes.nth(c - 1).boundingBox(), theirs.boundingBox()]);
+    expect(Math.abs(mine.y - other.y), `seed ${seed}`).toBeLessThan(1);
     // The second group, now the answer's size, is ringed in the part's colour; the cover in magenta.
     const part = page.locator('[data-hint] .bl-pan[data-pan="left"] .bl-ring.is-part');
     await expect(part).not.toHaveCount(0);
