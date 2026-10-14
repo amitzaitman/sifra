@@ -11,7 +11,7 @@ import { KINDS, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 1,
+  version: 2,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -26,6 +26,8 @@ const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'par
 const ten = { ...split, skill: 'num.parts.make-ten' };
 /** @type {Base} */
 const teen = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'whole', min: 10, max: 20, model: 'bundles', look: 'dots', options: 4, demo: false, terms: false };
+/** Ten and a missing part (level 9): the answer is the ones, 1 to 9, so the level has no min. @type {Base} */
+const teenPart = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'part', max: 20, model: 'bundles', look: 'symbols', options: 4, demo: false, terms: false };
 /** @type {Base} */
 const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false };
 
@@ -33,18 +35,16 @@ const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknow
 export const levels = [
   { id: 'split-5', ...split, max: 5, options: 3, demo: true },
   { id: 'split-10', ...split },
-  { id: 'split-bond', ...split, model: 'tree', demo: true },
+  { id: 'split-bond', ...split, model: 'tree', demo: true, eqform: ['standard', 'reversed'] },
   { id: 'split-pairs', ...split, unknown: 'both', model: 'cards', demo: true },
   { id: 'ten-empty', ...ten, demo: true },
   { id: 'ten-cover', ...ten },
   { id: 'ten-symbols', ...ten, look: 'symbols', eqform: ['standard', 'reversed'] },
   { id: 'teen-bundle', ...teen, demo: true },
-  // Pedagogy 6.2 gives level 9 `unknown: part` (14 = 10 + ?); the skill's rules cannot tag its
-  // wrong cards (R4), so it asks for the whole until the owner decides (architecture 6, open questions).
-  { id: 'teen-symbols', ...teen, look: 'symbols', eqform: ['standard', 'reversed'] },
+  { id: 'teen-symbols', ...teenPart, eqform: 'reversed' },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
-  { id: 'bridge-symbols', ...bridge, look: 'symbols' },
+  { id: 'bridge-symbols', ...bridge, look: 'symbols', unknown: ['result-right', 'result-left'] },
 ];
 
 /** What a level draws beyond its parameters, by level id: a five-frame, visible empty cells, counters that move. */
@@ -58,8 +58,11 @@ export const text = [];
 const groupsOf = (r) => (r.look === 'symbols' ? r.helpPicture : r.picture) ?? [];
 /** @type {(r: Round, role: string, k?: number) => number | null} */
 const count = (r, role, k = 0) => groupsOf(r).filter((g) => g.role === role)[k]?.count ?? null;
-/** @type {(r: Round) => [number, number] | null} the addends of a + b = ? */
-const addends = (r) => (r.unknown === 'result-right' && r.equation?.left[1] === '+' ? [Number(r.equation.left[0]), Number(r.equation.left[2])] : null);
+/** @type {(r: Round) => [number, number] | null} the addends of a + b = ? or ? = a + b */
+const addends = (r) => {
+  const side = { 'result-right': r.equation?.left, 'result-left': r.equation?.right }[r.unknown];
+  return side?.[1] === '+' ? [Number(side[0]), Number(side[2])] : null;
+};
 
 /**
  * The number formulas for a missing part, on a reading { whole, part, answer }.
@@ -96,6 +99,8 @@ function onPair(r, id) {
 
 /** @type {(r: Round) => boolean} */
 const pair = (r) => Array.isArray(r.answer);
+/** @type {(r: Round, v: number) => number | null} */
+const notAnswer = (r, v) => (v === r.answer ? null : v);
 /** The missing part's reading of a part-unknown round. @param {Round} r */
 const reading = (r) => ({ whole: count(r, 'whole'), part: count(r, 'part'), answer: r.answer });
 
@@ -120,8 +125,9 @@ export const rules = {
     const v = Number(String(r.answer).split('').reverse().join(''));
     return v === r.answer ? null : v;
   },
-  'pv.digits-added': (r) => (pair(r) || r.answer < 10 ? null : String(r.answer).split('').reduce((s, c) => s + Number(c), 0)),
-  'pv.ones-only': (r) => (pair(r) || r.answer < 10 ? null : r.answer % 10),
+  // Catalogue: no value when it is the answer (a single-digit answer).
+  'pv.digits-added': (r) => (pair(r) ? null : notAnswer(r, String(r.answer).split('').reduce((s, c) => s + Number(c), 0))),
+  'pv.ones-only': (r) => (pair(r) ? null : notAnswer(r, r.answer % 10)),
   'bridge.whole-second': (r) => (addends(r) ? 10 + addends(r)[1] : null),
   'bridge.leftover-only': (r) => (addends(r) ? addends(r)[0] + addends(r)[1] - 10 : null),
   'bridge.stopped-at-ten': (r) => (addends(r) ? (Math.floor(addends(r)[0] / 10) + 1) * 10 : null),
@@ -154,8 +160,8 @@ function choose(round, level, rng) {
   for (const [i, id] of order.entries()) {
     if (wrong.length === level.options - 1) break;
     const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
-    // Counting on from a bundle never counts down below it (the count-up display).
-    const drawable = (v) => !(round.model === 'bundles' && id === 'slip.near' && v < 10);
+    // Counting on from a bundle never counts down below it (the count-up display of the whole).
+    const drawable = (v) => !(round.model === 'bundles' && round.unknown === 'whole' && id === 'slip.near' && v < 10);
     const fits = options(rules[id](round)).filter((v) => ok(v) && drawable(v) && !taken.some((t) => same(t, v)) && !earlier.some((e) => same(e, v)));
     if (!fits.length) continue;
     const value = fits.length > 1 ? rng.pick(fits) : fits[0];
@@ -189,29 +195,42 @@ function roundOf(level, groups, equation, answer, eqform = 'standard') {
 }
 
 /** @type {(level: Level, rng: Rng) => string} a mixed eqform: 'reversed' in a third of the rounds (R8: 25% at least) */
-const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard') : 'standard');
+const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard')
+  : level.eqform ?? 'standard');
+
+/** About one round in five is a double, or 5 + 5 in making ten (number sense 4.4; decisions.md 2026-10-14). */
+const DOUBLES = 0.2;
 
 /**
- * The parts of a number: part + ? = whole. In the ten-frame level about one round in ten covers
- * nothing (the answer is 0: the cover stands on an empty cell); a bond never does.
+ * The parts of a number: part + ? = whole, and at the bond also whole = part + ? (R8). In the
+ * ten-frame level about one round in ten covers nothing (the answer is 0: the cover stands on an
+ * empty cell); a bond never does. About one round in five is a double (4 + ? = 8): there given.part
+ * is the answer, so its card gives way to the next rule (number sense 4.4).
  * @param {Level} level
  * @param {Rng} rng
  */
 function splitRound(level, rng) {
   let whole;
   let part;
-  if (level.model === 'frame' && level.max === 10 && rng.next() < 0.1) {
+  const zero = level.model === 'frame' && level.max === 10 ? 0.1 : 0;
+  const roll = rng.next();
+  if (roll < zero) {
     whole = rng.int(3, 9);
     part = whole;
+  } else if (roll < zero + DOUBLES) {
+    part = rng.int(2, Math.floor(level.max / 2));
+    whole = 2 * part;
   } else {
     do {
       whole = rng.int(3, level.max);
       part = rng.int(1, whole - 1);
     } while (part * 2 === whole);
   }
+  const eqform = eqformOf(level, rng);
   const groups = [{ role: 'whole', count: whole, shown: 'tag' }, { role: 'part', count: part, shown: 'items' },
     { role: 'unknown', count: whole - part, shown: 'covered' }];
-  return roundOf(level, /** @type {Group[]} */ (groups), { left: [part, '+', '?'], right: [whole] }, whole - part);
+  const equation = eqform === 'reversed' ? { left: [whole], right: [part, '+', '?'] } : { left: [part, '+', '?'], right: [whole] };
+  return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), whole - part, eqform);
 }
 
 /** All the ways: ? + ? = whole, and the cards are pairs (7 | 0 and 0 | 7 too). @param {Level} level @param {Rng} rng */
@@ -225,13 +244,16 @@ function pairsRound(level, rng) {
 
 /**
  * Making ten: k + ? = 10, or in symbols also 10 − k = ? and 10 = k + ?. The frame is the whole.
- * The level with visible empty cells sometimes shows a full frame (the answer is 0).
+ * The level with visible empty cells sometimes shows a full frame (the answer is 0). About one
+ * round in five is 5 + ? = 10: there given.part is the answer, so its card gives way to a slip.
  * @param {Level} level
  * @param {Rng} rng
  */
 function tenRound(level, rng) {
   const open = Boolean(VARIANT[level.id]?.open);
-  const k = open && rng.next() < 0.1 ? 10 : rng.pick([1, 2, 3, 4, 6, 7, 8, 9]);
+  const full = open ? 0.1 : 0;
+  const roll = rng.next();
+  const k = roll < full ? 10 : roll < full + DOUBLES ? 5 : rng.pick([1, 2, 3, 4, 6, 7, 8, 9]);
   const eqform = eqformOf(level, rng);
   const minus = eqform === 'standard' && level.look === 'symbols' && rng.next() < 0.5;
   const equation = eqform === 'reversed' ? { left: [10], right: [k, '+', '?'] }
@@ -241,8 +263,22 @@ function tenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 - k, eqform);
 }
 
-/** Ten and some more: 10 + k = ?, and in symbols also ? = 10 + k (k is 0 in about one round in ten). @param {Level} level @param {Rng} rng */
+/**
+ * Ten and some more: 10 + k = ? (k is 0 in about one round in ten). With the part unknown (level 9,
+ * pedagogy 6.2): 14 = 10 + ?, the whole a tag over the bundle and the ones under the cover; k is
+ * never 0 there, where the whole and the ten would be one card.
+ * @param {Level} level
+ * @param {Rng} rng
+ */
 function teenRound(level, rng) {
+  if (level.unknown === 'part') {
+    const k = rng.int(1, 9);
+    const groups = [{ role: 'whole', count: 10 + k, shown: 'tag' }, { role: 'part', count: 10, shown: 'items' },
+      { role: 'unknown', count: k, shown: 'covered' }];
+    const eqform = eqformOf(level, rng);
+    const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] } : { left: [10, '+', '?'], right: [10 + k] };
+    return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), k, eqform);
+  }
   const k = rng.next() < 0.1 ? 0 : rng.int(1, 9);
   const eqform = eqformOf(level, rng);
   const sum = [10, '+', k];
@@ -252,13 +288,22 @@ function teenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 + k, eqform);
 }
 
-/** Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). @param {Level} level @param {Rng} rng */
+/**
+ * Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). A level that lists
+ * result-left too writes ? = a + b in a third of the rounds (R8).
+ * @param {Level} level
+ * @param {Rng} rng
+ */
 function bridgeRound(level, rng) {
   const a = rng.int(6, 9);
   const b = rng.int(11 - a, 9);
+  const left = Array.isArray(level.unknown) && rng.next() < 1 / 3;
   const groups = [{ role: 'part', count: a, shown: 'items' }, { role: 'part', count: b, shown: 'items' },
     { role: 'unknown', count: a + b, shown: 'items' }];
-  return roundOf(level, /** @type {Group[]} */ (groups), { left: [a, '+', b], right: ['?'] }, a + b);
+  const equation = left ? { left: ['?'], right: [a, '+', b] } : { left: [a, '+', b], right: ['?'] };
+  const round = roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), a + b);
+  round.unknown = left ? 'result-left' : 'result-right';
+  return round;
 }
 
 /**
@@ -293,6 +338,8 @@ const LABEL = {
   bond: (w, p) => `קֶשֶׁר מִסְפָּרִים: ${w}, ${p} וּמִכְסֶה`,
   /** @type {(w: number) => string} */
   pairs: (w) => `קֶשֶׁר מִסְפָּרִים: ${w} וּשְׁנֵי מִכְסִים`,
+  /** @type {(w: number) => string} */
+  teen: (w) => `צְרוֹר שֶׁל עֶשֶׂר וּמִכְסֶה, ${w} בְּסַךְ הַכֹּל`,
   /** @type {(k: number) => string} */
   bundle: (k) => (k === 0 ? 'צְרוֹר שֶׁל עֶשֶׂר' : k === 1 ? 'צְרוֹר שֶׁל עֶשֶׂר וְעוֹד קַשִּׁית אַחַת' : `צְרוֹר שֶׁל עֶשֶׂר וְעוֹד ${k} קַשִּׁיּוֹת`),
   /** @type {(a: number, b: number) => string} */
@@ -301,7 +348,7 @@ const LABEL = {
 
 /** @type {(p: { kind: string, data: any }) => string} the picture's label, from LABEL */
 const labelOf = ({ kind, data: d }) => (kind === 'tree' ? LABEL.bond(d.whole, d.left.n) : kind === 'pairs' ? LABEL.pairs(d.whole)
-  : kind === 'bundles' ? LABEL.bundle(d.ones) : kind === 'bridge' ? LABEL.frames(d.a, d.b)
+  : kind === 'bundles' ? LABEL.bundle(d.ones) : kind === 'bundles-part' ? LABEL.teen(d.tag) : kind === 'bridge' ? LABEL.frames(d.a, d.b)
   : !d.whole ? LABEL.split(d.tag, d.part) : d.covered ? LABEL.covered(d.part) : LABEL.open(d.part, d.unknown));
 
 /**
@@ -327,6 +374,9 @@ function drawRound(host, round, solved) {
   if (kind === 'tree' || kind === 'pairs') {
     const t = drawTree(base, { ...data, solved, cover });
     pic = { t, d: { whole: data.whole, part: data.left.n, unknown: data.right.n }, covers: [...t.left.covers, ...t.right.covers] };
+  } else if (kind === 'bundles-part') {
+    const t = drawBundles(base, { ...data, solved, cover });
+    pic = { t, d: data, covers: t.covers };
   } else if (kind === 'bundles') pic = { t: drawBundles(base, data), d: data, covers: [] };
   else if (kind === 'bridge') {
     const t = drawBridge(base, data);

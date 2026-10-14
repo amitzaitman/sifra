@@ -480,6 +480,67 @@ export const BUNDLES = {
   },
 };
 
+// ---------- Bundles with the ones unknown: 14 = 10 + ? (level 9) ----------
+
+export const BUNDLES_PART = {
+  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
+  display(pic, root, { value, rule, display }) {
+    const { t, d } = pic;
+    const L = t.L;
+    if (display === 'flash' && rule === 'given.whole') {
+      ring(root, grow(L.tag, 0.18), '', 'is-chip');
+      return blink(pic, [t.chip]);
+    }
+    if (display === 'flash') {
+      ring(root, grow(L.bundle, 0.14), '', 'is-tray');
+      return blink(pic, [t.bundle]);
+    }
+    // count-up from 1 on the ones' places (the unknown is a part): one place left without a digit
+    // is ringed, or the extra digit lands on a ghost stick after them.
+    const lids = liftForDisplay(pic);
+    const last = Math.max(d.ones, value);
+    resize(pic, L.stick(last - 1).x + 1, L.dh);
+    for (let j = 0; j < last; j++) {
+      const delay = stagger(j, last, 120);
+      if (j >= d.ones) ghost(root, L.stick(j), delay, 'is-stick');
+      else mark(root, 'tf-place is-stick tf-enter', L.stick(j), undefined, delay);
+      if (j < value) digit(root, L.above(L.stick(j)), String(j + 1), delay, 'is-above');
+    }
+    if (value < d.ones) ring(root, grow(L.stick(value), 0.14), stagger(value, last, 120), 'is-tray');
+    else ring(root, grow(L.stick(value - 1), 0.14), stagger(value - 1, last, 120), 'is-tray');
+    return lids;
+  },
+  prep: () => [],
+  /** The bundle gets a 10 label, and the cover over the ones a ring (7.2). @param {Pic} pic @param {HTMLElement} root */
+  hint(pic, root) {
+    chipAt(root, pic.t.L.bundle, '10');
+    at(root, 'tf-ring is-tray is-hint', grow(pic.t.L.places, 0.14));
+  },
+  /**
+   * The cover lifts for good, and the ones are counted from 1 as they show (R5: the unknown is a
+   * part, so the tour ends on the answer, not on the whole).
+   * @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal
+   */
+  async tour(pic, root, signal) {
+    const { t } = pic;
+    const L = t.L;
+    pic.lidsUp = true;
+    await settled(lift(pic, true), signal);
+    await count(root, t.sticks.map((s, j) => ({ box: L.above(L.stick(j)), n: j + 1, cls: 'is-above', before: () => show(s) })), signal);
+    // The ring around the counted ones lies on the hint's ring around their places: one line.
+    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(L.places, 0.14, 0.5)], 'tf-line-unknown tf-enter')), signal);
+  },
+  /** @param {Pic} pic */
+  solve: (pic) => lift(pic, true),
+  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  async demo(pic, hand, steps) {
+    await hand.tap(pic.t.bundle);
+    if (pic.covers[0]) await hand.tap(pic.covers[0]);
+    await steps.hint();
+    await steps.tour();
+  },
+};
+
 // ---------- Two frames: bridging ten ----------
 
 /** @param {Pic} pic @param {number} i */
@@ -633,4 +694,4 @@ export const BRIDGE = {
  * @typedef {{ hint: () => Promise<void>, tour: () => Promise<void>, signal: AbortSignal }} Steps
  */
 
-export const KINDS = { frame: FRAME, tree: TREE, pairs: PAIRS, bundles: BUNDLES, bridge: BRIDGE };
+export const KINDS = { frame: FRAME, tree: TREE, pairs: PAIRS, bundles: BUNDLES, 'bundles-part': BUNDLES_PART, bridge: BRIDGE };
