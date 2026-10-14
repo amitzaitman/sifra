@@ -500,14 +500,14 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   first game, level 1; first skill passed: the next one); level kept after reload (one first try climbs to level 2,
   reload shows 2); review (a level passed yesterday opens with `data-kind="review"`); R9 (first entry to a demo level
   shows `[data-demo]` and writes no attempt; the hand logs `how`).
-- On index.html, looping over the registry (home and parents only until the games merge): no horizontal scroll at
+- On index.html, looping over the registry (both games, ten-frame and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KB of same-origin
-  responses, gzipped as GitHub Pages serves them (section 6); R7 on every `[data-math]` (attribute, computed
-  direction, characters left to right); R10 (animations only on `[data-role]`, `page.clock.runFor(60000)` adds
-  nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser] (text hidden, every control has
-  `[data-icon]`, a screenshot per level for the owner); R6 [browser] (every `[data-role]` element has its role token
-  in `fill` or `background-color`).
+  responses, counted in gzip bytes as GitHub Pages serves them (section 6, "First-load budget"); R7 on every
+  `[data-math]` (attribute, computed direction, characters left to right); R10 (animations only on `[data-role]`,
+  `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser]
+  (text hidden, every control has `[data-icon]`, a screenshot per level for the owner); R6 [browser] (every
+  `[data-role]` element has its role token in `fill` or `background-color`).
 
 ### 4.7 Each game spec (e2e/<id>.spec.js)
 

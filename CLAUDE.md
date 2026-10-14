@@ -4,11 +4,13 @@ Math games for Israeli elementary-school children, in Hebrew, for phones and tab
 Grades 1-2 first, growing game by game to grade 6. Static site on GitHub Pages: no
 server, no build step, no audio.
 
-Status: planning, no code yet. The pedagogy doc comes before the first game.
+Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, two games (`ten-frame`,
+`balance`), the tests and CI. A game goes live after the owner's iPhone check is logged in `docs/device-checks.md`.
 
 ## Where things are
 
 - `docs/decisions.md`: the owner's decisions and why (Hebrew). Don't reverse one without asking.
+- `docs/architecture.md`: the engineering contract (for agents): files, the game module contract, the shell, tests and CI, and the gaps in the docs with the choice made and the owner's open questions.
 - The pedagogy doc is split by section; section numbers (§) are the same in every file:
   - `docs/pedagogy.md` (§1, §5-§8): scope and evidence labels, how a silent app teaches (§5 is also the shell's spec), the first two games and their level tables (§6), what not to build on, and §8: the owner's decisions (§8.1), what to check in sources and with a child (§8.2-§8.4), design defaults (§8.5). It starts with an index of all the files.
   - `docs/rules.md` (§2): the eleven binding rules R1-R11 and how each is checked.
@@ -54,11 +56,13 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 - Pinch zoom works on every screen: no `maximum-scale` or `user-scalable=no`, and no zoom-lock script. Only `touch-action: manipulation` on the whole site, so a double tap doesn't zoom.
 - Code comments are short and in English. Docs the owner reads are in Hebrew.
 
-## Tools (planned)
+## Tools
 
-- Plain JavaScript with JSDoc, checked by `tsc --checkJs`. `node:test` for logic. Playwright on Chromium and WebKit (iPhone).
-- `npm test` runs `tests/docs.test.js`, which keeps skill ids, error rules, displays, models, meteg and links consistent across the docs. Run it after every docs change.
-- One CI workflow that tests and deploys to Pages.
+- Plain JavaScript with JSDoc, checked by `tsc --checkJs` (`npm run typecheck`). `node:test` for logic. Playwright on Chromium (Pixel 7) and WebKit (iPhone 13). `npm run check` runs all three.
+- `npm test` runs `tests/*.test.js`: `tests/docs.test.js` keeps skill ids, error rules, displays, models, meteg and links consistent across the docs (run it after every docs change); `tests/games.test.js` is the generic test (every game x level x 200 seeds); the shell's units and the code scans (no grade, no timers, no storage in games, `lib/` imports nothing and stays under 600 lines).
+- `data/` is generated from the docs by `npm run gen` and never edited by hand, except `data/videos.js`; `tests/sync.test.js` fails when it is stale.
+- `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
+- One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit and deploys to Pages.
 - Before a new game goes live: a manual iPhone check, logged with a date in `docs/device-checks.md`.
 
 ## Reuse from AlefBet
