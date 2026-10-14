@@ -266,27 +266,32 @@ for (const site of SITES) {
     }
   });
 
-  test(`${site.name}: R10, a waiting round is calm and a minute adds nothing`, async ({ page }) => {
-    await open(page, site.path);
-    for (const hash of ['#/', ...levelRoutes(site)]) {
-      await page.goto(`${site.path}${hash}`);
-      await expect(page.locator('main')).toBeVisible();
-      await expectCalm(page);
-      const before = await page.locator('main').innerHTML();
-      await page.clock.runFor(60000);
-      expect(await page.locator('main').innerHTML(), hash).toBe(before);
-      if (!hash.startsWith('#/dev/')) continue;
-      const { round, answerAt } = await roundOf(page);
-      await page.locator(`button[data-index="${answerAt === 0 ? 1 : 0}"]`).click();
-      await expect(page.locator('[data-display]')).toBeVisible();
-      await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked');
-      await expectCalm(page);
-      const after = await page.locator('main').innerHTML();
-      await page.clock.runFor(60000);
-      expect(await page.locator('main').innerHTML(), `${hash} after a miss`).toBe(after);
-      expect(round.choices.length).toBeGreaterThan(1);
-    }
-  });
+  // One test for home and one per game: each display runs in real time (about a second per level),
+  // so a single loop over every level would grow toward the timeout with each new game.
+  for (const [what, hashes] of [['home', ['#/']], ...site.games.map((g) => [g.meta.id, levelRoutes({ games: [g] })])]) {
+    test(`${site.name}: R10, ${what}: a waiting round is calm and a minute adds nothing`, async ({ page }) => {
+      test.setTimeout(60000);
+      await open(page, site.path);
+      for (const hash of hashes) {
+        await page.goto(`${site.path}${hash}`);
+        await expect(page.locator('main')).toBeVisible();
+        await expectCalm(page);
+        const before = await page.locator('main').innerHTML();
+        await page.clock.runFor(60000);
+        expect(await page.locator('main').innerHTML(), hash).toBe(before);
+        if (!hash.startsWith('#/dev/')) continue;
+        const { round, answerAt } = await roundOf(page);
+        await page.locator(`button[data-index="${answerAt === 0 ? 1 : 0}"]`).click();
+        await expect(page.locator('[data-display]')).toBeVisible();
+        await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked');
+        await expectCalm(page);
+        const after = await page.locator('main').innerHTML();
+        await page.clock.runFor(60000);
+        expect(await page.locator('main').innerHTML(), `${hash} after a miss`).toBe(after);
+        expect(round.choices.length).toBeGreaterThan(1);
+      }
+    });
+  }
 
   test(`${site.name}: R1, with the words hidden the round is whole and every control has an icon`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
