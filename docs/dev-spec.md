@@ -124,13 +124,15 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
 - **R5 [browser]:** `page.clock.install()` before `goto`. Tap a tagged wrong option: it is removed,
   `[data-display="<id>"]` is visible, and the attempt is logged with the rule.
   `page.clock.runFor(60000)` changes nothing. Second miss: the structure hint is visible. Third:
-  only the answer remains and the outcome is `shown`. With
+  only the answer remains, the last tour digit equals `answer` (it counts the unknown from 1 when
+  the unknown is a part, and counts on when it is the whole), and the outcome is `shown`. With
   `page.emulateMedia({ reducedMotion: 'reduce' })`, options accept taps right after a miss.
 - **R5 [auto]:** every rule a game uses has a display id from the catalog column.
 - **R6 [unit]:** drawing functions are pure `(host, data)`; test the computed layout: frame items
   left to right, top row first; tick 0 leftmost; rows of five above 4 items except
   `arrangement: 'scattered' | 'spread'` and the unit strip (`model: 'units'`); a numeral on every tick in small ranges except
-  `marks: 'landmarks' | 'ends'`.
+  `marks: 'landmarks' | 'ends'`; a ten-frame tray has role `whole` only in `num.parts.make-ten`
+  levels, otherwise no role (`--frame`).
 - **R6 [browser]:** x of the first dot < x of the second; elements with `data-role` have the
   role token's computed colour; only one cover component (`.cover`) exists.
 - **R7 [browser, Chromium and WebKit]:** every `[data-math]` element has the attribute
