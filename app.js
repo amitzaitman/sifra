@@ -8,7 +8,7 @@ import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession,
 import { demoSeed, rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
 import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
-import { tapWindow } from './shell/taps.js';
+import { byPointer, tapWindow } from './shell/taps.js';
 import { RULES } from './data/errors.js';
 import { SKILLS } from './data/skills.js';
 import { TOPICS, VERIFIED } from './data/videos.js';
@@ -413,7 +413,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   // under the finger (design 6.9): event times, no timer, nothing locked; the next tap is taken.
   const drop = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
   root.addEventListener('pointerdown', (e) => S.taps.down(e.timeStamp) && drop(e), { capture: true });
-  root.addEventListener('click', (e) => S.taps.click(e.timeStamp, e.detail) && drop(e), { capture: true });
+  root.addEventListener('click', (e) => S.taps.click(e.timeStamp, byPointer(e)) && drop(e), { capture: true });
   errorScreen();
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, newId, today());

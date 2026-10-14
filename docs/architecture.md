@@ -18,11 +18,11 @@ types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
 shell/                the shell's own modules: only app.js (and the tests) import them (owner decision 2026-10-14).
                       Each imports only lib/, data/ and shell/, and no game imports shell/ or app.js (an engineering
-                      decision the owner may reverse, section 6). 594 lines
+                      decision the owner may reverse, section 6). 602 lines
   cards.js 88  equation.js 77                 answer cards (AlefBet answer-choices.js), equation row (design §6.4)
   ladder.js 89  planner.js 193  store.js 77   levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
   rng.js 36                                   seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
-  taps.js 34                                  the double-tap window (3.2)
+  taps.js 42                                  the double-tap window (3.2)
 lib/                  code the games share: a game imports each module; each imports nothing; under 600 lines together
                       (tests/code.test.js counts newlines: 36)
   settle.js 22  cover.js 14                   animation ends (2.7), covers (2.8)
@@ -296,8 +296,11 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
   stamped with `new Event('change').timeStamp`, the clock input events are stamped with; capture-phase `pointerdown`
   and `click` listeners on the root drop (`preventDefault`, `stopImmediatePropagation`) an event stamped less than
   300 ms after the change, or before it (a tap queued while the screen changed). A click goes with its pointerdown,
-  so a press that came down in the window stays dropped however long it lasts; a keyboard click (`detail` 0) goes by
-  its own time. No `setTimeout` or `setInterval`; nothing locks or waits, and a tap after the window is taken. So
+  so a press that came down in the window stays dropped however long it lasts; a keyboard click goes by its own time.
+  A click is a pointer's when it has a `pointerType` (Chrome's click is a PointerEvent, with `''` from the keyboard),
+  else when its `detail` is above 0 (Safari 16.4's click is a MouseEvent): Chromium gives a touch click `detail` 0
+  when the shell dropped its pointerdown and the last click was a mouse's. No `setTimeout` or `setInterval`; nothing
+  locks or waits, and a tap after the window is taken. So
   the second tap of a double tap never answers a round the child has not seen, never skips the solved picture (also
   with reduced motion), and never opens a game from the end screen's home button, in every browser: the window
   counts no taps in `detail`, which iOS Safari never sets above 1. It replaced a `detail` guard that worked in
@@ -468,7 +471,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - rng: same seed, same sequence; `int` stays in bounds over 10,000 draws; `shuffle` is a permutation.
 - taps (3.2): nothing dropped before a change; 299.9 ms after it dropped, 300 ms taken; a tap stamped before the
   change dropped; the click of a pointer that came down in the window dropped, however late, and the next tap taken;
-  a keyboard click by its own time; each change starts the window again.
+  a pointer's click with `detail` 0 (Chromium) dropped with its pointerdown; a keyboard click by its own time; each
+  change starts the window again.
 - ladder: each rule of 3.4 alone: up after 4; first, help, first, help goes down; the window empties on a level
   change; mixed only up; reviews nothing; the fast climb up on each first try, back one and unmarked on the first
   miss, staying on a miss in its first round, at the last level once passed there, and on a mixed round; the last

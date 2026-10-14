@@ -6,8 +6,16 @@
 export const WINDOW = 300;
 
 /**
+ * Whether a click came from a pointer, not the keyboard. Chrome's click is a PointerEvent: its
+ * pointerType says so ('' from the keyboard), and its detail may be 0 when the shell dropped the
+ * pointerdown. Safari 16.4's click is a MouseEvent: detail 0 means the keyboard.
+ * @param {{ pointerType?: string, detail: number }} e
+ */
+export const byPointer = (e) => Boolean(e.pointerType) || e.detail > 0;
+
+/**
  * @param {number} [ms] the window
- * @returns {{ changed(t: number): void, down(t: number): boolean, click(t: number, detail: number): boolean }}
+ * @returns {{ changed(t: number): void, down(t: number): boolean, click(t: number, pointer: boolean): boolean }}
  *   changed records a change; down and click tell whether to drop a pointerdown or a click
  */
 export function tapWindow(ms = WINDOW) {
@@ -24,9 +32,9 @@ export function tapWindow(ms = WINDOW) {
       return downEarly;
     },
     // A tap arrives with its pointerdown: the click of a pointer that came down early goes with
-    // it, however long the press. A keyboard click (detail 0) has no pointer: its own time decides.
-    click(t, detail) {
-      const drop = early(t) || (detail > 0 && downEarly);
+    // it, however long the press. A keyboard click has no pointer: its own time decides.
+    click(t, pointer) {
+      const drop = early(t) || (pointer && downEarly);
       downEarly = false;
       return drop;
     },
