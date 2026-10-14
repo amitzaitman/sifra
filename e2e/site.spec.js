@@ -276,6 +276,7 @@ test('parents page: plain links that open YouTube in a new tab, and the home but
     await expect(link).toHaveAttribute('href', /^https:\/\/www\.youtube\.com\/watch\?v=/);
   }
   await expect(page.locator('iframe')).toHaveCount(0);
+  await look(page);
   await page.locator('[data-home]').click();
   await expect(page.locator('main[data-screen="home"]')).toBeVisible();
 });
