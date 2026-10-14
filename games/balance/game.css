@@ -1,0 +1,116 @@
+/* The balance (design 6.8, 7). The cube is (W - 78px) / 10 up to 28px, less when the pans need more
+   rows than the stage's height holds; places are in units of the cube (--c --r --w --h). */
+@property --rows { syntax: '<number>'; inherits: true; initial-value: 2; }
+@property --len { syntax: '<number>'; inherits: true; initial-value: 10; }
+
+[data-game="balance"] .bl-stage { position: absolute; inset: 0; padding: clamp(8px, 3vw, 16px); container-type: size; }
+[data-game="balance"] .bl-stage.is-thumb { inset: auto; left: 50%; top: 50%; width: 300px; height: 170px; padding: 0; transform: translate(-50%, -50%) scale(var(--k, .3)); }
+[data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 16px; }
+
+[data-game="balance"] .bl-scene {
+  --t: 0; --gx: 78px; --gt: 12px; --gc: 68px;
+  --cube: min(28px, calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 6px - 3px * var(--rows)) / (1.8 + var(--rows))));
+  --u: calc(var(--cube) + 3px); --w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 26px);
+  --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 21px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 6px);
+  --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 6px + 3px * var(--rows));
+  position: absolute; left: calc(50% - var(--w) / 2); top: calc(50% - var(--h) / 2); width: var(--w); height: var(--h); transition: --rows var(--t-move) var(--ease);
+}
+[data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none; }
+[data-game="balance"] .bl-base { position: absolute; bottom: 0; left: calc(50% - var(--cube) - 10px); width: calc(var(--cube) * 2 + 20px); height: 8px; border-radius: 4px; background: var(--frame); }
+[data-game="balance"] .bl-pole { position: absolute; top: var(--yb); bottom: 4px; left: calc(50% - 3px); width: 6px; border-radius: 3px; background: var(--frame); }
+[data-game="balance"] .bl-beam { position: absolute; top: calc(var(--yb) - 5px); left: calc(50% - var(--half) - 6px); width: calc(var(--half) * 2 + 12px); height: 10px; border-radius: 5px; background: var(--frame); transform: rotate(calc(var(--t) * 12deg)); transition: transform var(--t-beam) var(--ease); }
+[data-game="balance"] .bl-pivot { position: absolute; top: calc(var(--yb) - 8px); left: calc(50% - 8px); width: 16px; height: 16px; border-radius: 50%; background: var(--frame); box-shadow: 0 0 0 3px var(--panel); }
+/* One stop of 12 degrees for any difference (R8); the pans hang straight; ghosts land first. */
+[data-game="balance"] .bl-scene[data-tilt="left"] { --t: -1; }
+[data-game="balance"] .bl-scene[data-tilt="right"] { --t: 1; }
+[data-game="balance"] .bl-pan { --s: -1; position: absolute; top: var(--yb); bottom: var(--gc); left: calc(50% + var(--half) * var(--s) - var(--pan) / 2); width: var(--pan); transform: translate(calc(var(--half) * -.0219 * var(--s) * var(--t) * var(--t)), calc(var(--half) * .2079 * var(--s) * var(--t))); transition: transform var(--t-beam) var(--ease); }
+[data-game="balance"] .bl-pan[data-pan="right"] { --s: 1; }
+[data-game="balance"] .bl-scene.is-weighing .bl-beam, [data-game="balance"] .bl-scene.is-weighing .bl-pan { transition-delay: .25s; }
+[data-game="balance"] .bl-strings { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - var(--bowl)); overflow: visible; }
+[data-game="balance"] .bl-strings path { fill: none; stroke: var(--frame); stroke-width: 2; }
+[data-game="balance"] .bl-bowl { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bowl); border: 3px solid var(--frame); border-top: 0; border-radius: 0 0 14px 14px; background: var(--surface); }
+[data-game="balance"] .bl-stack { position: absolute; left: 7px; right: 7px; bottom: 6px; height: calc(var(--u) * 2 - 3px); }
+[data-game="balance"] .bl-stack > * { position: absolute; left: calc(var(--u) * var(--c, 0)); bottom: calc(var(--u) * var(--r, 0)); }
+[data-game="balance"] .bl-layer { position: absolute; inset: 0; pointer-events: none; }
+[data-game="balance"] .bl-layer.is-leaving { opacity: 0; animation: balance-out 200ms var(--ease); }
+
+[data-game="balance"] .bl-cube { width: var(--cube); height: var(--cube); border-radius: calc(var(--cube) * .25); }
+[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+[data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
+[data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
+[data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
+[data-game="balance"] .bl-cube.is-hop { animation: balance-hop var(--t-blink) var(--ease); }
+
+/* The stretched cover (design 6.6). */
+[data-game="balance"] .bl-lid { width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
+[data-game="balance"] .bl-lid > .cover { --cover-fs: calc(var(--cube) * .6); border-radius: calc(var(--cube) / 2) calc(var(--cube) / 2) calc(var(--cube) * .2) calc(var(--cube) * .2); box-shadow: 0 0 0 3px var(--halo); }
+[data-game="balance"] .bl-lid.is-back > .cover { animation: balance-drop var(--t-move) var(--ease); }
+[data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
+[data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); width: calc(var(--u) * var(--w) + 15px); }
+[data-game="balance"] .bl-bridge > .cover { border-radius: 0; box-shadow: none; }
+
+[data-game="balance"] .bl-ring { left: calc(var(--u) * var(--c) - 5px); bottom: calc(var(--u) * var(--r) - 5px); width: calc(var(--u) * var(--w) + 7px); height: calc(var(--u) * var(--h, 1) + 7px); border: 3px solid var(--role-added-edge); border-radius: calc(var(--cube) * .25 + 5px); box-shadow: inset 0 0 0 2px var(--halo); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+[data-game="balance"] .bl-ring.is-late { animation-delay: .25s; }
+[data-game="balance"] .bl-ring.is-hint, [data-game="balance"] .bl-ring.is-tour { border-color: var(--role-unknown); }
+[data-game="balance"] .bl-zero, [data-game="balance"] .bl-mark, [data-game="balance"] .bl-digit { display: grid; place-items: center; width: var(--cube); height: var(--cube); border-radius: 50%; color: var(--role-added-edge); font-size: max(14px, calc(var(--cube) * .6)); font-weight: 800; line-height: 1; }
+[data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
+[data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
+[data-game="balance"] .bl-mark { background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-added-edge); animation: balance-digit 150ms var(--ease) backwards; }
+[data-game="balance"] .bl-arc { left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube) * .7); width: var(--u); height: calc(var(--cube) * .5); border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; animation: balance-appear var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .bl-dash { width: var(--cube); height: var(--cube); border: 2px dashed var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+[data-game="balance"] .bl-scene.is-open .bl-dash { visibility: hidden; }
+[data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - var(--half)); transform: translateX(-50%); display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + var(--half)); }
+[data-game="balance"] .bl-op { color: var(--ink-soft); }
+[data-game="balance"] .bl-q { color: var(--role-unknown); }
+[data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); }
+[data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
+[data-game="balance"] .bl-digit.is-last { transform: scale(1.3); }
+
+[data-game="balance"] .bl-set {
+  --len: 10; --rows: 1; --cell: min(48px, calc((100cqw - 8px) / var(--len)), calc((100cqh - 8px) / (var(--rows) + 1.6)));
+  --dot: calc(var(--cell) * .76); --cube: var(--dot); --inset: calc((var(--cell) - var(--dot)) / 2);
+  position: absolute; left: calc(50% - var(--cell) * var(--len) / 2); top: calc(50% - var(--cell) * (var(--rows) + 1.6) / 2);
+  width: calc(var(--cell) * var(--len)); height: calc(var(--cell) * (var(--rows) + 1.6)); transition: --rows var(--t-move) var(--ease), --len var(--t-move) var(--ease);
+}
+[data-game="balance"] .bl-set.is-instant { transition: none; }
+[data-game="balance"] .bl-set .bl-dot, [data-game="balance"] .bl-set .bl-lid, [data-game="balance"] .bl-set .bl-ring { position: absolute; left: calc(var(--cell) * var(--x) + var(--inset)); top: calc(var(--cell) * var(--y) + var(--inset)); bottom: auto; }
+[data-game="balance"] .bl-set .bl-dot { width: var(--dot); height: var(--dot); border-radius: 50%; }
+[data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
+[data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
+[data-game="balance"] .bl-set .bl-copy { border: 3px solid var(--role-part-edge); }
+[data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
+[data-game="balance"] .bl-set .bl-lid > .cover { border-radius: calc(var(--dot) / 2) calc(var(--dot) / 2) calc(var(--dot) * .2) calc(var(--dot) * .2); }
+[data-game="balance"] .bl-set .bl-ring { left: calc(var(--cell) * var(--x) + var(--inset) - 6px); top: calc(var(--cell) * var(--y) + var(--inset) - 6px); width: calc(var(--cell) * (var(--w) - 1) + var(--dot) + 12px); height: calc(var(--dot) + 12px); border-radius: calc(var(--dot) / 2 + 6px); }
+[data-game="balance"] .bl-turn { position: absolute; left: 0; top: 0; width: calc(var(--cell) * var(--w)); height: var(--cell); opacity: 0; animation: balance-turn 1000ms var(--ease); }
+
+/* Cards: a pile in ink; judging cards two by two, one line each (R7). */
+[data-game="balance"] .bl-pile { display: flex; flex-wrap: wrap-reverse; gap: 3px; width: 72px; }
+[data-game="balance"] .bl-pile i { width: 12px; height: 12px; border-radius: 3px; background: var(--ink); }
+[data-game="balance"] .cards:has(.bl-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-game="balance"] .card:has(.bl-card) { height: var(--target); container-type: inline-size; }
+[data-game="balance"]:has(.bl-scene[data-judge]) .choices { min-height: calc(var(--target) * 2 + var(--gap)); }
+[data-game="balance"] .bl-card { display: grid; justify-items: center; gap: 2px; }
+[data-game="balance"] .bl-eq { display: flex; gap: .25em; font-size: min(28px, calc((100cqw - 4px) / var(--em))); line-height: 1.2; white-space: nowrap; }
+[data-game="balance"] .bl-mini { position: relative; width: 36px; height: 12px; visibility: hidden; }
+[data-game="balance"]:has([data-hint]) .card:not(.is-retired) .bl-mini { visibility: visible; }
+[data-game="balance"] .bl-mini::after { content: ''; position: absolute; left: 14px; bottom: 0; width: 8px; height: 8px; background: var(--frame); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+[data-game="balance"] .bl-mini-beam { position: absolute; left: 0; top: 2px; width: 36px; height: 3px; border-radius: 2px; background: var(--frame); }
+[data-game="balance"] .bl-mini[data-tilt="left"] .bl-mini-beam { transform: rotate(-12deg); }
+[data-game="balance"] .bl-mini[data-tilt="right"] .bl-mini-beam { transform: rotate(12deg); }
+
+@keyframes balance-in { from { opacity: 0; transform: translateY(-30%) scale(.85); } }
+@keyframes balance-out { from { opacity: 1; } }
+@keyframes balance-blink { 50% { opacity: .3; } }
+@keyframes balance-ring { 0% { opacity: 0; } 1% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes balance-digit { from { opacity: 0; transform: scale(.4); } }
+@keyframes balance-appear { from { opacity: 0; } }
+@keyframes balance-drop { from { opacity: 0; transform: translateY(-60%); } }
+@keyframes balance-hop { 50% { transform: translateY(-60%); } }
+@keyframes balance-turn { 0% { opacity: .9; transform: none; }
+  80% { opacity: .9; transform: translateY(calc(var(--cell) * 1.6)) rotate(180deg); }
+  100% { opacity: 0; transform: translateY(calc(var(--cell) * 1.6)) rotate(180deg); }
+}
