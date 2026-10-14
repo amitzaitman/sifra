@@ -429,6 +429,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   let hint = null;
   /** While a display runs, and once solved, a touch leaves no mark (as the cards, design 7.1). */
   let busy = false;
+  /** The latest miss or solve: a hint chained after a display's return draws only if nothing came since. */
+  let latest = 0;
   /** Counted things (design 6.3): the known cubes on the real pans and the known dots of the rows. */
   const counted = ':scope > .bl-pan > .bl-stack > .bl-cube:not([data-role="unknown"]), :scope > .bl-dot:not([data-role="unknown"])';
   /** In play, counted things are targets (architecture 2.8), so the shell does not log them as off-target. */
@@ -487,6 +489,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
    * @param {number} step
    */
   const missed = async ({ value, rule, display }, step) => {
+    const mine = ++latest;
     if (!s) draw(false);
     // The previous display goes at once; the new one runs (R5, design 7.2).
     clear(false);
@@ -504,8 +507,15 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       if (!first && !signal.aborted) {
         clear(true);
         s.rest(false, true);
-        await settle(s.scene, signal);
-        if (!signal.aborted) root.remove();
+        const back = settle(s.scene, signal).then(() => { if (!signal.aborted) root.remove(); });
+        // The cards lock only while the display runs (design 7.1): at step 2 the beam's return is
+        // not awaited, and the hint is drawn on the start picture once it is back (design 7.2),
+        // unless a tap came in between. The tour (step 3) still follows the return.
+        if (step < 3) {
+          back.then(() => { if (mine === latest && !signal.aborted) hint ??= s.hint(); });
+          return;
+        }
+        await back;
       }
     }
     if (signal.aborted) return;
@@ -538,6 +548,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     },
     async solve() {
       busy = true;
+      latest += 1;
       // Judging: the true card is written in the equation row, so the full exercise is on screen (R5).
       if (round.model === 'cards') setEquation(round.answer);
       if (!s) return;
