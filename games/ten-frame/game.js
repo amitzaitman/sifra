@@ -10,7 +10,6 @@ import { KINDS, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  grades: [1],
   version: 1,
   css: new URL('game.css', import.meta.url).href,
 };
