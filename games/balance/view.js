@@ -503,14 +503,15 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       await settle(s.scene, signal);
       if (!first && !signal.aborted) {
         clear(true);
-        s.rest(false, true);
-        const back = settle(s.scene, signal).then(() => { if (!signal.aborted) root.remove(); });
         // The hint goes on the start picture as it comes back, above the leaving ghosts (design
         // 7.2), so it is on screen when the cards unlock, as the shell has logged it (architecture
-        // 2.5 step 4); R10 allows no delay that would wait out the return. The cards lock only
-        // while the display runs (design 7.1): at step 2 the return is not awaited; the tour
-        // (step 3) follows it.
+        // 2.5 step 4); R10 allows no delay that would wait out the return. It is drawn while the
+        // pans still hold the display's tilt (panLayer reads the style), so its pans swing back
+        // with the real ones. The cards lock only while the display runs (design 7.1): at step 2
+        // the return is not awaited; the tour (step 3) follows it.
         hint ??= s.hint();
+        s.rest(false, true);
+        const back = settle(s.scene, signal).then(() => { if (!signal.aborted) root.remove(); });
         if (step < 3) return;
         await back;
       }

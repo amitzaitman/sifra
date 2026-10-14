@@ -177,6 +177,8 @@ export function panLayer(scene) {
   const layer = el('div', 'bl-layer');
   const [left, right] = ['left', 'right'].map((name) => layer.appendChild(pan(name, false)).lastElementChild);
   scene.append(layer);
+  // A style read: its pans start at the real ones' tilt, so a tilt set next moves them together.
+  void layer.offsetWidth;
   return { el: layer, left: /** @type {HTMLElement} */ (left), right: /** @type {HTMLElement} */ (right) };
 }
 

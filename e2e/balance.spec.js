@@ -183,6 +183,63 @@ test('a later miss unlocks the cards when its display ends; the beam goes back w
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
 });
 
+test('a display\'s pans and the hint\'s pans swing with the real ones: the ghosts and the cover\'s outline stay on their places (8 = 3 + ?)', async ({ page }) => {
+  const { round } = await devAt(page, 'missing-reversed', 8);
+  expect(round.equation).toEqual({ left: [8], right: [3, '+', '?'] });
+  const at = (value) => round.choices.findIndex((c) => c.value === value);
+  // The moment a display is drawn, and the moment the cards unlock after the second miss: every
+  // animation in the picture paused, each transition the same time into it (pans that move
+  // together are then together), and how far a layer's right pan is from the real one.
+  await page.evaluate(() => {
+    const scene = document.querySelector('.bl-scene');
+    const apart = (t) => {
+      const all = scene.getAnimations({ subtree: true });
+      for (const a of all) {
+        a.pause();
+        if (a instanceof CSSTransition) a.currentTime = t;
+      }
+      const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+      const gap = (a, b) => (a && b ? Math.round(Math.hypot(a.x - b.x, a.y - b.y)) : null);
+      const real = box('.bl-scene > .bl-pan[data-pan="right"]');
+      const out = {
+        display: gap(box('[data-display]:not(.is-leaving) .bl-pan[data-pan="right"]'), real),
+        hint: gap(box('[data-hint] .bl-pan[data-pan="right"]'), real),
+        // The outline is a cube scaled to .78 in the cover's first place.
+        dash: gap(box('[data-hint] .bl-dash'), box('.bl-scene > .bl-pan[data-pan="right"] .bl-lid')),
+        moving: all.filter((a) => a instanceof CSSTransition && a.transitionProperty === 'transform').length,
+      };
+      for (const a of all) a.play();
+      return out;
+    };
+    new MutationObserver((_, watch) => {
+      if (!scene.querySelector('[data-display]')) return;
+      watch.disconnect();
+      window['atDisplay'] = apart(260);
+    }).observe(scene, { childList: true });
+    const row = document.querySelector('[data-choices]');
+    let locks = 0;
+    new MutationObserver((_, watch) => {
+      if (row.hasAttribute('data-locked')) return void (locks += 1);
+      if (locks < 2) return;
+      watch.disconnect();
+      window['atUnlock'] = apart(20);
+    }).observe(row, { attributes: true, attributeFilter: ['data-locked'] });
+  });
+  // The first miss (11, balance): ghosts land, then the beam tilts; the display's pans go with it.
+  await card(page, at(11)).click();
+  const shown = await (await page.waitForFunction(() => window['atDisplay'])).jsonValue();
+  expect(shown.moving, 'the beam and pans are tilting').toBeGreaterThan(0);
+  expect(shown.display).toBe(0);
+  await unlocked(page);
+  // The second miss (8): the display leaves and the beam swings back; the hint is drawn on the
+  // way, its pans and the cover's outline swinging with the real ones.
+  await card(page, at(8)).click();
+  const back = await (await page.waitForFunction(() => window['atUnlock'], null, { timeout: 10000 })).jsonValue();
+  expect(back.moving, 'the beam and pans are swinging back').toBeGreaterThan(0);
+  expect(back.hint).toBe(0);
+  expect(back.dash).toBeLessThanOrEqual(5);
+});
+
 for (const level of ['both-sides', 'turn']) {
   test(`${level}: the right card the moment the cards unlock after the second miss; the hint the shell logged is on screen at the tap (design 7.2)`, async ({ page }) => {
     const { round, answerAt } = await devAt(page, level, 1);
