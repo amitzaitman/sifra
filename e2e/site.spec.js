@@ -134,6 +134,46 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
 
+/** Two touchscreen taps at the middle of an element, as fast as the protocol sends them: one double tap. */
+async function doubleTap(page, locator) {
+  const box = await locator.boundingBox();
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  await page.touchscreen.tap(x, y);
+  await page.touchscreen.tap(x, y);
+}
+
+test('a double tap on the right card with reduced motion: "הַבָּא" is born under the finger, and the second tap does not skip the solved round (design 6.9)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await open(page, `${FIXTURE}#/play/parts`);
+  const { answerAt, data } = await roundOf(page);
+  await doubleTap(page, page.locator(`button[data-index="${answerAt}"]`));
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', data.seed);
+  await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '0');
+  // A tap of its own is taken.
+  await page.locator('[data-next]').click();
+  await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '1');
+});
+
+for (const [name, route] of [['a session', '#/play/parts'], ['#/dev', '#/dev/parts/2/1']]) {
+  test(`${name}: a double tap on "הַבָּא" starts the next round, and the second tap does not answer it (design 6.9)`, async ({ page }) => {
+    await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+    await open(page, `${FIXTURE}${route}`);
+    await solve(page);
+    const before = await page.locator('main[data-screen="round"]').getAttribute('data-seed');
+    await doubleTap(page, page.locator('[data-next]'));
+    await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-seed', before);
+    await expect(page.locator('[data-choices]')).toBeVisible();
+    await expect(page.locator('button[data-index].is-retired')).toHaveCount(0);
+    await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved', '');
+    expect((await stored(page)).child.attempts).toHaveLength(route.startsWith('#/play') ? 1 : 0);
+    // The next tap is taken.
+    await solve(page);
+  });
+}
+
 test('parents page: plain links that open YouTube in a new tab, and the home button', async ({ page }) => {
   await open(page, `${INDEX}#/parents`);
   const links = page.locator('main[data-screen="parents"] a');

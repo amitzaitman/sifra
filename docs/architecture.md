@@ -281,6 +281,10 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
   `[data-show-picture]`. Control buttons have `data-control` and an `svg[data-icon]`.
 - Off-target taps: each pointerdown on the screen that hits no button and no `[data-target]` is counted by the
   nearest `[data-area]` (`picture`, `equation`, else `other`).
+- Double tap (design 6.9): a capture-phase click listener on the root drops a click whose `detail` is over 1 when
+  the screen, or the cards' place ("הַבָּא"), changed since the previous click. The browser counts the taps; there is
+  no clock and nothing locks, and the next tap is taken. So the second tap of a double tap never answers a round
+  the child has not seen, and never skips the solved picture, also with reduced motion.
 
 ### 3.3 Session
 
@@ -582,6 +586,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |
 | End screen | Solved thumbs and home only | R10, §5.10; the next step on home starts the next session |
+| Double tap | The shell drops a click with `detail > 1` after the screen or the cards' place changed (3.2) | design 6.9 says the second tap never skips the solved picture, but with reduced motion "הַבָּא" is born at once; a time window would be a clock (R5). Whether iOS Safari counts taps in `detail` is checked on the iPhone (`device-checks.md`) |
 | 60 s test | One for the suite, all games in parallel pages | A.2 asks one per suite; one wait covers every game |
 | Parents labels | By hand with nikud; link hidden until `VERIFIED` | The doc's table has no nikud; decisions.md: every link is checked before the page goes live |
 | `meta` | No `topic`, no grade; `version` and `css` added | Owner decision 2026-10-14: nothing at run time uses a grade, so the review pool needs none; `version` marks a changed generator |

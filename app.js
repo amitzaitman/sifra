@@ -74,6 +74,7 @@ function screen(name, title, attrs = {}) {
   S.ctl?.abort();
   S.ctl = new AbortController();
   S.thumbs.length = 0;
+  S.swapped = true;
   const main = h('main', { 'data-screen': name, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
@@ -283,6 +284,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     const label = `<span>${T.next}</span>${svg('next')}`;
     const button = h('button', { type: 'button', class: 'next btn btn-action', 'data-next': true, 'data-control': true, html: label });
     button.addEventListener('click', next, { signal });
+    S.swapped = true;
     cardsArea.replaceChildren(button);
     button.focus({ preventScroll: true });
   };
@@ -403,7 +405,14 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   }
   const ordered = homeOrder(games, SKILLS);
   S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [],
-    seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]) };
+    seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]), swapped: false };
+  // The second tap of a double tap never acts on what the first one put under the finger: a new
+  // screen, or "הַבָּא" in the cards' place (design 6.9). The browser counts the taps in
+  // click.detail; this is no clock and locks nothing, and the next tap is taken.
+  root.addEventListener('click', (e) => {
+    if (S.swapped && e.detail > 1) return void (e.preventDefault(), e.stopImmediatePropagation());
+    S.swapped = false;
+  }, { capture: true });
   errorScreen();
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, newId, today());
