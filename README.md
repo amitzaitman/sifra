@@ -10,3 +10,4 @@
 - [החלטות](docs/decisions.md)
 - [מסמך הפדגוגיה](docs/pedagogy.md) (טיוטה)
 - [מפת המיומנויות](docs/skills.md) (טיוטה)
+- [סרטוני אהרוני לדף ההורים](docs/parents-videos.md) (טיוטה, הקישורים עוד לא נבדקו)

@@ -9,15 +9,18 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 ## Where things are
 
 - `docs/decisions.md`: the owner's decisions and why (Hebrew). Don't reverse one without asking.
-- `docs/pedagogy.md`: the binding rules (R1-R11) every game follows, the grade 1-6 map, grade 1-2 depth, the error-rule catalogue, the first two games and the owner's open questions (§8.1). Draft: the owner hasn't answered §8.1 yet. Appendix A is for developers.
+- `docs/pedagogy.md`: the binding rules (R1-R11) every game follows, the grade 1-6 map, grade 1-2 depth, the error-rule catalogue and the first two games. The owner answered §8.1 on 2026-10-14; §8.1 records those decisions and §8.5 holds the new open questions. Aharoni and the Singapore series ("מתמטיקה יסודית") decide the order, notation and teaching; the Ministry curriculum is secondary, and §3.6 lists where the order differs from school. Appendix A is for developers.
+- `docs/parents-videos.md`: Aharoni's videos per topic for the parents' page. Links unverified until checked.
 - `docs/skills.md`: every skill id with prerequisites and error-rule ids. Ids are stable: never rename one that a game or a saved record uses.
 
 ## Product rules
 
 - Silent: no speech, no sound, no audio code.
 - Every round can be solved from the picture and the exercise. At most one short pointed sentence.
-- No timers inside games: the child taps "הַבָּא". No coins, streaks, stars or clocks.
-- No adult tools in v1. No accounts, analytics or network service at play time.
+- No timers inside games: the child taps "הַבָּא". No coins, streaks, stars or clocks as rewards or timers (reading a clock and counting coins are maths content).
+- No adult tools in v1, except one parents' page of links to Aharoni's videos (`docs/parents-videos.md`). Videos open in YouTube itself; never embed them. No accounts, analytics or network service at play time.
+- Home page: one big "הַצַּעַד הַבָּא" button (the first skill in the Aharoni/Singapore order that isn't mastered and whose prerequisites are), and every game open below it. No locks (`docs/pedagogy.md` §5.12).
+- sifra is practice after the child met a concept in class or with objects, not the first meeting: level 1 of a skill starts with pictures of real objects.
 - Tap input only, until a game needs dragging.
 - Target Safari 16.4+ and current Chrome. Nothing is transpiled, so don't use newer features.
 
