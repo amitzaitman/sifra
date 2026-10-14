@@ -157,7 +157,7 @@ test('a display stays until the next tap, which removes it; a minute changes not
   await expectCalm(page);
 });
 
-test('a later miss unlocks the cards when its display ends; the beam goes back and the hint comes after, unlocked (design 7.1-7.2)', async ({ page }) => {
+test('a later miss unlocks the cards when its display ends; the beam goes back with the hint on it, unlocked (design 7.1-7.2)', async ({ page }) => {
   const { round } = await devAt(page, 'both-sides', 1);
   // Two misses whose display tilts the beam, so the return is a real motion.
   const [first, second] = wrongOf(round).filter((i) => RULES[round.choices[i].rule].display === 'balance');
@@ -175,33 +175,38 @@ test('a later miss unlocks the cards when its display ends; the beam goes back a
   await card(page, second).click();
   await expect(page.locator('[data-choices]')).toHaveAttribute('data-locked');
   const at = await (await page.waitForFunction(() => window['atUnlock'], null, { timeout: 10000 })).jsonValue();
-  // The display has ended (it is leaving) and the return runs with the cards open; then the hint.
-  expect(at).toEqual({ leaving: 1, hint: 0 });
+  // The display has ended (it is leaving), the hint is on the returning picture, and the return
+  // runs with the cards open.
+  expect(at).toEqual({ leaving: 1, hint: 1 });
   await expect(page.locator('[data-hint]')).toHaveCount(1);
   await expect(page.locator('[data-display]')).toHaveCount(0);
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
 });
 
-test('the right card during the beam\'s return after the second miss: the hint the shell logged is drawn before the closing (design 7.2)', async ({ page }) => {
-  const { round, answerAt } = await devAt(page, 'both-sides', 1);
-  const [first, second] = wrongOf(round).filter((i) => RULES[round.choices[i].rule].display === 'balance');
-  await card(page, first).click();
-  await unlocked(page);
-  // The right card is tapped the moment the cards unlock after the second miss, while the beam goes back.
-  await page.evaluate((i) => {
-    const row = document.querySelector('[data-choices]');
-    new MutationObserver((_, watch) => {
-      if (row.hasAttribute('data-locked')) return;
-      watch.disconnect();
-      window['atTap'] = { leaving: document.querySelectorAll('.bl-scene [data-display].is-leaving').length, hint: document.querySelectorAll('[data-hint]').length };
-      row.querySelector(`button[data-index="${i}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-    }).observe(row, { attributes: true, attributeFilter: ['data-locked'] });
-  }, answerAt);
-  await card(page, second).click();
-  await expect(page.locator('[data-next]')).toBeVisible();
-  expect(await page.evaluate(() => window['atTap'])).toEqual({ leaving: 1, hint: 0 });
-  await expect(page.locator('[data-hint]')).toHaveCount(1);
-});
+for (const level of ['both-sides', 'turn']) {
+  test(`${level}: the right card the moment the cards unlock after the second miss; the hint the shell logged is on screen at the tap (design 7.2)`, async ({ page }) => {
+    const { round, answerAt } = await devAt(page, level, 1);
+    // Misses whose display tilts the beam, so the return is a real motion, where there are two.
+    const tilting = wrongOf(round).filter((i) => RULES[round.choices[i].rule].display === 'balance');
+    const [first, second] = tilting.length >= 2 ? tilting : wrongOf(round);
+    await card(page, first).click();
+    await unlocked(page);
+    // The right card is tapped the moment the cards unlock after the second miss, while the picture goes back.
+    await page.evaluate((i) => {
+      const row = document.querySelector('[data-choices]');
+      new MutationObserver((_, watch) => {
+        if (row.hasAttribute('data-locked')) return;
+        watch.disconnect();
+        window['atTap'] = { leaving: document.querySelectorAll('[data-display].is-leaving').length, hint: document.querySelectorAll('[data-hint]').length };
+        row.querySelector(`button[data-index="${i}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      }).observe(row, { attributes: true, attributeFilter: ['data-locked'] });
+    }, answerAt);
+    await card(page, second).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    expect(await page.evaluate(() => window['atTap'])).toEqual({ leaving: 1, hint: 1 });
+    await expect(page.locator('[data-hint]')).toHaveCount(1);
+  });
+}
 
 test('the help ladder: display, then chips and the cover\'s outline, then the tour ends on the answer; outcome shown', async ({ page }) => {
   const { round, answerAt } = await playAt(page, 'missing-right');
