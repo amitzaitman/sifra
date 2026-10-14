@@ -620,10 +620,31 @@ Until then these are not choices made. One list for both games.
   skills.md; depth §4.9 says the `equal.*` rules come first in the reversed form (`c = a + ?`, `? = a + b`). The game
   and the generic test follow §4.9 (the "Ties in a reversed form" row above). Either keep §4.9's sentence, or give
   skills.md a per-form order and drop it.
-- **Two known numbers on one pan** (`balance`: `a + b` on a pan, or both sides). Design §6.8 draws a pan as rows of
-  five and does not say how two parts of one colour stay apart. The game starts each known number on a new row, so
-  `5 + 3` is a row of five and a row of three. Either keep that, or draw the second part in a second part colour,
-  or leave a gap of one place between them.
+- **Two known numbers in one picture** (`balance`: `a + b` on a pan, or both sides; and the turned rows of `turn`).
+  Design §6.8 draws a pan as rows of five and does not say how two parts of one colour stay apart. The game starts
+  each known number on a new row, so `5 + 3` is a row of five and a row of three; in the turned rows (`model: set`)
+  the groups are apart by a gap, and every known group is `--role-part`. Other docs ask for two colours: pedagogy
+  §6.3 row 1 and depth §4.9 `eq.sign.same-as` ("cubes in two colours on the left pan"), and depth §4.9
+  `eq.props.commutative` ("a row of dots in two colours", "the colours change sides" when it turns, help (3) "both
+  colours are counted"), so the colour swap the turn level is about cannot be seen. R6 has one part colour. Either
+  add a second part colour token (a change to R6 and decisions.md condition 6), or reword §6.3 and §4.9 to "two
+  groups, apart by a new row or a gap" ("the groups change sides" for the turn), or leave a gap of one place on a
+  pan too.
+- **The step-3 tour in three `balance` levels** (R5 against depth §4.9 help (3)). R5 ends the tour on the answer:
+  `same` counts on over the left pan's second group to the total; `relational` and `turn` count the unknown from 1.
+  Depth §4.9 asks for more: `eq.sign.same-as` "the cubes in both pans are counted", `eq.sign.relational` "both sides
+  are built and counted", `eq.props.commutative` "both colours are counted". Either keep R5's tour and reword the
+  three help (3) lines, or count both sides first and end on the unknown (for `same`, pair by pair as the judging
+  tour does; for `turn`, the matching group on the first row, then the unknown; `relational` needs a new design,
+  since counting the sides ends on the total).
+- **The judging round's true card** (`balance` `true-false`, depth §4.9 `eq.sign.true-false` level 1: `7 = 7`,
+  `5 + 2 = 7`, `7 = 5 + 2`). The true card is always the reversed form `c = a + b`, and `7 = 7` never appears;
+  the wrong cards are `a + b` equal to one more than `c` (`equal.reject-reversed`), `a + b = c + a`
+  (`equal.accepts-chain`), and `c` equal to `a` plus one more than `b` (`slip.card`). So two cards always have a lone number on the left, one of them true: the shape
+  alone narrows four cards to two. `equal.reject-reversed` has a value only when the true card is reversed (errors.md),
+  so a standard or `7 = 7` true card leaves one real error, short of R4's two. Either record the reversed-only true
+  card in §4.9 and drop `7 = 7`, or vary the true card and say how R4's two real errors apply then (a new rule for a
+  false reversed card, or one real error and slips in those rounds).
 - **Eleven `balance` levels for the ten rows of §6.3.** Row 5 says `look: symbols`, `max: 10` and then `max: 20`;
   the game makes it two levels (`missing-symbols`, `missing-symbols-20`), so §6.3's levels 6-10 are the game's 7-11
   (levels are named by id here). Either keep two levels and number §6.3 the same way, or make row 5 one level with
