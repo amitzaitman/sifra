@@ -441,6 +441,41 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover stretc
   expect(two.y).toBeLessThan(one.y - one.height / 2);
 });
 
+test('a cover over a run of places has the dome\'s corners at its ends, from its height, and covers each place (design 6.6)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  // 3 + ? = 10: a piece over two places and one over five; ? = 6 + 4: pieces in the shape of 6 and 4;
+  // the turned rows: one piece over four dots.
+  for (const [level, seed] of [['missing-right', 1], ['missing-reversed', 2], ['turn', 4]]) {
+    await devAt(page, level, seed);
+    const problems = await page.evaluate(() => {
+      const out = [];
+      const numbers = (s) => (s.match(/[\d.]+/g) ?? []).map(Number);
+      const pieces = [...document.querySelectorAll('[data-area="picture"] .bl-lid:not(.bl-bridge)')];
+      for (const lid of pieces) {
+        // The dome app.css draws for a cover of this height (--cover-h), as the equation's and ten-frame's.
+        const probe = document.body.appendChild(document.createElement('div'));
+        probe.style.cssText = `position: absolute; width: 10px; height: 10px; --cover-h: ${getComputedStyle(lid).height}`;
+        const dome = probe.appendChild(document.createElement('span'));
+        dome.className = 'cover';
+        const [want, got] = [numbers(getComputedStyle(dome).borderRadius), numbers(getComputedStyle(lid.firstElementChild).borderRadius)];
+        probe.remove();
+        if (want.length !== got.length || want.some((n, i) => Math.abs(n - got[i]) > 0.05)) out.push(`corners ${got} instead of ${want}`);
+      }
+      // Every place under the cover: near its top and bottom edges, a quarter in from either side,
+      // is the cover itself (hit testing follows the rounded corners), not the box around it.
+      for (const place of document.querySelectorAll('[data-area="picture"] .bl-stage [data-role="unknown"]')) {
+        const c = place.getBoundingClientRect();
+        for (const [fx, fy] of [[0.25, 0.2], [0.75, 0.2], [0.25, 0.85], [0.75, 0.85], [0.5, 0.1]]) {
+          const hit = document.elementFromPoint(c.left + fx * c.width, c.top + fy * c.height);
+          if (!hit?.matches('.cover')) out.push(`a place at ${Math.round(c.left)},${Math.round(c.top)}, ${fx},${fy}: ${hit?.className}`);
+        }
+      }
+      return out;
+    });
+    expect(problems, level).toEqual([]);
+  }
+});
+
 test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await playAt(page, 'missing-left');

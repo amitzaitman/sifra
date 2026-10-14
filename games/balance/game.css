@@ -41,9 +41,11 @@
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
 
-/* The stretched cover (design 6.6). */
-[data-game="balance"] .bl-lid { width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
-[data-game="balance"] .bl-lid > .cover { --cover-fs: calc(var(--cube) * .6); border-radius: calc(var(--cube) / 2) calc(var(--cube) / 2) calc(var(--cube) * .2) calc(var(--cube) * .2); box-shadow: 0 0 0 3px var(--halo); }
+/* The stretched cover (design 6.6): a piece per row. --cover-h is the piece's height (a cube, or
+   a dot in the turned rows): app.css sizes the dome's corners from it, so a piece over a run of
+   places keeps the dome's corners at its ends and covers every place between them. */
+[data-game="balance"] .bl-lid { --cover-h: var(--cube); width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
+[data-game="balance"] .bl-lid > .cover { --cover-fs: calc(var(--cube) * .6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-lid.is-back > .cover { animation: balance-drop var(--t-move) var(--ease); }
 [data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
 [data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); width: calc(var(--u) * var(--w) + 15px); }
@@ -82,7 +84,6 @@
 [data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
 [data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
-[data-game="balance"] .bl-set .bl-lid > .cover { border-radius: calc(var(--dot) / 2) calc(var(--dot) / 2) calc(var(--dot) * .2) calc(var(--dot) * .2); }
 [data-game="balance"] .bl-set .bl-ring { left: calc(var(--cell) * var(--x) + var(--inset) - 6px); top: calc(var(--cell) * var(--y) + var(--inset) - 6px); width: calc(var(--cell) * (var(--w) - 1) + var(--dot) + 12px); height: calc(var(--dot) + 12px); border-radius: calc(var(--dot) / 2 + 6px); }
 /* The turn (depth 4.9): the first row's copy turns over about its middle onto the second row. */
 [data-game="balance"] .bl-set .bl-twin { opacity: 0; transform-origin: calc(var(--cell) * (var(--line) / 2 - var(--x)) - var(--inset)) 50%; animation: balance-turn 700ms var(--ease); }
