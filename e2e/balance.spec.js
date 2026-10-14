@@ -314,6 +314,22 @@ test('? = a + b: the cover in the shape of a and b; the tour counts on over what
   await expect(page.locator('[data-next]')).toBeVisible();
 });
 
+for (const [level, thing] of [['missing-left', '.bl-scene > .bl-pan > .bl-stack > .bl-cube[data-role="part"]'], ['turn', '.bl-set > .bl-dot[data-role="part"]']]) {
+  test(`${level}: a tap on a counted thing leaves one mark; a second tap on it, or a tap on the cover, is logged as off-target (design 6.3)`, async ({ page }) => {
+    const { answerAt } = await playAt(page, level);
+    const known = page.locator(thing).first();
+    await known.click();
+    await expect(known.locator('.bl-touch')).toHaveCount(1);
+    await known.click();
+    await expect(known.locator('.bl-touch')).toHaveCount(1);
+    await page.locator('.bl-lid').first().click();
+    await expect(page.locator('.bl-touch')).toHaveCount(1);
+    await card(page, answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    expect(await lastAttempt(page)).toMatchObject({ outcome: 'first', taps: { picture: 2, equation: 0, other: 0 } });
+  });
+}
+
 test('reduced motion: a tap is taken right after a miss, and the hint comes at once', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { round, answerAt } = await playAt(page, 'both-sides');

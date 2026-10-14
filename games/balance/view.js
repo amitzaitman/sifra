@@ -427,12 +427,32 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   let s = null;
   /** @type {Layer | null} the hint, once drawn */
   let hint = null;
+  /** While a display runs, and once solved, a touch leaves no mark (as the cards, design 7.1). */
+  let busy = false;
+  /** Counted things (design 6.3): the known cubes on the real pans and the known dots of the rows. */
+  const counted = ':scope > .bl-pan > .bl-stack > .bl-cube:not([data-role="unknown"]), :scope > .bl-dot:not([data-role="unknown"])';
+  /** In play, counted things are targets (architecture 2.8), so the shell does not log them as off-target. */
+  const countable = () => {
+    if (mode !== 'play') return;
+    s.scene.querySelectorAll(counted).forEach((n) => { if (!(n instanceof HTMLElement) || 'marked' in n.dataset) return; n.dataset.target = ''; });
+  };
+  // A touch on a counted thing leaves one ink dot; it is no longer a target, so a second touch is logged.
+  if (mode === 'play') {
+    host.addEventListener('click', (e) => {
+      const node = e.target instanceof Element ? e.target.closest('[data-target]') : null;
+      if (!(node instanceof HTMLElement) || busy) return;
+      node.dataset.marked = '';
+      delete node.dataset.target;
+      node.append(el('span', 'bl-touch'));
+    }, { signal });
+  }
   /**
    * Draws the picture; in play and demo its intro runs, unless it is drawn solved or motion is reduced.
    * @param {boolean} asSolved
    */
   const draw = (asSolved) => {
     s = (round.model === 'set' ? rowsScene : balanceScene)(host, round, asSolved, signal);
+    countable();
     if (mode !== 'thumb') return asSolved || reduced() || s.intro();
     // A thumb: the stage at a phone's size, scaled into its host, still.
     s.stage.classList.add('is-thumb');
@@ -461,51 +481,63 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     }
     s.scene.classList.remove('is-open', 'is-weighing');
   };
+  /**
+   * A miss (architecture 2.5 step 4): its display, the hint from step 2, the tour at step 3.
+   * @param {{ value: any, rule: string, display: string }} choice
+   * @param {number} step
+   */
+  const missed = async ({ value, rule, display }, step) => {
+    if (!s) draw(false);
+    // The previous display goes at once; the new one runs (R5, design 7.2).
+    clear(false);
+    s.scene.classList.add('is-instant');
+    s.rest();
+    void s.scene.offsetWidth;
+    s.scene.classList.remove('is-instant');
+    // A first miss keeps its display to the next tap: step 1, or step 2 on a 3-option level,
+    // where the hint joins it (architecture 2.5 step 4). A later miss's display runs and leaves,
+    // so the start picture, cover included, gets the hint; with reduced motion it is skipped.
+    const first = step === 1 || (step === 2 && round.choices.length === 3);
+    if (first || !reduced()) {
+      const root = await s.show(display, value, rule, lift);
+      await settle(s.scene, signal);
+      if (!first && !signal.aborted) {
+        clear(true);
+        s.rest(false, true);
+        await settle(s.scene, signal);
+        if (!signal.aborted) root.remove();
+      }
+    }
+    if (signal.aborted) return;
+    hint ??= step >= 2 ? s.hint() : null;
+    if (step < 3) return;
+    // Step 3, the tour: the unknown shows, and each digit is written in turn (R5).
+    lift();
+    for (const n of s.unknowns()) n.classList.add('is-shown');
+    const { steps, pace, ring } = s.tour(hint);
+    countable();   // a judging round's true card is on the pans now
+    await settle(s.scene, signal);
+    for (let j = 0; j < steps.length && !signal.aborted; j += pace) {
+      const digits = steps.slice(j, j + pace).map(([target, n]) => {
+        const last = j + pace >= steps.length ? ' is-last' : '';
+        const digit = put(target, `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`, undefined, n);
+        digit.dataset.tour = String(n);
+        return digit;
+      });
+      await Promise.all(digits.map((digit) => settle(digit, signal)));
+    }
+    if (!signal.aborted) await Promise.all(ring().map((r) => settle(r, signal)));
+  };
   return {
     label: labelOf(round),
     picture: () => draw(false),
-    async miss({ value, rule, display }, step) {
-      if (!s) draw(false);
-      // The previous display goes at once; the new one runs (R5, design 7.2).
-      clear(false);
-      s.scene.classList.add('is-instant');
-      s.rest();
-      void s.scene.offsetWidth;
-      s.scene.classList.remove('is-instant');
-      // A first miss keeps its display to the next tap: step 1, or step 2 on a 3-option level,
-      // where the hint joins it (architecture 2.5 step 4). A later miss's display runs and leaves,
-      // so the start picture, cover included, gets the hint; with reduced motion it is skipped.
-      const first = step === 1 || (step === 2 && round.choices.length === 3);
-      if (first || !reduced()) {
-        const root = await s.show(display, value, rule, lift);
-        await settle(s.scene, signal);
-        if (!first && !signal.aborted) {
-          clear(true);
-          s.rest(false, true);
-          await settle(s.scene, signal);
-          if (!signal.aborted) root.remove();
-        }
-      }
-      if (signal.aborted) return;
-      hint ??= step >= 2 ? s.hint() : null;
-      if (step < 3) return;
-      // Step 3, the tour: the unknown shows, and each digit is written in turn (R5).
-      lift();
-      for (const n of s.unknowns()) n.classList.add('is-shown');
-      const { steps, pace, ring } = s.tour(hint);
-      await settle(s.scene, signal);
-      for (let j = 0; j < steps.length && !signal.aborted; j += pace) {
-        const digits = steps.slice(j, j + pace).map(([target, n]) => {
-          const last = j + pace >= steps.length ? ' is-last' : '';
-          const digit = put(target, `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`, undefined, n);
-          digit.dataset.tour = String(n);
-          return digit;
-        });
-        await Promise.all(digits.map((digit) => settle(digit, signal)));
-      }
-      if (!signal.aborted) await Promise.all(ring().map((r) => settle(r, signal)));
+    async miss(choice, step) {
+      busy = true;
+      await missed(choice, step);
+      busy = false;
     },
     async solve() {
+      busy = true;
       // Judging: the true card is written in the equation row, so the full exercise is on screen (R5).
       if (round.model === 'cards') setEquation(round.answer);
       if (!s) return;

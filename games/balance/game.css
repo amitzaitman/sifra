@@ -41,6 +41,9 @@
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
+/* A touch on a counted thing (design 6.3): an ink dot with a white edge, once; a tour digit covers it. */
+[data-game="balance"] .bl-touch { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+[data-game="balance"] :has(> .bl-digit) > .bl-touch { display: none; }
 
 /* The stretched cover (design 6.6): a piece per row. --cover-h is the piece's height (a cube, or
    a dot in the turned rows): app.css sizes the dome's corners from it, so a piece over a run of
