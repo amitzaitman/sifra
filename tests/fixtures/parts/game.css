@@ -1,0 +1,20 @@
+/* Fixture game "parts" (test code). Every selector starts with [data-game="parts"]. */
+[data-game="parts"] .fx-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
+[data-game="parts"] .fx-group { position: relative; display: grid; place-items: center; min-width: 40px; min-height: 40px; }
+[data-game="parts"] .fx-dots { display: flex; flex-wrap: wrap; gap: 6px; max-width: 134px; }
+[data-game="parts"] .fx-dot { position: relative; width: 22px; height: 22px; border-radius: 50%; }
+[data-game="parts"] .fx-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="parts"] .fx-dot[data-role="whole"] { background-color: var(--role-whole); }
+[data-game="parts"] .fx-empty { box-shadow: inset 0 0 0 2px var(--frame); }
+[data-game="parts"] .fx-tag { padding: 2px 12px; border-radius: var(--r-chip); background: var(--surface); color: var(--role-whole); font-size: 28px; font-weight: 800; }
+[data-game="parts"] .fx-unknown .cover { inset: -3px; }
+[data-game="parts"] .fx-display { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 180px; animation: parts-in var(--t-move) var(--ease); }
+[data-game="parts"] .fx-ghost { width: 14px; height: 14px; border-radius: 50%; background: var(--role-added-ghost); box-shadow: inset 0 0 0 2px var(--role-added-edge); }
+[data-game="parts"] .fx-hint { position: absolute; inset: -8px; border-radius: 14px; box-shadow: 0 0 0 var(--ring) var(--role-unknown); pointer-events: none; animation: parts-pulse var(--t-blink) var(--ease); }
+[data-game="parts"] .fx-tour { position: absolute; inset: 0; display: grid; place-items: center; color: var(--on-unknown); font-size: 14px; font-weight: 800; animation: parts-in 150ms var(--ease); }
+[data-game="parts"] .fx-empty .fx-tour { color: var(--role-unknown); }
+[data-game="parts"] .thumb .fx-dots, [data-game="parts"].thumb .fx-dots { gap: 3px; max-width: 62px; }
+[data-game="parts"] .thumb .fx-dot, [data-game="parts"].thumb .fx-dot { width: 10px; height: 10px; }
+[data-game="parts"].thumb .fx-tag { font-size: 16px; }
+@keyframes parts-in { from { opacity: 0; transform: scale(0.6); } }
+@keyframes parts-pulse { 50% { opacity: 0.3; } }
