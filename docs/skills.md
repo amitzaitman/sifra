@@ -1,7 +1,7 @@
 # sifra: רשימת המיומנויות
 
 טיוטה מ-2026-10-14.
-ההסברים, הרמות, הטעויות והעזרה של כל מיומנות נמצאים ב-`docs/pedagogy.md`. המזהים כאן ושם זהים,
+ההסברים, הרמות, הטעויות והעזרה של כל מיומנות נמצאים בקובץ העומק של התחום שלה (`docs/depth/`). המזהים כאן ושם זהים,
 ובדיקה אחת תשווה בין שני הקבצים ובין הקוד.
 
 ## המזהים
@@ -27,7 +27,7 @@
   ידע קיים היא ערך חדש של פרמטר, לא מזהה חדש: טווח גדול יותר (`max`), ייצוג חדש (`model`),
   כיוון (`dir`), פעולה אחרת (`op`), או לוח הכפל של 7 (`factor: 7`). תחום חדש נוסף רק לנושא חדש
   לגמרי (למשל `int`).
-- **מקום הנעלם הוא פרמטר, לא חלק מהמזהה** (החלטת הבעלים, 2026-10-14, `pedagogy.md` §8.1 ג). הדוגמה
+- **מקום הנעלם הוא פרמטר, לא חלק מהמזהה** (החלטת הבעלים, 2026-10-14, [§8.1](pedagogy.md) ג). הדוגמה
   בחוזה שב-`decisions.md` היא `num.parts.make-ten` עם `unknown: 'part'`.
 
 ### מזהה כלל טעות
@@ -41,12 +41,12 @@
 - **`slip.*` הם מעידות, לא תפיסות שגויות.** הם ממלאים מקום כשאין טעות ידועה, ומפה בעתיד
   תשקלל אותם אחרת. גם `build.other` ו-`line.estimate-off` אינם תפיסות שגויות: הם התוצאה של
   סיווג בסיבובי בנייה והערכה, כשאף כלל אחר לא מסביר את מה שהילד עשה.
-- כל כלל מוגדר בטבלת כללי הטעות ב-`pedagogy.md` (§4.2): מה הילד חשב, הנוסחה, סוג הערך, התצוגה,
+- כל כלל מוגדר בטבלת כללי הטעות ([§4.2](depth/errors.md)): מה הילד חשב, הנוסחה, סוג הערך, התצוגה,
   ומה התמונה מראה אחרי שבוחרים בו.
 
 ### מזהי תצוגה
 
-כל כלל טעות מראה מה הבחירה אומרת דרך תצוגה אחת מהרשימה הזו (`pedagogy.md` §4.1):
+כל כלל טעות מראה מה הבחירה אומרת דרך תצוגה אחת מהרשימה הזו ([§4.1](depth/README.md)):
 `count-up`, `overflow`, `flash`, `balance`, `jumps`, `pairs`, `build`, `flag`, `reverse-check`,
 `story-replay`, `label-ten`, `regroup`, `place-slot`, `running-sums`, `circle-groups`,
 `deal-out`, `overlay`, `lift-cover`, `digit-value`, `line-drop`, `empty-plate`, `too-far`, `fill`,
@@ -60,14 +60,14 @@
 | פרמטר | ערכים | מה הוא קובע |
 |---|---|---|
 | `structure` | `change-add`, `change-take`, `part-whole`, `compare`, `equation`, `equal-groups`, `array`, `share` | מבנה הבעיה. `equation` הוא תרגיל בלי סיפור (שוויון, עובדות, רב-ספרתי). מיומנויות שאינן פעולה לא מצהירות על מבנה |
-| `unknown` | בסיפורים: `result`, `change`, `start`, `whole`, `part`, `both`, `difference`, `larger`, `smaller`. ב-`equation`: `result-right`, `result-left`, `right-part`, `left-part`, `both-sides`. בכפל וחילוק: `product`, `group-size`, `groups` | מקום הנעלם. הזוגות המותרים וצורת התרגיל של כל זוג בטבלה ב-`pedagogy.md` §4.6 |
+| `unknown` | בסיפורים: `result`, `change`, `start`, `whole`, `part`, `both`, `difference`, `larger`, `smaller`. ב-`equation`: `result-right`, `result-left`, `right-part`, `left-part`, `both-sides`. בכפל וחילוק: `product`, `group-size`, `groups` | מקום הנעלם. הזוגות המותרים וצורת התרגיל של כל זוג בטבלה ב-[§4.6](depth/addsub-meaning.md) |
 | `max` | `5`, `10`, `20`, `100`, `1000`, `10000` | טווח המספרים. הטווח מתחיל ב-0, אלא אם הרמה אומרת אחרת |
-| `model` | `set`, `frame`, `rows`, `scene`, `bundles`, `place-table`, `path`, `line`, `empty-line`, `balance`, `cards`, `tree`, `plates`, `array`, `shapes`, `columns`, `bar`, `figures`, `dot-grid`, `sticks`, `units`, `ruler`, `clock`, `picto`, `pans`, `dial` | מה מצויר (`pedagogy.md` §4.1). לכל מיומנות יש סדר מותר של מודלים, והרמות לא חוזרות בו אחורה (R3). ערך המקום (`pv.*`) מצויר רק בצרורות (`bundles`), וברמה אחת גם בהקפה של עשרה בציור; אין מוטות וקוביות (החלטת הבעלים, 2026-10-14). `tree` הוא קשר מספרים, ו-`bar` מודל הפס, שניהם כמו בסינגפור. `pans` ו-`dial` הם מאזני משקל, ציור אחר ממאזני השוויון (`balance`) |
+| `model` | `set`, `frame`, `rows`, `scene`, `bundles`, `place-table`, `path`, `line`, `empty-line`, `balance`, `cards`, `tree`, `plates`, `array`, `shapes`, `columns`, `bar`, `figures`, `dot-grid`, `sticks`, `units`, `ruler`, `clock`, `picto`, `pans`, `dial` | מה מצויר ([§4.1](depth/README.md)). לכל מיומנות יש סדר מותר של מודלים, והרמות לא חוזרות בו אחורה (R3). ערך המקום (`pv.*`) מצויר רק בצרורות (`bundles`), וברמה אחת גם בהקפה של עשרה בציור; אין מוטות וקוביות (החלטת הבעלים, 2026-10-14). `tree` הוא קשר מספרים, ו-`bar` מודל הפס, שניהם כמו בסינגפור. `pans` ו-`dial` הם מאזני משקל, ציור אחר ממאזני השוויון (`balance`) |
 | `look` | `objects`, `dots`, `symbols` | כמה מוחשי המודל: חפצי סיפור, נקודות, או תרגיל בלבד. בגאומטריה, התווית של המגש (דוגמאות; דוגמאות עם נקודות וספרה; ספרה). בסרגל, תאים צבועים או סרגל רגיל. בשעון, שעון עזר או שעון רגיל |
 | `arrangement` | `rows`, `scattered`, `spread`, `wall`, `shifted`, `steps`, `apart`, `bent` | איך החפצים מסודרים: בשורות של חמש (ברירת המחדל), מפוזרים, או פרוסים לאורך. `scattered` ו-`spread` הם חריג מכוון ל-R6. בהשוואת אורכים: צמודים לקיר, מוזזים, על מדרגה, רחוקים זה מזה, או כפופים |
 | `bridge` | `none`, `ten`, `hundred` | מעבר עשרת או מאה |
 | `regroup` | `no`, `yes` | המרה (פריטה) בדו-ספרתי |
-| `wording` | `consistent`, `inconsistent` | בהשוואה עם משפט: המילה מתאימה לפעולה או הפוכה לה. לא בגרסה הראשונה (`pedagogy.md` §8.1 ט) |
+| `wording` | `consistent`, `inconsistent` | בהשוואה עם משפט: המילה מתאימה לפעולה או הפוכה לה. לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) |
 | `ask` | `pairs`, `more`, `fewer`, `equalize`, `count`, `which`, `total`, `longer`, `order`, `length`, `layout`, `other-unit`, `read`, `match`, `wind`, `about`, `possible` | מה שואלים: בהשוואה, בגרף תמונות, במדידה, בשעון ובאומדן. ברמה מעורבת, המתכנן בוחר את `ask` של כל סיבוב (R3, R11) |
 | `eqform` | `standard`, `reversed`, `both-sides` | צורת התרגיל סביב `=` |
 | `op` | `add`, `sub`, `mul`, `div` | הפעולה, במיומנויות שחלות על כמה פעולות |
@@ -85,9 +85,9 @@
 | `key` | `1`, `2` | בגרף תמונות: כמה שווה כל תמונה (המקרא). `5` ו-`10` יתווספו עם `data.bar.read` |
 | `options` | `3`, `4` | מספר האפשרויות |
 | `demo` | `true`, `false` | האם הרמה מתחילה בהדגמה שקטה (R9) |
-| `terms` | `true`, `false` | האם התרגיל הפתור מקבל תוויות אחרי תשובה נכונה (`pedagogy.md` §4.1): מחובר וסכום וכו', לפי הסימן, ובשברים ½ או ¼ על כל חלק. `true` רק ברמה של כיתה ב (רמה שמסומנת "(ב)", או רמה של מיומנות שהכותרת שלה מתחילה בכיתה ב), ורק ב-`addsub.*`, ב-`muldiv.*` וב-`frac.*`. פרמטר קבוע, כי המחולל לא יודע באיזו כיתה הילד |
-| `helpEstimate` | `true`, `false` | האם רצועת האומדן (`too-far`) מצטרפת לצעד 2 של העזרה (`pedagogy.md` §4.8). `true` רק ברמות של `addsub.multi.two-digit` ו-`addsub.multi.column` שבאות ברשימת הרמות של המשחק אחרי רמות של `addsub.multi.estimate`. פרמטר קבוע, כי המחולל לא רואה את ההיסטוריה של הילד |
-| `needsReading` | `true`, `false` | שמור. בגרסה הראשונה כל רמה היא `false`: אין סיבובים שתלויים בקריאה (החלטת הבעלים, 2026-10-14, `pedagogy.md` §8.1 ט) |
+| `terms` | `true`, `false` | האם התרגיל הפתור מקבל תוויות אחרי תשובה נכונה ([§4.1](depth/README.md)): מחובר וסכום וכו', לפי הסימן, ובשברים ½ או ¼ על כל חלק. `true` רק ברמה של כיתה ב (רמה שמסומנת "(ב)", או רמה של מיומנות שהכותרת שלה מתחילה בכיתה ב), ורק ב-`addsub.*`, ב-`muldiv.*` וב-`frac.*`. פרמטר קבוע, כי המחולל לא יודע באיזו כיתה הילד |
+| `helpEstimate` | `true`, `false` | האם רצועת האומדן (`too-far`) מצטרפת לצעד 2 של העזרה ([§4.8](depth/addsub-multi.md)). `true` רק ברמות של `addsub.multi.two-digit` ו-`addsub.multi.column` שבאות ברשימת הרמות של המשחק אחרי רמות של `addsub.multi.estimate`. פרמטר קבוע, כי המחולל לא רואה את ההיסטוריה של הילד |
+| `needsReading` | `true`, `false` | שמור. בגרסה הראשונה כל רמה היא `false`: אין סיבובים שתלויים בקריאה (החלטת הבעלים, 2026-10-14, [§8.1](pedagogy.md) ט) |
 
 ## התחומים
 
@@ -117,10 +117,10 @@
     של תוצאת חיפוש.
   - **[ס]** מקור ישראלי משני: ספר לימוד או אתר מורים, שנראה רק בתקציר. בכיתות א–ג, התגיות האלה
     נשענו על סדרת ספרים בשם "שבילים חדשים", **ששמה לא נמצא** בחיפושים של הסוקר. לכן הן ירדו
-    ל-[נ], עד שהבעלים יאשר את שם הסדרה (`pedagogy.md` §3.1, §8.2).
-  - **[סי]** סדרת סינגפור (Primary Mathematics 1A–2B), שנראתה רק בתקצירים (`pedagogy.md` §3.1).
+    ל-[נ], עד שהבעלים יאשר את שם הסדרה ([§3.1](map.md), [§8.2](pedagogy.md)).
+  - **[סי]** סדרת סינגפור (Primary Mathematics 1A–2B), שנראתה רק בתקצירים ([§3.1](map.md)).
     מאז 2026-10-14 אהרוני וסינגפור קובעים את הסדר, ותוכנית המשרד משנית. כשהכיתה כאן שונה מבית הספר,
-    כתובות שתיהן (`pedagogy.md` §3.6).
+    כתובות שתיהן ([§3.6](map.md)).
   - **[ב]** סדר בינלאומי אחר בלבד (תוכנית הליבה האמריקאית, אנגליה).
   - **[נ]** ניחוש שלנו.
 - **דרישות קודמות:** מיומנויות שבאות קודם. בגרסה הראשונה הן קובעות את סדר הרמות בתוך משחק
@@ -130,11 +130,11 @@
     `[bridge=ten] addsub.facts.bridge-add`, `[op=mul] muldiv.meaning.equal-groups`. כמה תנאים
     מופרדים בנקודה-פסיק.
   - בקוד זה יהיה `requires: { base: [...], when: [{ if: { max: '>20' }, add: [...] }] }`.
-- **עומק:** "עומק" אומר שב-`pedagogy.md` (§4) יש לה מבנים, מודלים, רמות, טעויות ועזרה. "מפה"
+- **עומק:** "עומק" אומר שבקבצי העומק ([§4](depth/README.md)) יש לה מבנים, מודלים, רמות, טעויות ועזרה. "מפה"
   אומר שיש לה רק מקום, סדר ומזהה. מחקר עומק ייעשה לפני המשחק הראשון שלה.
-  - **"מפה (§8.1 י)":** מיומנות מפה של כיתות א–ב בגאומטריה, במדידות ובנתונים. הבעלים בחר עומק לחמש
+  - **"מפה ([§8.1](pedagogy.md) י)":** מיומנות מפה של כיתות א–ב בגאומטריה, במדידות ובנתונים. הבעלים בחר עומק לחמש
     מרכזיות (2026-10-14), והעומק של השאר ייכתב לפני המשחק הראשון בתחום שלהן.
-  - **"לא בגרסה הראשונה (§8.1 ט)":** המיומנות או הרמה תלויות בקריאה, ולא נכנסות למשחק (החלטת הבעלים,
+  - **"לא בגרסה הראשונה ([§8.1](pedagogy.md) ט)":** המיומנות או הרמה תלויות בקריאה, ולא נכנסות למשחק (החלטת הבעלים,
     2026-10-14).
 - **כללי טעות:** בכל מיומנות עומק, הכללים שמייצרים את התשובות השגויות שלה, בסדר העדיפות. במיומנויות
   מפה של כיתות א–ב מופיעים כללים מועמדים בלבד.
@@ -170,16 +170,16 @@
 | `pv.numeral.digit-value` | ערך המקום | א–ב [ת] | כמה שווה הספרה | `pv.numeral.read` | ספרה מסומנת מעל צרורות וקשיות | עומק | `pv.ten-as-one-object`, `pv.wrong-digit`, `pv.whole-number` |
 | `pv.numeral.split` | ערך המקום | א–ב [ת] | מפרקים לעשרות ואחדות | `pv.numeral.read` | תרגיל משמאל לימין, והמודל מתפרק לתוך התאים שלו | עומק | `pv.digits-added`, `pv.expanded-concat`, `pv.reversed`, `pv.loose-ten-ignored`, `slip.near` |
 | `pv.numeral.ten-more` | ערך המקום | א–ב [ת] | עוד עשר, עוד אחד | `pv.numeral.read`, `count.skip.sequence` | צרור או קשית שנוספים; קפיצות של 10 על הישר | עומק | `pv.one-for-ten`, `pv.ten-for-one`, `pv.direction-swapped`, `pv.expanded-concat`, `pv.zero-dropped` |
-| `pv.numeral.words` | ערך המקום | ב [נ] | ממילים למספר | `pv.numeral.read` | צירוף מילים מנוקד שנדלק חלק אחרי חלק לתוך טבלת מקום. דורש קריאה | עומק, לא בגרסה הראשונה (§8.1 ט) | `pv.expanded-concat`, `pv.zero-dropped`, `pv.teen-reversed`, `pv.reversed` |
+| `pv.numeral.words` | ערך המקום | ב [נ] | ממילים למספר | `pv.numeral.read` | צירוף מילים מנוקד שנדלק חלק אחרי חלק לתוך טבלת מקום. דורש קריאה | עומק, לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) | `pv.expanded-concat`, `pv.zero-dropped`, `pv.teen-reversed`, `pv.reversed` |
 | `pv.units.thousands` | ערך המקום | ג [ת] | אלף ורבבה: שמות היחידות והמרות | `pv.numeral.read` | טבלת מקום; עשרה צרורות של מאה נקשרים לצרור של אלף | מפה | — |
 | `pv.units.millions` | ערך המקום | ד [ת] | עד מיליון: שמות היחידות והמרות | `pv.units.thousands` | טבלת מקום | מפה | — |
 | `addsub.meaning.change-add` | חיבור וחיסור | א [ת] | הוסיפו | `count.set.how-many` | חפצי סיפור, אחר כך נקודות; מכסה `?` על הנעלם | עומק | `op.other`, `given.whole`, `given.part`, `count.start-included`, `slip.near` |
 | `addsub.meaning.change-take` | חיבור וחיסור | א [ת] | לקחו | `count.set.how-many` | כמו הוסיפו; חפץ שהלך משאיר קו מתאר | עומק | `op.other`, `given.whole`, `given.part`, `op.swapped-subtraction`, `count.start-included`, `slip.near` |
 | `addsub.meaning.part-whole` | חיבור וחיסור | א [ת] | שני חלקים ושלם | `num.parts.split` | סל עם שני צבעים; מכסה `?` מעל צבע אחד; אחר כך קשר מספרים (סינגפור 1A) | עומק | `op.other`, `given.whole`, `given.part`, `slip.near` |
-| `addsub.meaning.compare` | חיבור וחיסור | א–ב [ב] | השוואה | `num.compare.sets`, `addsub.meaning.change-take` | שתי שורות מחוברות בזוגות; סוגר `?` מעל מה שאין לו זוג; בתמונה בלבד; בכיתה ב, מודל הפס (סינגפור) | עומק. רמה 7 (משפט) לא בגרסה הראשונה (§8.1 ט) | `given.larger`, `given.smaller`, `op.other`, `slip.near`; ברמה 7 בלבד, שלא בגרסה הראשונה: `keyword.added`, `keyword.inverted` |
+| `addsub.meaning.compare` | חיבור וחיסור | א–ב [ב] | השוואה | `num.compare.sets`, `addsub.meaning.change-take` | שתי שורות מחוברות בזוגות; סוגר `?` מעל מה שאין לו זוג; בתמונה בלבד; בכיתה ב, מודל הפס (סינגפור) | עומק. רמה 7 (משפט) לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) | `given.larger`, `given.smaller`, `op.other`, `slip.near`; ברמה 7 בלבד, שלא בגרסה הראשונה: `keyword.added`, `keyword.inverted` |
 | `addsub.meaning.mixed` | חיבור וחיסור | א–ב [נ] | איזה סיפור | `addsub.meaning.change-add`, `addsub.meaning.change-take`, `addsub.meaning.part-whole` | אותו מראה לכל המבנים; המתכנן בוחר את המבנה של כל סיבוב | עומק | `op.other`, `given.whole`, `given.part`, `given.larger`, `given.smaller`, `count.start-included`, `slip.near` |
 | `addsub.meaning.match-story` | חיבור וחיסור | א–ב [ת] | מתרגיל לסיפור | `addsub.meaning.change-add`, `addsub.meaning.change-take` | כרטיסי סיפור מצוירים לצד תרגיל | עומק | `story.other-op`, `story.roles`, `story.other-numbers`, `story.result-form` |
-| `addsub.meaning.two-step` | חיבור וחיסור | ב–ג [ב] | שני שלבים | `addsub.meaning.mixed` | דורש קריאה: לא בגרסה הראשונה (§8.1 ט), ולא מתוכנן | מפה | ייקבעו במחקר העומק |
+| `addsub.meaning.two-step` | חיבור וחיסור | ב–ג [ב] | שני שלבים | `addsub.meaning.mixed` | דורש קריאה: לא בגרסה הראשונה ([§8.1](pedagogy.md) ט), ולא מתוכנן | מפה | ייקבעו במחקר העומק |
 | `addsub.facts.count-on` | חיבור וחיסור | א [ת] | סופרים מהגדול | `count.on.continue`, `eq.props.commutative` | מכסה עם ספרה; קפיצות על הישר | עומק | `count.start-included`, `given.part`, `op.other`, `slip.near` |
 | `addsub.facts.think-addition` | חיבור וחיסור | א–ב [ת] | חיסור כהשלמה | `num.parts.split`, `count.on.continue` | קפיצות על הישר מהמחסר אל המחוסר | עומק | `line.landing`, `given.part`, `count.start-included`, `op.other` |
 | `addsub.facts.doubles` | חיבור וחיסור | א [נ] | כפולים | `count.set.how-many` | שתי שורות זהות | עומק | `double.neighbor`, `given.part`, `slip.near` |
@@ -216,7 +216,7 @@
 | `muldiv.facts.derived` | כפל וחילוק | ג [נ] | עובדות מעובדה ידועה | `muldiv.facts.skip-count`, `muldiv.meaning.array` | מערך שמתפצל; הקשרים של אהרוני: מ-`6 × 5` ל-`7 × 5`, `9 × n = 10 × n − n`, ו-`5 × n` כחצי של `10 × n`, בצלחות (המספר הראשון סופר את הקבוצות) | מפה | — |
 | `muldiv.facts.recall` | כפל וחילוק | ג [נ] | לוח הכפל מהזיכרון | `muldiv.facts.derived`, `muldiv.facts.divide` | תרגיל בלבד | מפה | — |
 | `muldiv.div.remainder` | כפל וחילוק | ג [נ] | חילוק עם שארית | `muldiv.facts.divide`, `muldiv.share.equal` | צלחות, והשארית בחוץ | מפה | — |
-| `muldiv.div.remainder-meaning` | כפל וחילוק | ג–ה [נ] | מה עושים עם השארית | `muldiv.div.remainder` | תמונת מצב ומשפט. דורש קריאה: לא בגרסה הראשונה (§8.1 ט) | מפה | — |
+| `muldiv.div.remainder-meaning` | כפל וחילוק | ג–ה [נ] | מה עושים עם השארית | `muldiv.div.remainder` | תמונת מצב ומשפט. דורש קריאה: לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) | מפה | — |
 | `muldiv.multi.by-tens` | כפל וחילוק | ג [ת] | כפל בעשרות ובמאות | `muldiv.facts.recall`, `pv.numeral.read` | טבלת מקום שהספרות זזות בה | מפה | — |
 | `muldiv.multi.by-one-digit` | כפל וחילוק | ג–ד [ת] | כפל בחד-ספרתי | `muldiv.multi.by-tens`, `eq.props.distributive` | מלבן שטח | מפה | — |
 | `muldiv.multi.column` | כפל וחילוק | ד–ה [ת] | כפל במאונך | `muldiv.multi.by-one-digit` | מלבן שטח, ואחר כך טורים | מפה | — |
@@ -259,17 +259,17 @@
 | `ratio.percent.meaning` | יחס ואחוזים | ו [ת] | אחוז מתוך 100 | `dec.place.hundredths`, `frac.equiv.names` | ריבוע 10 על 10; פס עם סולם אחוזים | מפה | — |
 | `ratio.percent.benchmark` | יחס ואחוזים | ו [ת] | 50%, 25%, 10% | `ratio.percent.meaning` | פס עם אחוז, שבר ועשרוני | מפה | — |
 | `ratio.percent.of-quantity` | יחס ואחוזים | ו [ת] | אחוז מכמות | `ratio.percent.benchmark`, `frac.nonunit.of-set` | ישר כפול | מפה | — |
-| `ratio.percent.change` | יחס ואחוזים | ו [נ] | הנחה והתייקרות | `ratio.percent.of-quantity` | פס. דורש קריאה: לא בגרסה הראשונה (§8.1 ט) | מפה | — |
+| `ratio.percent.change` | יחס ואחוזים | ו [נ] | הנחה והתייקרות | `ratio.percent.of-quantity` | פס. דורש קריאה: לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) | מפה | — |
 | `ratio.meaning.compare` | יחס ואחוזים | ו [ת] | איזה מיץ חזק יותר | `muldiv.facts.recall` | כוסות מיץ ומים | מפה | — |
 | `ratio.meaning.equivalent` | יחס ואחוזים | ו [ת] | יחסים שווים | `ratio.meaning.compare` | טבלת יחס מצוירת; ישר כפול | מפה | — |
 | `ratio.meaning.part-whole` | יחס ואחוזים | ו [ת] | יחס ושבר מהכול | `ratio.meaning.equivalent`, `frac.equiv.names` | פס בשני צבעים | מפה | — |
 | `ratio.scale.map` | יחס ואחוזים | ו [ת] | קנה מידה | `ratio.meaning.equivalent` | מפה על רשת | מפה | — |
-| `ratio.rate.unit` | יחס ואחוזים | ו–ז [נ] | מחיר ליחידה ומהירות | `ratio.meaning.equivalent` | ישר כפול. דורש קריאה: לא בגרסה הראשונה (§8.1 ט) | מפה | — |
+| `ratio.rate.unit` | יחס ואחוזים | ו–ז [נ] | מחיר ליחידה ומהירות | `ratio.meaning.equivalent` | ישר כפול. דורש קריאה: לא בגרסה הראשונה ([§8.1](pedagogy.md) ט) | מפה | — |
 | `int.meaning.negative` | מספרים מכוונים | ז [ת] | מספרים שליליים (שמור) | `num.line.locate` | ישר משני צדי 0 | מפה | — |
 | `geo.shape.polygons` | גאומטריה | א–ב [ת] | מצולעים | `[look=dots] count.set.how-many`; `[look=symbols] count.set.how-many` | מגש עם שתי דוגמאות שונות ותא `?`; צורות בקו מתאר בכיוונים, בגדלים ובפרופורציות שונים; לא-דוגמאות קרובות (פתח, צלע עקומה, פינות מעוגלות, צלע אחת יותר או פחות); אחר כך נקודות בקודקודים ותג ספרה; לוח נקודות לבנייה (ב). נגיעה בלבד | עומק | `shape.open-accepted`, `shape.curved-accepted`, `shape.rounded-accepted`, `shape.one-side-off`, `shape.slanted-accepted`, `shape.near-square`, `shape.turned-rejected`, `shape.irregular-rejected`, `build.other` |
-| `geo.shape.attributes` | גאומטריה | ב [ת] | צלעות וקודקודים | `geo.shape.polygons` | צורות; נגיעה בכל צלע או קודקוד | מפה (§8.1 י) | מועמדים: `shape.turned-rejected`, `shape.irregular-rejected`, `shape.one-side-off` |
-| `geo.solid.parts` | גאומטריה | ב [נ] | פאות, מקצועות, קודקודים | `geo.shape.attributes` | גוף מכמה מבטים | מפה (§8.1 י) | מועמדים: `solid.visible-only` |
-| `geo.triangle.classify` | גאומטריה | ב–ג [נ] | סוגי משולשים | `geo.shape.attributes` | משולשים בכיוונים שונים | מפה (§8.1 י) | ייקבעו במחקר העומק |
+| `geo.shape.attributes` | גאומטריה | ב [ת] | צלעות וקודקודים | `geo.shape.polygons` | צורות; נגיעה בכל צלע או קודקוד | מפה ([§8.1](pedagogy.md) י) | מועמדים: `shape.turned-rejected`, `shape.irregular-rejected`, `shape.one-side-off` |
+| `geo.solid.parts` | גאומטריה | ב [נ] | פאות, מקצועות, קודקודים | `geo.shape.attributes` | גוף מכמה מבטים | מפה ([§8.1](pedagogy.md) י) | מועמדים: `solid.visible-only` |
+| `geo.triangle.classify` | גאומטריה | ב–ג [נ] | סוגי משולשים | `geo.shape.attributes` | משולשים בכיוונים שונים | מפה ([§8.1](pedagogy.md) י) | ייקבעו במחקר העומק |
 | `geo.lines.relations` | גאומטריה | ג–ד [ת] | ישרים מקבילים ומאונכים | `geo.shape.attributes` | זוגות קווים בזוויות שונות | מפה | — |
 | `geo.quad.classify` | גאומטריה | ג–ה [ת] | מרובעים | `geo.lines.relations`, `meas.angle.classify` | "געו בכל המלבנים" | מפה | — |
 | `geo.symmetry.line` | גאומטריה | ג–ד [נ] | ציר סימטריה | `geo.shape.attributes` | קיפול כמשוב | מפה | — |
@@ -280,10 +280,10 @@
 | `meas.length.units` | מדידות | א–ב [ת]; סרגל בכיתה ב [סי] | מודדים ביחידות | `meas.length.compare`, `count.set.how-many`; `[model=ruler] count.sequence.next`; `[max>20] pv.numeral.read` | מקלות זהים קצה אל קצה מתחת לחפץ, ושורה ארוכה ממנו; ארבע מדידות לשיפוט; מקל כפול ומכסה `?`; סרגל עם תאים, אחר כך סרגל רגיל, חפץ מוזז וסרגל שבור; מטר עם חלון זום | עומק | `line.landing`, `count.start-included`, `measure.whole-scale`, `measure.ignores-unit`, `measure.bigger-unit-more`, `measure.gaps`, `measure.overlaps`, `measure.not-from-start`, `measure.mixed-units`, `line.snapped-landmark`, `count.skipped-one`, `count.double`, `slip.near` |
 | `meas.time.clock` | מדידות | א–ב [סי]; ב בבית הספר [ת] | שעון מחוגים: שעה וחצי שעה, ובכיתה ב רבעים וחמש דקות | `count.skip.sequence`, `frac.parts.equal-shares` | שעון מחוגים מחובר (תוכן, לא שעון עצר; R10), שעון עזר עם טבעת שעות ואחר כך שעון רגיל; כרטיסים ספרתיים `h:mm` משמאל לימין; קוראים, מתאימים, או מגלגלים בחצים | עומק | `clock.next-hour`, `clock.hour-hand-still`, `clock.hands-swapped`, `clock.half-flip`, `clock.numeral-as-minutes`, `clock.minutes-mirrored`, `build.other` |
 | `meas.time.elapsed` | מדידות | ג [נ] | משך זמן | `meas.time.clock` | ציר זמן | מפה | — |
-| `meas.money.coins` | מדידות | א–ב [נ] | מטבעות | `pv.numeral.read` | מטבעות שקל (תוכן, לא פרס; R10) | מפה (§8.1 י) | מועמדים: `coin.count-not-value` |
-| `meas.volume.compare` | מדידות | ב [ת] | משווים נפחים ומבני קוביות | `count.set.how-many` | כלים; מבני קוביות | מפה (§8.1 י) | מועמדים: `volume.visible-faces` |
-| `meas.mass.units` | מדידות | א–ג [סי]; ג בבית הספר [ת] | משקל: משווים, ואחר כך קילוגרם וגרם | `meas.length.compare`; `[model=dial] pv.numeral.read` | מאזני משקל עם כפות תלויות וחפצים אמיתיים (`pans`; השוואה בלי יחידות, 1A), ואחר כך מאזני מחוג (`dial`; קילוגרם וגרם, 2A). במאזני משקל חפץ גדול שוקל יותר בצדק, ולכן הם מצוירים אחרת ממאזני השוויון, במסגרת בצבע ובצורה אחרים (`pedagogy.md` R6, §4.4). קריאת מספרים נדרשת רק ב-`dial` | מפה (§8.1 י) | ייקבעו במחקר העומק |
-| `meas.capacity.units` | מדידות | ב–ג [סי]; ג בבית הספר [ת] | נפח בליטרים | `pv.numeral.read` | כד עם סולם (2B) | מפה (§8.1 י) | ייקבעו במחקר העומק |
+| `meas.money.coins` | מדידות | א–ב [נ] | מטבעות | `pv.numeral.read` | מטבעות שקל (תוכן, לא פרס; R10) | מפה ([§8.1](pedagogy.md) י) | מועמדים: `coin.count-not-value` |
+| `meas.volume.compare` | מדידות | ב [ת] | משווים נפחים ומבני קוביות | `count.set.how-many` | כלים; מבני קוביות | מפה ([§8.1](pedagogy.md) י) | מועמדים: `volume.visible-faces` |
+| `meas.mass.units` | מדידות | א–ג [סי]; ג בבית הספר [ת] | משקל: משווים, ואחר כך קילוגרם וגרם | `meas.length.compare`; `[model=dial] pv.numeral.read` | מאזני משקל עם כפות תלויות וחפצים אמיתיים (`pans`; השוואה בלי יחידות, 1A), ואחר כך מאזני מחוג (`dial`; קילוגרם וגרם, 2A). במאזני משקל חפץ גדול שוקל יותר בצדק, ולכן הם מצוירים אחרת ממאזני השוויון, במסגרת בצבע ובצורה אחרים ([R6](rules.md), [§4.4](depth/number-sense.md)). קריאת מספרים נדרשת רק ב-`dial` | מפה ([§8.1](pedagogy.md) י) | ייקבעו במחקר העומק |
+| `meas.capacity.units` | מדידות | ב–ג [סי]; ג בבית הספר [ת] | נפח בליטרים | `pv.numeral.read` | כד עם סולם (2B) | מפה ([§8.1](pedagogy.md) י) | ייקבעו במחקר העומק |
 | `meas.area.units` | מדידות | ג [נ] | שטח ביחידות | `muldiv.meaning.array` | רשת; אריחים בנגיעה | מפה | — |
 | `meas.perimeter.units` | מדידות | ג–ד [נ] | היקף | `meas.length.units`, `addsub.multi.two-digit` | גדר סביב אריחים | מפה | — |
 | `meas.area.vs-perimeter` | מדידות | ד [נ] | שטח מול היקף | `meas.area.units`, `meas.perimeter.units` | אריחים וגדר | מפה | — |
@@ -298,6 +298,6 @@
 | `meas.volume.cubes` | מדידות | ה [נ] | נפח בקוביות | `meas.volume.compare`, `muldiv.meaning.array` | קופסה ושכבות | מפה | — |
 | `meas.volume.box` | מדידות | ה–ו [ס] | נפח תיבה | `meas.volume.cubes`, `muldiv.facts.recall` | שכבות | מפה | — |
 | `data.picto.read` | נתונים | א–ב [ת]; מקרא בכיתה ב [סי] | קוראים גרף תמונות | `count.set.how-many`; `[ask=which] num.compare.sets`; `[ask=more] addsub.meaning.compare`; `[ask=total] addsub.meaning.part-whole`; `[key=2] count.skip.sequence` | גרף תמונות (`picto`): שורה לכל סוג משמאל לימין, תמונות זהות בתאים שווים; סוגר `?` על מה ששואלים; ברמה 1 בונים מערמה בנגיעות; בכיתה ב מקרא "תמונה = 2" | עומק | `graph.counted-pictures`, `graph.other-category`, `graph.counted-categories`, `given.larger`, `given.smaller`, `given.part`, `op.other`, `groups.added`, `groups.one-group-off`, `compare.spread`, `compare.size`, `compare.flipped`, `compare.level-when-close`, `count.skipped-one`, `count.double`, `slip.near`, `slip.far` |
-| `data.bar.read` | נתונים | ב–ד [ת] | קוראים דיאגרמת עמודות | `num.compare.numbers` | עמודות בלי ציורים בתוכן | מפה (§8.1 י) | מועמדים: `graph.counted-pictures`, `graph.other-category` |
+| `data.bar.read` | נתונים | ב–ד [ת] | קוראים דיאגרמת עמודות | `num.compare.numbers` | עמודות בלי ציורים בתוכן | מפה ([§8.1](pedagogy.md) י) | מועמדים: `graph.counted-pictures`, `graph.other-category` |
 | `data.chance.compare` | נתונים | ד [ת] | סיכוי | `frac.unit.compare` | שקיות כדורים | מפה | — |
 | `data.mean.average` | נתונים | ה–ו [נ] | ממוצע | `muldiv.div.long` | עמודות שמתיישרות | מפה | — |
