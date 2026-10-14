@@ -1,16 +1,16 @@
-// lib/planner.js: the dev-spec R3/R11 [unit] list (architecture 4.3), with the fixtures standing
+// shell/planner.js: the dev-spec R3/R11 [unit] list (architecture 4.3), with the fixtures standing
 // for ten-frame (parts) and balance (scale), the learning order, and the pedagogy 5.12 walk.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
-import { moveTo, startLadder, step } from '../lib/ladder.js';
+import { moveTo, startLadder, step } from '../shell/ladder.js';
 import {
   addDays, dayOf, daysBetween, homeOrder, mastered, nextStep, pickMix, planSession, prereqs, reviews, schedule,
   skillPassed, stuckTarget,
-} from '../lib/planner.js';
-import { rng } from '../lib/rng.js';
-import { newChild } from '../lib/store.js';
+} from '../shell/planner.js';
+import { rng } from '../shell/rng.js';
+import { newChild } from '../shell/store.js';
 import { SKILLS } from '../data/skills.js';
 import { learningOrder } from '../scripts/gen-data.js';
 import { SKILLS as SKILLS_MD, parseSkills, parseStrands, read } from '../scripts/docs-parse.js';

@@ -3,7 +3,7 @@
 import { expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 
 export const FIXTURE = '/e2e/fixture.html';
 export const INDEX = '/index.html';

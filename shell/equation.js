@@ -12,7 +12,7 @@ const span = (className, text) => Object.assign(document.createElement('span'), 
  * @param {HTMLElement} host
  * @param {Equation | null} equation
  * @param {unknown} answer
- * @param {(mark?: string) => HTMLElement} makeCover lib/cover.js (lib modules import nothing)
+ * @param {(mark?: string) => HTMLElement} makeCover the cover maker, lib/cover.js
  * @returns {{ row: HTMLElement, covers: HTMLElement[] }}
  */
 export function drawEquation(host, equation, answer, makeCover) {

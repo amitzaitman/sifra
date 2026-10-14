@@ -8,7 +8,7 @@ import * as registry from '../games/registry.js';
 import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 import {
   CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectTouchTargets,
   ladderAt, roundOf, seedStore, skillState, storeWith, stored,

@@ -1,7 +1,7 @@
-// lib/rng.js (architecture 3.8, 4.3).
+// shell/rng.js (architecture 3.8, 4.3).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { demoSeed, rng, seedFrom } from '../lib/rng.js';
+import { demoSeed, rng, seedFrom } from '../shell/rng.js';
 
 test('the same seed gives the same sequence; another seed another', () => {
   const draw = (seed) => Array.from({ length: 50 }, rng(seed).next);

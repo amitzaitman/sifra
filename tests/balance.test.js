@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
 import { bridges, ghostSlots, layoutLine, layoutPan, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
 /** Every round of a level over 200 seeds. */

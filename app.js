@@ -1,13 +1,13 @@
 // The sifra shell (docs/architecture.md section 3): routes, screens, sessions, the round runner,
 // demos and the error screen. The shell owns levels, storage and records; games only draw.
-import { drawCards } from './lib/cards.js';
+import { drawCards } from './shell/cards.js';
 import { cover } from './lib/cover.js';
-import { drawEquation, fitEquation, solveEquation } from './lib/equation.js';
-import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './lib/ladder.js';
-import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './lib/planner.js';
-import { demoSeed, rng, seedFrom } from './lib/rng.js';
+import { drawEquation, fitEquation, solveEquation } from './shell/equation.js';
+import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
+import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
+import { demoSeed, rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
-import { CAPS, capped, childOf, exportFile, load, save } from './lib/store.js';
+import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
 import { RULES } from './data/errors.js';
 import { SKILLS } from './data/skills.js';
 import { TOPICS, VERIFIED } from './data/videos.js';

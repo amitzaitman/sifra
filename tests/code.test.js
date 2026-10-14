@@ -2,15 +2,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { posix } from 'node:path';
 import { listFiles, read } from '../scripts/docs-parse.js';
 import { GAMES } from './all-games.js';
 import { TOPICS } from '../data/videos.js';
 
 const all = listFiles(['.js', '.css', '.html', '.webmanifest']);
 const lib = all.filter((f) => f.startsWith('lib/'));
+// The shell's own modules (owner decision 2026-10-14, "להפריד את המעטפת"): only app.js imports them.
+const shell = all.filter((f) => f.startsWith('shell/'));
 // The games: registered ones and the fixtures, which keep the same rules.
 const gameFiles = all.filter((f) => /^(games\/[^/]+\/|tests\/fixtures\/)/.test(f));
-const site = all.filter((f) => /^(index\.html|manifest\.webmanifest|app\.(js|css)|lib\/|data\/|games\/)/.test(f));
+const site = all.filter((f) => /^(index\.html|manifest\.webmanifest|app\.(js|css)|lib\/|shell\/|data\/|games\/)/.test(f));
 const REWARD = [
   'כל הכבוד', 'מצוין', 'מצוינת', 'מצוינים', 'מעולה', 'יופי', 'נהדר', 'נפלא', 'אלוף', 'אלופה', 'אלופים', 'גאון', 'כוכב',
   'כוכבים', 'פרס', 'פרסים', 'ניצחון', 'ניצחתם', 'גביע', 'מדליה', 'רצף', 'בונוס', 'עליתם רמה', 'ירדתם רמה', 'שיא', 'הישג', 'יהלום',
@@ -29,11 +32,11 @@ function scan(files, pattern, what) {
 const none = (problems) => assert.ok(problems.length === 0, problems.join('\n'));
 
 test('no timers in site code (R10): setTimeout, setInterval, requestAnimationFrame', () => {
-  none(scan(['app.js', ...lib, ...gameFiles.filter((f) => f.endsWith('.js'))], /\b(setTimeout|setInterval|requestAnimationFrame)\b/, 'a timer'));
+  none(scan(['app.js', ...shell, ...lib, ...gameFiles.filter((f) => f.endsWith('.js'))], /\b(setTimeout|setInterval|requestAnimationFrame)\b/, 'a timer'));
 });
 
-test('no Math.random in lib/ or games (makeRound uses its rng)', () => {
-  none(scan([...lib, ...gameFiles], /Math\.random/, 'Math.random'));
+test('no Math.random in shell/, lib/ or games (makeRound uses its rng)', () => {
+  none(scan([...shell, ...lib, ...gameFiles], /Math\.random/, 'Math.random'));
 });
 
 test('games never touch storage, wait for animationend, or make their own cover', () => {
@@ -59,6 +62,25 @@ test('lib/ imports nothing and stays under 600 lines', () => {
   none(scan(lib, /^\s*import\b|\bimport\(/, 'an import'));
   const lines = lib.reduce((n, f) => n + read(f).split('\n').length - 1, 0);
   assert.ok(lines < 600, `lib/ has ${lines} lines`);
+});
+
+/**
+ * The repo paths a JS file imports, resolved from its folder (bare and URL specifiers as written).
+ * @param {string} file
+ */
+const importsOf = (file) => [...read(file).matchAll(/^\s*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]/gm)]
+  .map((m) => m[1] ?? m[2] ?? m[3])
+  .map((spec) => (spec.startsWith('.') ? posix.join(posix.dirname(file), spec) : spec));
+
+test('shell/ imports only lib/, data/ and shell/; games never import shell/ or app.js; a game imports every lib/ module', () => {
+  // Who imports a module decides where it lives (owner decision 2026-10-14): a module only the shell
+  // imports is in shell/, and a game never reaches the shell's levels, storage or session (condition 1).
+  const gameJs = gameFiles.filter((f) => f.endsWith('.js') && f.startsWith('games/'));
+  none([
+    ...shell.flatMap((f) => importsOf(f).filter((p) => !/^(lib|data|shell)\//.test(p)).map((p) => `${f}: imports ${p}`)),
+    ...gameFiles.filter((f) => f.endsWith('.js')).flatMap((f) => importsOf(f).filter((p) => /^shell\/|^app\.js$/.test(p)).map((p) => `${f}: imports ${p}`)),
+    ...lib.filter((m) => !gameJs.some((f) => importsOf(f).includes(m))).map((m) => `${m}: no game imports it; the shell's own code goes in shell/`),
+  ]);
 });
 
 // Features newer than Safari 16.4 (CLAUDE.md: the target). Neither the ES2022 + DOM type lib nor CI's
@@ -92,7 +114,7 @@ test('no reward words in titles, text templates and the shell (R10, compared wit
   const strings = [
     ...GAMES.flatMap((g) => [g.meta.title, ...g.text]),
     ...TOPICS.flatMap((t) => [t.title, ...t.videos.flatMap((v) => [v.label, v.who])]),
-    ...['app.js', 'index.html', 'manifest.webmanifest', ...lib].flatMap((f) => read(f).match(/[֐-׿][֐-׿\s'"-]*/g) ?? []),
+    ...['app.js', 'index.html', 'manifest.webmanifest', ...shell, ...lib].flatMap((f) => read(f).match(/[֐-׿][֐-׿\s'"-]*/g) ?? []),
   ].map(plain);
   const words = (s) => s.split(/[^א-ת]+/).filter(Boolean);
   none(strings.flatMap((s) => REWARD.filter((r) => (r.includes(' ') ? s.includes(r) : words(s).includes(r))).map((r) => `"${s}": ${r}`)));

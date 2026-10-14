@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { GAMES } from './all-games.js';
 import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 import { RULES } from '../data/errors.js';
 import { FORMS } from '../data/forms.js';
 import { MODEL_ORDER } from '../data/models.js';

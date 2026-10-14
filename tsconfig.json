@@ -11,5 +11,5 @@
     "noImplicitAny": false,
     "skipLibCheck": true
   },
-  "include": ["types.d.ts", "app.js", "lib", "games", "data"]
+  "include": ["types.d.ts", "app.js", "shell", "lib", "games", "data"]
 }

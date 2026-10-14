@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
-import { rng } from '../lib/rng.js';
+import { rng } from '../shell/rng.js';
 import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, ladderAt, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const ID = 'ten-frame';
