@@ -96,8 +96,9 @@ dev-spec A.1 is the shape, with these precisions:
   with numbers and operators on both sides and no `'?'`; every choice is such a card; the answer card is true and every
   other card false. `equation` is `null` (the exercises are on the cards, so the equation row is empty until the round
   is solved; then the game writes the true card there with `setEquation`, so the full exercise is on screen, R5), there is no `unknown`
-  and no §4.6 row, and `picture` is the game's own stage (it may hold no groups). Values compare by deep equality,
-  whatever their key order. The shell's card label reads the tokens (`5 + 2 = 7`); `face` draws the card on one
+  and no §4.6 row, and `picture` is the game's own stage (it may hold no groups). The balance's judging round also
+  carries `fact: [a, b]`, the exercise `a + b = c` every card is made of: a true `7 = 7` shows no parts, and the
+  catalogue's card formulas need them (depth §4.9). Values compare by deep equality, whatever their key order. The shell's card label reads the tokens (`5 + 2 = 7`); `face` draws the card on one
   line and may set its own `aria-label`.
 
 ### 2.4 render and the RoundView
@@ -186,7 +187,8 @@ dev-spec A.1 is the shape, with these precisions:
 ### 2.8 Drawing, CSS and hooks
 
 - A representation is a pure layout function (`layoutFrame(data)`, tested in Node for R6 [unit]) and a drawing
-  function `drawFrame(host, data)` (condition 6), coloured only through role tokens. Both live in one module that
+  function `drawFrame(host, data)` (condition 6), coloured only through role tokens (the second of two known parts in
+  one picture: `--role-part-2`, marked `data-second`). Both live in one module that
   imports nothing (balance `stage.js`, ten-frame `draw.js`), so it can move to lib/ unchanged; the cover maker comes
   in data (its `cover` key), because a lib/ module cannot import lib/cover.js. The game passes it in.
 - `data-role` only on quantity elements, never on frames, trays without a role, text or the equation. The unknown is
@@ -417,7 +419,9 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
 - `tests/docs.test.js` as today, importing its parsers from scripts/docs-parse.js; `tests/sync.test.js` regenerates
   data/ in memory and compares byte for byte (and the videos.js URLs with the doc's); `tests/games.test.js` (4.2);
   `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js` (4.3);
-  `tests/code.test.js` (4.4); `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
+  `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3 and 10: the colour tokens measured from app.css, the
+  role fills, `--role-removed` and the part's second shade apart, text and graphics contrast); `tests/<id>.test.js`
+  per game, from its branch (layout functions, R6 [unit]).
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
   `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
   `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`
@@ -521,7 +525,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `[data-math]` (attribute, computed direction, characters left to right); R10 (animations only on `[data-role]`,
   `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser]
   (text hidden, every control has `[data-icon]`, a screenshot per level for the owner); R6 [browser] (every
-  `[data-role]` element has its role token in `fill` or `background-color`).
+  `[data-role]` element has its role token in `fill` or `background-color`; a `[data-second]` part, `--role-part-2`).
 
 ### 4.7 Each game spec (e2e/<id>.spec.js)
 
@@ -604,17 +608,58 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | `ten-frame` level 9 | `unknown: part`, `14 = 10 + ?`: cards 4, 10 (`given.part`), 14 (`given.whole`) and a `slip.near`, as pedagogy §6.2 says; `given.whole` and `given.part` join `pv.teens.ten-and`'s rules (skills.md, depth §4.5) and data/ is regenerated. Decided 2026-10-14, see decisions.md | With the skill's rules before, `14 = 10 + ?` had only `slip.near` as a wrong card (no `pv.*` rule has a value there: the answer is a single digit, §4.2), short of R4's two real errors, so the game played `10 + 4 = ?` and `? = 10 + 4` |
 | `5 + 5` and doubles (`ten-frame`) | About one round in five of a `num.parts.split` level is a double, and of a `num.parts.make-ten` level `5 + ? = 10`; there `given.part` equals the answer, so its card gives way to the next rule in the list: a slip card (the answer plus or minus 1) on a 4-card level, `op.other` on level 1, whose 3 cards keep R4's two real errors. Level 4 (pairs, no given part) never left doubles out and is unchanged. Depth §4.4 states this R4 exception, and R4 points to it. Decided 2026-10-14, see decisions.md | Leaving them out kept `given.part` off the answer (R4: the main rules give different values), but dropped `5 + 5`, one of the five pairs of ten, and every double |
 | R8 in `num.parts.split` and `addsub.facts.bridge-add` | `ten-frame` level 3 (the bond) also gets reversed forms (`9 = 3 + ?`), level 12 also `result-left` rounds (`? = 8 + 5`); pedagogy §6.2 changes with them. Decided 2026-10-14, see decisions.md | R8 asks for some rounds with the unknown or the result left of `=` after a skill's first level, and §6.2 gave `eqform` only to levels 7 and 9 |
-| Two known numbers in one picture (`balance`) | A second part colour, light yellow: a lighter shade of the part yellow with a visible edge, for the second of two known numbers in one picture. The colour, not a new row, keeps them apart: piles go back to continuous rows of five, so design 6.8's rows of five compare the pans again; `same` shows two colours, and in `turn` the colours change sides. The token joins design §3 (its role, contrast on `--paper`, its edge and a digit on it, a colour-blind check against the part yellow), R6 and every list of role colours (CLAUDE.md and decisions.md condition 6, this file), and replaces the row per number. Decided 2026-10-14, see decisions.md | Pedagogy §6.3 row 1 and depth §4.9 ask for two colours, and `turn` is about the colours changing sides; with one part colour the game started each known number on a new row, so `5 + 3` was a row of five and a row of three |
+| Two known numbers in one picture (`balance`) | A second part colour, light yellow: a lighter shade of the part yellow with a visible edge, for the second of two known numbers in one picture. The colour, not a new row, keeps them apart: piles go back to continuous rows of five, so design 6.8's rows of five compare the pans again; `same` shows two colours, and in `turn` the colours change sides. The token joins design §3 (its role, contrast on `--paper`, its edge and a digit on it, a colour-blind check against the part yellow), R6 and every list of role colours (CLAUDE.md and decisions.md condition 6, this file), and replaces the row per number. Built: `--role-part-2: #FFEDB8` with the part edge, on a part marked `data-second` (`paint` in stage.js); `? = a + b` covers the sum's places in the same rows; in `relational` the cubes that change group stay in place and change colour (an engineering decision the owner may reverse, decisions.md); tests/tokens.test.js measures it. Whether the shade reaches the ten-frame is open (below). Decided 2026-10-14, see decisions.md | Pedagogy §6.3 row 1 and depth §4.9 ask for two colours, and `turn` is about the colours changing sides; with one part colour the game started each known number on a new row, so `5 + 3` was a row of five and a row of three |
 | The step-3 tour in `same`, `relational` and `turn` | R5's tour, ending on the answer: `same` counts on over the left pan's second group to the total; `relational` and `turn` count the unknown from 1. Depth §4.9's help (3) lines of `eq.sign.same-as`, `eq.sign.relational` and `eq.props.commutative` say so. Decided 2026-10-14, see decisions.md | Counting both pans, both sides or both colours ends on a side's total, not on the answer, and R5 ends every tour on the answer |
-| The judging round's cards (`balance` `true-false`) | The true card varies among the forms `7 = 7`, `5 + 2 = 7` and `7 = 5 + 2`, and the false cards take the same forms, so a card's shape tells nothing. The catalogue rules the false cards need join §4.2, depth §4.9 and `eq.sign.true-false`'s rules in skills.md, keeping R4: every wrong card has a rule, real errors before slips. Decided 2026-10-14, see decisions.md | The true card was always `c = a + b` and `7 = 7` never appeared; two cards had a lone number on the left, one of them true, so the shape alone narrowed four cards to two. `equal.reject-reversed` has a value only when the true card is reversed (§4.2), so a true card in another form needs another real error for R4's two |
+| The judging round's cards (`balance` `true-false`) | The true card varies among the forms `7 = 7`, `5 + 2 = 7` and `7 = 5 + 2`, and the false cards take the same forms, so a card's shape tells nothing. Built: every round shows two standard cards, one reversed and one without an operation, and the true card is any of the four alike (standard in half the rounds); `op.other` (`5 + 2 = 3`) and `equal.copy` (`5 = 5 + 2`) gain a card formula, `equal.reject-reversed` also answers a true `7 = 7`, and `slip.card` is `7 = 8`, the form no real error fills; `equal.accepts-chain` waits for level 2 (§4.2, depth §4.9, skills.md). R4 holds: every wrong card has a rule, two real errors at least, real errors before slips, except in one case that is open (below): when the true card is reversed, no real error gives a card without an operation, and `equal.copy` (`5 = 5 + 2`) is a second reversed card. As built, `equal.copy` is left out there and `slip.card` fills the form without an operation, against R4, which is unchanged until the owner answers. Decided 2026-10-14, see decisions.md | The true card was always `c = a + b` and `7 = 7` never appeared; two cards had a lone number on the left, one of them true, so the shape alone narrowed four cards to two. `equal.reject-reversed` has a value only when the true card has a lone number left of `=` (§4.2), so a true standard card needs two other real errors for R4's two |
 | `balance` level numbers | Pedagogy §6.3 has 11 rows, one per level: row 5's `max: 10` and then `max: 20` are levels 5 and 6 (`missing-symbols`, `missing-symbols-20`), and §6.3's level n is `levels[n - 1]`. Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | The game built two levels, so from level 6 on the doc's numbers missed `#/dev` and the records; two levels keep the step from 10 to 20 a rung of the ladder |
 | When a game goes live | "Live" means "shared with children". CI deploys every merge to main to Pages, the owner's iPhone check runs there right after the merge, and the link is not shared with children until its row in `device-checks.md` is logged; a failed check is fixed or reverted on main at once (section 7). Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | A merge puts a game on the public site before its check can be done, and the saving checks need Pages: `start.js` listens on 127.0.0.1 only, and plain http on a home network is not a secure context (no storage manager) |
 
 ### Open questions for the owner
 
-None open. On 2026-10-14 the owner answered the questions this list held, and engineering decisions closed the rest
-(ties in a reversed form, the balance's level numbers, when a game goes live; the owner may reverse them); each is a
-row of the table above, and decisions.md records them all. The rows that change code (the double tap, ten-frame
+Two questions are open (pedagogy §8.1 has them in Hebrew, for the owner):
+
+- **The part's second shade outside the balance.** R6, condition 6 (CLAUDE.md, decisions.md), design §2-§3 and 2.8
+  here give `--role-part-2` to the second of two known parts in one picture, in the general words of the owner's
+  answer (decisions.md, "צבע שני"); the question was asked about the balance. The ten-frame still draws both known
+  parts in part yellow: `addsub.facts.bridge-add` (levels 10-12, `8 + 3` in two frames; level 10 moves counters
+  into the first frame; level 12 in its help picture) and `pv.teens.ten-and` (levels 8-9, a bundle and loose sticks;
+  level 9 in its help picture). R6's table marks both as pending. The R6 [browser] check only looks at elements that
+  carry `data-second`, so it cannot see a missing mark.
+  - (A) ★★★★ recommended: bridging takes the shade. The second addend's counters carry `data-second` in
+    `--role-part-2` with the part edge, also after they move into the first frame (8 + 2 + 1 in two colours) and
+    in the help pictures. The bundle and its loose sticks stay part yellow: a bundle is ten of the same sticks
+    (depth §4.5) and shape already tells them apart; R6 states the exception.
+  - (B) ★★★ both cases take the shade, as R6 is worded.
+  - (C) ★★ the shade stays a balance convention; R6, condition 6 and design §2-§3 say so.
+
+  The answer is built on the ten-frame branch, with a test that counts the `data-second` elements from the round
+  data.
+- **A card without an operation when the true card is reversed** (`balance` `true-false`, depth §4.9). The owner's
+  answer "לגוון את הכרטיס הנכון" asks for two things: a card's shape tells nothing, and R4 as it is, real errors
+  before slips. In about a quarter of the rounds the true card is reversed (`7 = 5 + 2`), and there the two cannot
+  both hold: no catalogue rule gives a false card without an operation (`7 = 8`), and no source we have describes a
+  child choosing one, while the real errors that fit are `5 + 2 = 8` (`equal.reject-reversed`), `5 + 2 = 3`
+  (`op.other`) and `5 = 5 + 2` (`equal.copy`), a second reversed card.
+  - (A) ★★★★ recommended, as built: `equal.copy` gives way to `slip.card` (`7 = 8`) in those rounds, and R4 writes
+    an exception for judging rounds. The shape never tells, and every round keeps two real errors; the log does not
+    test `equal.copy`, itself a hypothesis in judging, in a quarter of the rounds.
+  - (B) ★★★ a new hypothesised rule whose card has no operation, e.g. "`=` means 'becomes'": the exercise's first
+    number left of `=` and its result right (`5 = 7`). Both the shape and R4 hold, but no source describes the
+    error, and its display would explain a thought the child may not have; like every hypothesis in the catalogue,
+    it stays only if the log shows children choosing it.
+  - (C) ★★ `equal.copy` stays in those rounds, and they have no card without an operation. R4 holds as it is, but
+    the shape tells: a round without a card like `7 = 7` is one whose true card is reversed, which narrows four
+    cards to two for a child who notices.
+
+  Until the owner answers, the game plays (A) and R4 stays as the owner kept it.
+
+Before the balance goes live, R4's [סקירה] looks at the judging cards' new formulas (depth §4.9: `5 + 2 = 3` for
+`op.other`, `5 = 5 + 2` for `equal.copy`, `7 = 8` for `slip.card`): would a child think this way?
+
+On 2026-10-14 the owner answered the questions this list held, and engineering decisions closed the rest
+(ties in a reversed form, the balance's level numbers, when a game goes live, the relational cubes that change
+colour; the owner may reverse them); each is a row of the table above, and
+decisions.md records them all. The rows that change code (the double tap, ten-frame
 level 9, `5 + 5` and doubles, R8, the second part colour, the judging round's cards) are built on their own
 branches, which change the sections that describe the code with it. So is the owner's choice to move the shell's
 own logic out of lib/ into a new shell/ folder (decisions.md, 2026-10-14), which replaces the "What lib/ holds" row

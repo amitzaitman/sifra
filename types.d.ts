@@ -47,6 +47,8 @@ interface Round {
   terms: { at: any; word: string }[];
   answer: any;
   choices: Choice[];
+  /** a judging round (architecture 2.3): the exercise's numbers a and b, which every card is made of */
+  fact?: number[];
 }
 
 interface Hand { tap(el: Element): Promise<void> }

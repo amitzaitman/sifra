@@ -172,7 +172,8 @@ export async function expectCalm(page) {
 
 /**
  * R6 [browser]: every [data-role] element shows its role token in background-color or fill
- * (removed: a hollow outline in its colour); only one cover kind.
+ * (removed: a hollow outline in its colour; a second known part, [data-second], the part's light
+ * shade --role-part-2, design 3); only one cover kind.
  * @param {import('@playwright/test').Page} page
  */
 export async function expectRoleColours(page) {
@@ -186,7 +187,7 @@ export async function expectRoleColours(page) {
     const out = [];
     for (const el of document.querySelectorAll('[data-role]')) {
       const role = el.getAttribute('data-role');
-      const want = rgb(`--role-${role}`);
+      const want = rgb(role === 'part' && el.hasAttribute('data-second') ? '--role-part-2' : `--role-${role}`);
       const s = getComputedStyle(el);
       const ok = role === 'removed'
         ? [s.borderTopColor, s.outlineColor, s.stroke].includes(want)

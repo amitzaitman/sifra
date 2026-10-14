@@ -4,10 +4,14 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
+import { rng } from '../lib/rng.js';
 import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';
+const YELLOW = 'rgb(255, 194, 51)';
+/** --role-part-2, the second of two known parts (design 3) */
+const LIGHT = 'rgb(255, 237, 184)';
 /** The real pan's stack (the display and hint layers have frameless pans of their own). */
 const stack = (page, side) => page.locator(`.bl-scene > .bl-pan[data-pan="${side}"] > .bl-stack`);
 const number = (id) => balance.levels.findIndex((l) => l.id === id) + 1;
@@ -183,6 +187,63 @@ test('a later miss unlocks the cards when its display ends; the beam goes back w
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
 });
 
+test('a display\'s pans and the hint\'s pans swing with the real ones: the ghosts and the cover\'s outline stay on their places (8 = 3 + ?)', async ({ page }) => {
+  const { round } = await devAt(page, 'missing-reversed', 8);
+  expect(round.equation).toEqual({ left: [8], right: [3, '+', '?'] });
+  const at = (value) => round.choices.findIndex((c) => c.value === value);
+  // The moment a display is drawn, and the moment the cards unlock after the second miss: every
+  // animation in the picture paused, each transition the same time into it (pans that move
+  // together are then together), and how far a layer's right pan is from the real one.
+  await page.evaluate(() => {
+    const scene = document.querySelector('.bl-scene');
+    const apart = (t) => {
+      const all = scene.getAnimations({ subtree: true });
+      for (const a of all) {
+        a.pause();
+        if (a instanceof CSSTransition) a.currentTime = t;
+      }
+      const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+      const gap = (a, b) => (a && b ? Math.round(Math.hypot(a.x - b.x, a.y - b.y)) : null);
+      const real = box('.bl-scene > .bl-pan[data-pan="right"]');
+      const out = {
+        display: gap(box('[data-display]:not(.is-leaving) .bl-pan[data-pan="right"]'), real),
+        hint: gap(box('[data-hint] .bl-pan[data-pan="right"]'), real),
+        // The outline is a cube scaled to .78 in the cover's first place.
+        dash: gap(box('[data-hint] .bl-dash'), box('.bl-scene > .bl-pan[data-pan="right"] .bl-lid')),
+        moving: all.filter((a) => a instanceof CSSTransition && a.transitionProperty === 'transform').length,
+      };
+      for (const a of all) a.play();
+      return out;
+    };
+    new MutationObserver((_, watch) => {
+      if (!scene.querySelector('[data-display]')) return;
+      watch.disconnect();
+      window['atDisplay'] = apart(260);
+    }).observe(scene, { childList: true });
+    const row = document.querySelector('[data-choices]');
+    let locks = 0;
+    new MutationObserver((_, watch) => {
+      if (row.hasAttribute('data-locked')) return void (locks += 1);
+      if (locks < 2) return;
+      watch.disconnect();
+      window['atUnlock'] = apart(20);
+    }).observe(row, { attributes: true, attributeFilter: ['data-locked'] });
+  });
+  // The first miss (11, balance): ghosts land, then the beam tilts; the display's pans go with it.
+  await card(page, at(11)).click();
+  const shown = await (await page.waitForFunction(() => window['atDisplay'])).jsonValue();
+  expect(shown.moving, 'the beam and pans are tilting').toBeGreaterThan(0);
+  expect(shown.display).toBe(0);
+  await unlocked(page);
+  // The second miss (8): the display leaves and the beam swings back; the hint is drawn on the
+  // way, its pans and the cover's outline swinging with the real ones.
+  await card(page, at(8)).click();
+  const back = await (await page.waitForFunction(() => window['atUnlock'], null, { timeout: 10000 })).jsonValue();
+  expect(back.moving, 'the beam and pans are swinging back').toBeGreaterThan(0);
+  expect(back.hint).toBe(0);
+  expect(back.dash).toBeLessThanOrEqual(5);
+});
+
 for (const level of ['both-sides', 'turn']) {
   test(`${level}: the right card the moment the cards unlock after the second miss; the hint the shell logged is on screen at the tap (design 7.2)`, async ({ page }) => {
     const { round, answerAt } = await devAt(page, level, 1);
@@ -282,10 +343,42 @@ test('judging: the cards read left to right on one line, two by two; the hint gi
   await expect(page.locator('[data-area="equation"] .eq > *')).toHaveCount(0);
   await card(page, answerAt).click();
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-cube[data-role="whole"]')).toHaveCount(total(round.answer.left));
+  await expectCardOnPans(page, round.answer);
   // The true card's exercise is written in the equation row (R5), left to right.
   await expect(page.locator('[data-area="equation"] .eq')).toHaveText([...round.answer.left, '=', ...round.answer.right].join(''));
   expect(await readsLeftToRight(page.locator('[data-area="equation"] .eq'))).toBe('');
+});
+
+/** The true card on the balance once solved: a lone number is its side's whole, a sum its parts, the second light. */
+async function expectCardOnPans(page, card) {
+  for (const side of ['left', 'right']) {
+    const tokens = card[side];
+    await expect(stack(page, side).locator(`.bl-cube[data-role="${tokens.length === 1 ? 'whole' : 'part'}"]`), side).toHaveCount(total(tokens));
+    await expect(stack(page, side).locator('.bl-cube[data-second]'), side).toHaveCount(tokens.length === 1 ? 0 : tokens[2]);
+  }
+}
+
+/** The form of a card: 'standard' (5 + 2 = 7), 'reversed' (7 = 5 + 2) or 'same' (7 = 7). */
+const formOf = (card) => ({ 'n+n=n': 'standard', 'n=n+n': 'reversed', 'n=n': 'same' })[[...card.left, '=', ...card.right].map((t) => (typeof t === 'number' ? 'n' : t)).join('')];
+
+test('judging: the true card in each form (5 + 2 = 7, 7 = 5 + 2, 7 = 7) is the one that solves the round, next to cards of the other forms', async ({ page }) => {
+  const level = balance.levels.find((l) => l.id === 'true-false');
+  for (const form of ['standard', 'reversed', 'same']) {
+    let seed = 1;
+    while (formOf(balance.makeRound(level, rng(seed)).answer) !== form) seed += 1;
+    const { round, answerAt } = await devAt(page, 'true-false', seed);
+    // Every form is on the cards: two standard, one reversed, one without an operation.
+    expect(round.choices.map((c) => formOf(c.value)).sort(), form).toEqual(['reversed', 'same', 'standard', 'standard']);
+    const wrong = wrongOf(round);
+    await card(page, wrong[0]).click();
+    await expect(page.locator('[data-display] .bl-ghost'), form).toHaveCount(total(round.choices[wrong[0]].value.left) + total(round.choices[wrong[0]].value.right));
+    await unlocked(page);
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]'), form).toHaveAttribute('data-solved', '');
+    await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
+    await expectCardOnPans(page, round.answer);
+    await expect(page.locator('[data-area="equation"] .eq')).toHaveText([...round.answer.left, '=', ...round.answer.right].join(''));
+  }
 });
 
 test('the turned row (eq.props.commutative): it turns on mount; the hint turns it again with a ring in each role\'s colour; the tour counts the unknown', async ({ page }) => {
@@ -313,6 +406,22 @@ test('the turned row (eq.props.commutative): it turns on mount; the hint turns i
   await expect(page.locator('.bl-set .bl-dot[data-role="unknown"]')).toHaveCount(round.answer);
 });
 
+test('the turned row in two colours: turned, the colours change sides (owner decision 2026-10-14)', async ({ page }) => {
+  const { round } = await devAt(page, 'turn', 1);
+  const [a, , b] = round.equation.left;
+  // The left row a + b, then the right row's b: drawn in that order.
+  const dots = page.locator('.bl-set > .bl-dot[data-role="part"]');
+  await expect(dots).toHaveCount(a + 2 * b);
+  for (let i = 0; i < a + 2 * b; i++) await expect(dots.nth(i)).toHaveCSS('background-color', i < a ? YELLOW : LIGHT);
+  // First row: yellow on the left, light on the right. Second row: light on the left, the cover where a lands.
+  const [yellow, light, turned, lid] = [dots.nth(0), dots.nth(a), dots.nth(a + b), page.locator('.bl-set > .bl-lid')].map((l) => l.boundingBox());
+  const [y, l, t, c] = await Promise.all([yellow, light, turned, lid]);
+  expect(y.x).toBeLessThan(l.x);
+  expect(t.x).toBeLessThan(c.x);
+  // The turning copy carries the colours: b's dots are light, and they land on the second row's b.
+  await expect(page.locator('.bl-turning:not([data-hint]) > .bl-twin[data-second]')).toHaveCount(b);
+});
+
 test('the turned row does not turn with reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await devAt(page, 'turn', 1);
@@ -326,13 +435,27 @@ test('relational: the hint moves the cubes that make a into c to the first group
     const [a, , b] = round.equation.left;
     const [c] = round.equation.right;
     await expect(stack(page, 'left')).toHaveAttribute('data-groups', `${a} ${b}`);
+    const cubes = stack(page, 'left').locator('.bl-cube');
+    await expect(cubes.nth(a - 1)).toHaveCSS('background-color', YELLOW);
+    await expect(cubes.nth(a)).toHaveCSS('background-color', LIGHT);
     const wrong = wrongOf(round).filter((i) => round.choices[i].rule !== 'equal.compensate-wrong');
     await card(page, wrong[0]).click();
     await unlocked(page);
     await card(page, wrong[1]).click();
     await unlocked(page);
     await expect(stack(page, 'left'), `seed ${seed}`).toHaveAttribute('data-groups', `${c} ${round.answer}`);
+    // The cubes that change group stay in place and take its colour: c yellow on each pan, in the same places.
+    await expect(cubes.nth(c - 1)).toHaveCSS('background-color', YELLOW);
+    await expect(cubes.nth(c)).toHaveCSS('background-color', LIGHT);
+    // The cards unlock while the beam still swings back (the return is not awaited at step 2): the
+    // pans move in opposite directions, so their gap passes through every value on the way. Wait
+    // until the scene and both real pans have stopped, then compare the rows once.
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
+    await expect.poll(() => page.locator('.bl-scene').evaluate((scene) => [scene, ...scene.querySelectorAll(':scope > .bl-pan')]
+      .flatMap((el) => el.getAnimations({ subtree: el !== scene })).length)).toBe(0);
+    const theirs = stack(page, 'right').locator('.bl-cube').nth(c - 1);
+    const [mine, other] = await Promise.all([cubes.nth(c - 1).boundingBox(), theirs.boundingBox()]);
+    expect(Math.abs(mine.y - other.y), `seed ${seed}`).toBeLessThan(1);
     // The second group, now the answer's size, is ringed in the part's colour; the cover in magenta.
     const part = page.locator('[data-hint] .bl-pan[data-pan="left"] .bl-ring.is-part');
     await expect(part).not.toHaveCount(0);
@@ -341,12 +464,33 @@ test('relational: the hint moves the cubes that make a into c to the first group
   }
 });
 
-test('? = a + b: the cover in the shape of a and b; the tour counts on over what was under it, a + 1 to the answer', async ({ page }) => {
+test('relational: the next tap puts the cubes the wrong way moved back at once, colours too (design 7.2)', async ({ page }) => {
+  const { round } = await devAt(page, 'relational', 1);
+  const wrong = wrongOf(round);
+  const moved = wrong.find((i) => round.choices[i].rule === 'equal.compensate-wrong');
+  await card(page, moved).click();
+  await unlocked(page);
+  // What the real cubes are doing the moment the next display is drawn.
+  await page.evaluate(() => {
+    const scene = document.querySelector('.bl-scene');
+    new MutationObserver((_, watch) => {
+      if (!scene.querySelector(':scope > [data-display]')) return;
+      watch.disconnect();
+      const cubes = [...scene.querySelectorAll(':scope > .bl-pan .bl-cube')];
+      window['atDisplay'] = cubes.flatMap((c) => c.getAnimations()).filter((a) => a instanceof CSSTransition && a.transitionProperty === 'background-color').length;
+    }).observe(scene, { childList: true });
+  });
+  await card(page, wrong.find((i) => i !== moved)).click();
+  const fading = await (await page.waitForFunction(() => window['atDisplay'] !== undefined && { n: window['atDisplay'] })).jsonValue();
+  expect(fading.n, 'no cube fades back while the next display is drawn').toBe(0);
+});
+
+test('? = a + b: the cover over the sum\'s places in rows of five; the tour counts on over what was under it, a + 1 to the answer', async ({ page }) => {
   const { round, answerAt } = await devAt(page, 'missing-reversed', 1);
   expect(round.unknown).toBe('result-left');
   const [a, , b] = round.equation.right;
-  // The cover: a piece for a's places, a piece for b's from the next row, one bridge.
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)')).toHaveCount(Math.ceil(a / 5) + Math.ceil(b / 5));
+  // The cover: a piece per row of the sum's places.
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)')).toHaveCount(Math.ceil((a + b) / 5));
   const wrong = wrongOf(round);
   for (const i of wrong) {
     await card(page, i).click();
@@ -479,6 +623,47 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
   }
 });
 
+test('320px: the tour\'s last number grows 1.3 over the one before it; two digits widen their cube, above the ring (design 7.2)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  // 6 + 4 = 10 on known cubes (the ring on the right pan), and ? = 9 + 7 counting on to 16 on the unknown's.
+  for (const [level, seed, last] of [['true-false', 2, 10], ['missing-symbols-20', 10, 16]]) {
+    const { round } = await devAt(page, level, seed);
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]').last(), `${level} ${seed}`).toHaveText(String(last));
+    await expect(page.locator('[data-hint] .bl-ring.is-tour')).not.toHaveCount(0);
+    const measured = () => page.evaluate((n) => {
+      const text = (node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return range.getBoundingClientRect();
+      };
+      // The layers take no taps; for this read they do, so the point finds what is drawn on top.
+      const style = document.head.appendChild(document.createElement('style'));
+      style.textContent = '[data-game] * { pointer-events: auto !important; }';
+      const before = text(document.querySelector(`[data-tour="${n - 1}"]`)).height;
+      const out = [...document.querySelectorAll(`[data-tour="${n}"]`)].map((digit) => {
+        const t = text(digit);
+        const own = digit.getBoundingClientRect();
+        const [x, y] = [own.left + own.width / 2, own.top + own.height / 2];
+        const cube = document.elementsFromPoint(x, y).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube')).getBoundingClientRect();
+        return {
+          grows: Math.round((t.height / before) * 100) / 100,
+          inside: t.left >= own.left - 0.5 && t.right <= own.right + 0.5,
+          onTop: [t.left + 1, t.right - 1].every((at) => document.elementFromPoint(at, t.top + t.height / 2) === digit),
+          onCube: Math.abs(cube.left + cube.width / 2 - x) < 1 && Math.abs(cube.top + cube.height / 2 - y) < 1,
+        };
+      });
+      style.remove();
+      return out;
+    }, last);
+    const one = { grows: expect.closeTo(1.3, 1), inside: true, onTop: true, onCube: true };
+    await expect.poll(measured, `${level} ${seed}`).toEqual(level === 'true-false' ? [one, one] : [one]);
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);
@@ -499,18 +684,42 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover stretc
   await expect(page.locator('.bl-pan[data-pan="right"] .bl-cube').first()).toHaveCSS('background-color', 'rgb(14, 58, 138)');
   // The balance's frame has no role colour (R6, design 6.8).
   await expect(page.locator('.bl-beam')).toHaveCSS('background-color', 'rgb(122, 111, 92)');
-  // Each known number is its own pile: 2 + 6, the 6 from the next row up, at the left edge.
-  const same = await devAt(page, 'same', 1);
-  const a = same.round.picture[0].count;
-  const left = stack(page, 'left').locator('.bl-cube');
-  const [one, two] = [await left.nth(0).boundingBox(), await left.nth(a).boundingBox()];
-  expect(Math.abs(two.x - one.x)).toBeLessThan(1);
-  expect(two.y).toBeLessThan(one.y - one.height / 2);
+});
+
+test('two known numbers on a pan: one pile in rows of five, the second number in the part\'s light shade (owner decision 2026-10-14, "צבע שני")', async ({ page }) => {
+  // same-as: a + b on the left pan; its cubes fill places 0 to a + b - 1, a's yellow, b's light.
+  for (const seed of [1, 2, 3]) {
+    const { round } = await devAt(page, 'same', seed);
+    const [a, b] = round.picture.filter((g) => g.role === 'part').map((g) => g.count);
+    const cubes = stack(page, 'left').locator('.bl-cube');
+    await expect(cubes).toHaveCount(a + b);
+    const boxes = await Promise.all((await cubes.all()).map((c) => c.boundingBox()));
+    for (let i = 0; i < a + b; i++) {
+      // Rows of five from the bottom: the i-th cube is in column i % 5 of row i / 5.
+      expect(Math.abs(boxes[i].x - boxes[i % 5].x), `seed ${seed} cube ${i}`).toBeLessThan(1);
+      expect(Math.abs(boxes[i].y - boxes[5 * Math.floor(i / 5)].y), `seed ${seed} cube ${i}`).toBeLessThan(1);
+      await expect(cubes.nth(i)).toHaveCSS('background-color', i < a ? YELLOW : LIGHT);
+    }
+  }
+  // ? = a + b: a yellow and b light on the right pan, in one pile; the cover on the left over the
+  // places of the sum, in the same rows of five (design 6.8: the pans compare row by row).
+  const { round } = await devAt(page, 'missing-reversed', 2);
+  expect(round.unknown).toBe('result-left');
+  const [a, , b] = round.equation.right;
+  const right = stack(page, 'right').locator('.bl-cube');
+  await expect(stack(page, 'right').locator('.bl-cube[data-second]')).toHaveCount(b);
+  await expect(right.nth(a - 1)).toHaveCSS('background-color', YELLOW);
+  await expect(right.nth(a)).toHaveCSS('background-color', LIGHT);
+  const lids = stack(page, 'left').locator('.bl-lid:not(.bl-bridge)');
+  await expect(lids).toHaveCount(Math.ceil((a + b) / 5));
+  // The cover's first piece spans the first row, as the right pan's first five cubes do.
+  const [lid, c0, c1] = [await lids.first().boundingBox(), await right.nth(0).boundingBox(), await right.nth(1).boundingBox()];
+  expect(Math.abs(lid.width - ((Math.min(5, a + b) - 1) * (c1.x - c0.x) + c0.width))).toBeLessThan(2);
 });
 
 test('a cover over a run of places has the dome\'s corners at its ends, from its height, and covers each place (design 6.6)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
-  // 3 + ? = 10: a piece over two places and one over five; ? = 6 + 4: pieces in the shape of 6 and 4;
+  // 3 + ? = 10: a piece over two places and one over five; ? = 6 + 4: two pieces of five;
   // the turned rows: one piece over four dots.
   for (const [level, seed] of [['missing-right', 1], ['missing-reversed', 2], ['turn', 4]]) {
     await devAt(page, level, seed);

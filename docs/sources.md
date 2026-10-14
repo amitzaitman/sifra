@@ -105,6 +105,7 @@
 | Battista & Clements (1996). *JRME* | מחקר | לא אומת |
 | Battista, Clements, Arnoff, Battista & Van Auken Borrow (1998). *JRME* | מחקר | לא אומת |
 | Beck & Gong (2013). Wheel-spinning. AIED | ניתוח נתונים | תקציר |
+| Behr, Erlwanger & Nichols (1980). How children view the equals sign. *Mathematics Teaching* 92 | מחקר | לא אומת |
 | Beishuizen (1993). *JRME* | מחקר | לא אומת |
 | Berkowitz et al. (2015). Math at home adds up to achievement in school. *Science* | ניסוי אקראי | תקציר |
 | Bernabeu, Saorín, Buforn & Sancho (2025). Reconocimiento de triángulos en estudiantes de 1º a 6º de educación primaria. *Investigación en Educación Matemática XXVIII* (SEIEM) | מחקר, 1,047 תלמידים | תקציר |

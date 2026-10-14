@@ -140,7 +140,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   `marks: 'landmarks' | 'ends'`; a ten-frame tray has role `whole` only in `num.parts.make-ten`
   levels, otherwise no role (`--frame`).
 - **R6 [browser]:** x of the first dot < x of the second; elements with `data-role` have the
-  role token's computed colour; only one cover component (`.cover`) exists.
+  role token's computed colour (a part marked `data-second`: `--role-part-2`, the second of two known
+  parts); only one cover component (`.cover`) exists.
 - **R7 [browser, Chromium and WebKit]:** every `[data-math]` element has the attribute
   `dir="ltr"` (or is a `<bdi dir="ltr">`), computed `direction` is `ltr`, and the x of each
   character (via `Range.getBoundingClientRect` per character) increases in source order.

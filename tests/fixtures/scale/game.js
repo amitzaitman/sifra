@@ -20,13 +20,14 @@ export const text = [];
 export const rules = {
   'given.whole': (r) => count(r, 'whole'),
   'given.part': (r) => count(r, 'part'),
-  'op.other': (r) => (r.unknown === 'result-right' ? Math.abs(r.equation.left[0] - r.equation.left[2]) : count(r, 'whole') + count(r, 'part')),
+  'op.other': (r) => (r.model === 'cards' ? null : r.unknown === 'result-right' ? Math.abs(r.equation.left[0] - r.equation.left[2]) : count(r, 'whole') + count(r, 'part')),
   'count.start-included': (r) => r.answer + 1,
   'slip.near': (r) => ({ oneOf: [r.answer - 1, r.answer + 1] }),
-  // Judging rounds: the answer card is c = a + b (reversed), so the plain form is a real error.
+  // Judging rounds: the answer card is always c = a + b (reversed), so the plain form is a real
+  // error; the balance varies the true card's form (depth 4.9), which the shell's tests do not need.
   'equal.reject-reversed': (r) => ({ left: [r.answer.right[0], '+', r.answer.right[2]], right: [r.answer.left[0] + 1] }),
   'equal.accepts-chain': (r) => ({ left: [r.answer.right[0], '+', r.answer.right[2]], right: [r.answer.left[0], '+', r.answer.right[2]] }),
-  'slip.card': (r) => ({ left: [r.answer.left[0]], right: [r.answer.right[0], '+', r.answer.right[2] + 1] }),
+  'slip.card': (r) => ({ left: [r.answer.left[0]], right: [r.answer.left[0] + 1] }),
 };
 const ORDER = {
   'eq.sign.same-as': ['given.part', 'op.other', 'slip.near'],

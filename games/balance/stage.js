@@ -8,10 +8,9 @@
  * @property {string} role
  * @property {number} count
  * @property {boolean} [cover] under the ? cover
- * @property {boolean} [fresh] starts a row: a known number after another is its own pile
- * @property {number[]} [blocks] lengths of runs that each start a row (`? = a + b`: the cover in the shape of a and b)
+ * @property {boolean} [second] the second of two known parts: the part's light shade (design 3)
  */
-/** @typedef {{ group: number, role: string, slot: number, col: number, row: number }} CubeSpot a cube's place */
+/** @typedef {{ group: number, role: string, second: boolean, slot: number, col: number, row: number }} CubeSpot a cube's place */
 /** @typedef {{ start: number, length: number }} Run consecutive places */
 /** @typedef {{ group: number, places: number[], runs: Run[] }} Span a group's places, and the same as runs */
 /** @typedef {{ cubes: CubeSpot[], spans: Span[], slots: number }} PanLayout slots: the places taken */
@@ -19,7 +18,7 @@
 /** @typedef {{ from: number, to: number, row: number, across: boolean }} Bridge columns from-to, under row */
 /**
  * A row of groups in cells: each dot, each group's first column, and the row's length.
- * @typedef {{ dots: { group: number, role: string, x: number, y: number }[], blocks: { group: number, x: number, count: number }[],
+ * @typedef {{ dots: { group: number, role: string, second: boolean, x: number, y: number }[], blocks: { group: number, x: number, count: number }[],
  *   length: number }} LineLayout
  */
 /** @typedef {{ el: HTMLElement, stack: HTMLElement, layout: PanLayout, cubes: HTMLElement[], lids: HTMLElement[] }} PanView */
@@ -27,9 +26,6 @@
 
 /** @type {(slot: number) => { col: number, row: number }} rows of five, left to right, the bottom row first */
 export const at = (slot) => ({ col: slot % 5, row: Math.floor(slot / 5) });
-
-/** @type {(slot: number) => number} the first place of a row, at slot or after it */
-const rowStart = (slot) => Math.ceil(slot / 5) * 5;
 
 /** @type {(slots: number[]) => Run[]} places (ascending) as runs of consecutive places */
 export const runsOf = (slots) => slots.reduce((out, slot) => {
@@ -40,9 +36,10 @@ export const runsOf = (slots) => slots.reduce((out, slot) => {
 }, /** @type {Run[]} */ ([]));
 
 /**
- * A pan's places: rows of five from the bottom. A group follows on from the one before it, but a
- * fresh group or a block starts a row (design 7.3). A covered group takes one place at least (a
- * cover over nothing stands on an empty place, design 6.6).
+ * A pan's places: rows of five from the bottom, each group following on from the one before it.
+ * The colour, not a new row, keeps two known numbers apart, so the rows of five compare across
+ * the pans (design 6.8). A covered group takes one place at least (a cover over nothing stands on
+ * an empty place, design 6.6).
  * @param {PanGroup[]} groups
  * @returns {PanLayout}
  */
@@ -50,17 +47,25 @@ export function layoutPan(groups) {
   /** @type {PanLayout} */
   const out = { cubes: [], spans: [], slots: 0 };
   groups.forEach((g, group) => {
-    const runs = (g.blocks ?? [g.cover ? Math.max(1, g.count) : g.count]).map((length, i) => {
-      if (i > 0 || g.fresh) out.slots = rowStart(out.slots);
-      const run = { start: out.slots, length };
-      out.slots += length;
-      return run;
-    });
-    const places = runs.flatMap((r) => Array.from({ length: r.length }, (_, k) => r.start + k));
-    for (const slot of places.slice(0, g.count)) out.cubes.push({ group, role: g.role, slot, ...at(slot) });
-    out.spans.push({ group, places, runs });
+    const run = { start: out.slots, length: g.cover ? Math.max(1, g.count) : g.count };
+    out.slots += run.length;
+    const places = Array.from({ length: run.length }, (_, k) => run.start + k);
+    for (const slot of places.slice(0, g.count)) out.cubes.push({ group, role: g.role, second: Boolean(g.second), slot, ...at(slot) });
+    out.spans.push({ group, places, runs: [run] });
   });
   return out;
+}
+
+/**
+ * Colours a quantity by its role (R6), and a second known part in the part's light shade.
+ * @param {HTMLElement} node
+ * @param {{ role: string, second?: boolean }} spot
+ * @returns {HTMLElement}
+ */
+export function paint(node, spot) {
+  node.dataset.role = spot.role;
+  node.toggleAttribute('data-second', Boolean(spot.second));
+  return node;
 }
 
 /**
@@ -128,7 +133,7 @@ export function layoutLine(groups) {
   let x = 0;
   groups.forEach((g, group) => {
     out.blocks.push({ group, x, count: g.count });
-    for (let k = 0; k < g.count; k++) out.dots.push({ group, role: g.role, x: x + (k % 5), y: Math.floor(k / 5) });
+    for (let k = 0; k < g.count; k++) out.dots.push({ group, role: g.role, second: Boolean(g.second), x: x + (k % 5), y: Math.floor(k / 5) });
     out.length = x + Math.min(5, Math.max(1, g.count));
     x = out.length + GAP;
   });
@@ -177,6 +182,8 @@ export function panLayer(scene) {
   const layer = el('div', 'bl-layer');
   const [left, right] = ['left', 'right'].map((name) => layer.appendChild(pan(name, false)).lastElementChild);
   scene.append(layer);
+  // A style read: its pans start at the real ones' tilt, so a tilt set next moves them together.
+  void layer.offsetWidth;
   return { el: layer, left: /** @type {HTMLElement} */ (left), right: /** @type {HTMLElement} */ (right) };
 }
 
@@ -189,8 +196,8 @@ const stageOf = () => {
 };
 
 /**
- * Draws the balance (design 6.8): the frame in --frame, cubes in rows of five, and the ? cover over
- * a covered group, a piece per row joined by bridges, ? on the first.
+ * Draws the balance (design 6.8): the frame in --frame, cubes in rows of five in their role
+ * colours, and the ? cover over a covered group, a piece per row joined by bridges, ? on the first.
  * @param {HTMLElement} host
  * @param {{ left: PanGroup[], right: PanGroup[], tilt: string, rows: number, cover: (mark?: string) => HTMLElement }} data
  *   cover: the cover maker (lib/cover.js)
@@ -208,11 +215,7 @@ export function drawBalance(host, data) {
     const node = scene.appendChild(pan(name, true));
     const stack = /** @type {HTMLElement} */ (node.lastElementChild);
     const layout = layoutPan(data[name]);
-    const cubes = layout.cubes.map((spot) => {
-      const cube = stack.appendChild(el('span', 'bl-cube', spot));
-      cube.dataset.role = spot.role;
-      return cube;
-    });
+    const cubes = layout.cubes.map((spot) => paint(stack.appendChild(el('span', 'bl-cube', spot)), spot));
     const lids = data[name].flatMap((g, i) => {
       if (!g.cover) return [];
       const pieces = layout.spans[i].runs.flatMap((r) => rowPieces(r.start, r.length));
@@ -247,11 +250,7 @@ export function drawRows(host, data) {
   const lines = {};
   for (const [name, y] of /** @type {[string, number][]} */ ([['left', 0], ['right', LINE]])) {
     const layout = layoutLine(data[name]);
-    const dots = layout.dots.map((d) => {
-      const dot = scene.appendChild(el('span', 'bl-dot', { x: d.x, y: y + d.y }));
-      dot.dataset.role = d.role;
-      return dot;
-    });
+    const dots = layout.dots.map((d) => paint(scene.appendChild(el('span', 'bl-dot', { x: d.x, y: y + d.y })), d));
     data[name].forEach((g, i) => {
       if (!g.cover) return;
       const lid = scene.appendChild(el('span', 'bl-lid', { x: layout.blocks[i].x, y, w: Math.max(1, g.count) }));

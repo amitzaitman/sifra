@@ -16,7 +16,8 @@
   --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 6px + 3px * var(--rows));
   position: absolute; left: calc(50% - var(--w) / 2); top: calc(50% - var(--h) / 2); width: var(--w); height: var(--h); transition: --rows var(--t-move) var(--ease);
 }
-[data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none; }
+/* A reset goes at once: this wins over every element's own transition (a cube's colour fade too). */
+[data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none !important; }
 [data-game="balance"] .bl-base { position: absolute; bottom: 0; left: calc(50% - var(--cube) - 10px); width: calc(var(--cube) * 2 + 20px); height: 8px; border-radius: 4px; background: var(--frame); }
 [data-game="balance"] .bl-pole { position: absolute; top: var(--yb); bottom: 4px; left: calc(50% - 3px); width: 6px; border-radius: 3px; background: var(--frame); }
 [data-game="balance"] .bl-beam { position: absolute; top: calc(var(--yb) - 5px); left: calc(50% - var(--half) - 6px); width: calc(var(--half) * 2 + 12px); height: 10px; border-radius: 5px; background: var(--frame); transform: rotate(calc(var(--t) * 12deg)); transition: transform var(--t-beam) var(--ease); }
@@ -36,7 +37,10 @@
 [data-game="balance"] .bl-layer.is-leaving { opacity: 0; animation: balance-out 200ms var(--ease); }
 
 [data-game="balance"] .bl-cube { width: var(--cube); height: var(--cube); border-radius: calc(var(--cube) * .25); }
-[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); transition: background-color var(--t-move) var(--ease); }
+/* The second of two known parts (design 3, 6.8): the part's light shade, the same edge. A cube that
+   changes group (relational) fades to its new colour. */
+[data-game="balance"] .bl-cube[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
@@ -75,6 +79,12 @@
 [data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); }
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 [data-game="balance"] .bl-digit.is-last { transform: scale(1.3); }
+/* A two-digit last number at 1.3 is wider than a small cube: its cube widened to fit, drawn in the
+   hint's pan at the cube's place, above the ring (design 7.2). On a known cube: white, with the
+   cube's edge. */
+[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c) + var(--cube) / 2); bottom: calc(var(--u) * var(--r)); min-width: var(--cube); height: var(--cube); translate: -50% 0; border-radius: calc(var(--cube) * .25); background: var(--role-unknown); z-index: 1; }
+[data-game="balance"] .bl-stack > .bl-digit.is-over.on-known { padding: 0 2px; background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+[data-game="balance"] .bl-stack > .bl-digit.is-over.on-whole { box-shadow: inset 0 0 0 2px var(--role-whole); }
 
 [data-game="balance"] .bl-set {
   --len: 10; --rows: 1; --cell: min(48px, calc((100cqw - 8px) / var(--len)), calc((100cqh - 8px) / (var(--rows) + 1.6)));
@@ -86,6 +96,7 @@
 [data-game="balance"] .bl-set .bl-dot, [data-game="balance"] .bl-set .bl-lid, [data-game="balance"] .bl-set .bl-ring { position: absolute; left: calc(var(--cell) * var(--x) + var(--inset)); top: calc(var(--cell) * var(--y) + var(--inset)); bottom: auto; }
 [data-game="balance"] .bl-set .bl-dot { width: var(--dot); height: var(--dot); border-radius: 50%; }
 [data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="balance"] .bl-set .bl-dot[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
 [data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
