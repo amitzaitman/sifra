@@ -32,7 +32,7 @@ export const SKILLS = [
   {"id":"addsub.meaning.match-story","requires":{"base":["addsub.meaning.change-add","addsub.meaning.change-take"],"when":[]},"rules":["story.other-op","story.roles","story.other-numbers","story.result-form"]},
   {"id":"addsub.facts.near-doubles","requires":{"base":["addsub.facts.doubles"],"when":[]},"rules":["double.no-adjust","op.other","slip.far"]},
   {"id":"eq.sign.same-as","requires":{"base":["num.compare.sets"],"when":[]},"rules":["given.part","op.other","slip.near"]},
-  {"id":"eq.props.commutative","requires":{"base":["num.parts.split"],"when":[{"if":{"model":"=path"},"add":["count.on.continue"]},{"if":{"op":"=mul"},"add":["muldiv.meaning.array"]}]},"rules":["equal.add-to-equal","equal.copy","equal.add-all","count.start-included","given.part","op.other"]},
+  {"id":"eq.props.commutative","requires":{"base":["num.parts.split"],"when":[{"if":{"model":"=path"},"add":["count.on.continue"]},{"if":{"unknown":"=both-sides"},"add":["eq.sign.both-sides"]},{"if":{"op":"=mul"},"add":["muldiv.meaning.array"]}]},"rules":["equal.add-to-equal","equal.copy","equal.add-all","count.start-included","given.part","op.other"]},
   {"id":"muldiv.share.equal","requires":{"base":["count.set.make"],"when":[]},"rules":["groups.answered-groups","groups.subtracted","given.whole","slip.near"]},
   {"id":"frac.unit.of-whole","requires":{"base":["frac.parts.equal-shares"],"when":[]},"rules":[]},
   {"id":"geo.solid.parts","requires":{"base":["geo.shape.attributes"],"when":[]},"rules":[]},

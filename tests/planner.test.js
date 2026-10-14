@@ -299,3 +299,26 @@ test('5.12 walk: an always-right child follows the next step through every offer
   assert.equal(reviews(c, GAMES, TODAY, SKILLS).length, 0, 'everything was played today');
   assert.equal(reviews(c, GAMES, addDays(TODAY, 1), SKILLS).length, 2, 'tomorrow: two due');
 });
+
+test('5.12 walk over games/registry.js: an always-right child opens each game\'s levels in list order (pedagogy 6.2, 6.3)', async () => {
+  const games = homeOrder(Object.values(await import('../games/registry.js')), SKILLS);
+  const c = child();
+  const offered = SKILLS.map((s) => s.id).filter((id) => games.some((g) => g.levels.some((l) => l.skill === id)));
+  /** @type {Record<string, number[]>} each game's levels, numbered from 1, in the order they were first played */
+  const played = Object.fromEntries(games.map((g) => [g.meta.id, []]));
+  for (let n = 0; n < 200 && !offered.every((id) => skillPassed(c, games, id)); n++) {
+    const { game, index } = nextStep(c, games, SKILLS);
+    const [id, level] = [game.meta.id, game.levels[index]];
+    for (const p of prereqs(SKILLS, level.skill, level).filter((p) => offered.includes(p))) {
+      assert.ok(skillPassed(c, games, p), `${id} level ${index + 1} (${level.id}) opened before its prerequisite ${p}`);
+    }
+    if (!played[id].includes(index + 1)) played[id].push(index + 1);
+    const now = c.games[id];
+    c.games[id] = !now ? startLadder(game.levels, level.id) : now.level === level.id ? now : moveTo(now, level.id);
+    const r = step(c.games[id], game.levels, { outcome: 'first', kind: 'new', session: n });
+    c.games[id] = r.state;
+    schedule(c.skills, level.skill, { day: TODAY, kind: 'new', outcome: 'first', passed: r.passed !== null });
+  }
+  assert.ok(offered.every((id) => skillPassed(c, games, id)));
+  for (const g of games) assert.deepEqual(played[g.meta.id], g.levels.map((_, i) => i + 1), g.meta.id);
+});

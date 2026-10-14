@@ -456,7 +456,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   base prerequisites; by depth, then skills.md row). The next step on small plain skill lists: a skill no game
   offers is skipped and counts as met when it is a prerequisite; a conditional prerequisite holds back the level
   that meets it. The §5.12 walk: a child who is always right, from an empty store, follows the next step until
-  every offered skill is passed; each opens only after its offered prerequisites, in SKILLS order.
+  every offered skill is passed; each opens only after its offered prerequisites, in SKILLS order. The same walk
+  over games/registry.js: each game's levels open in list order (pedagogy §6.2, §6.3).
 - store: importing with a storage that throws on any access does not throw; migrate cases, a newer schema of another
   shape included; caps; quota retry; export named by the local day.
 
@@ -552,7 +553,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | "Mastered" | Skill passed (last level passed) for the next step; mastered (R11) for the stuck rule | §5.12 defines it by the level rule and §5.4 by R11; one definition would stall the next step for days |
 | Attempt | One record per round, by the shell; `onAttempt` is only a build-round commit | The CLAUDE.md fields describe a round, and R5 must act the same in every game |
 | Help ladder | The shell counts, picks the step, locks and decides; the game draws | R5 is one rule: one implementation, tested once |
-| Learning order | The prerequisite graph: depth of base prerequisites, then skills.md row order; prerequisites (with conditions) gate the level | Owner decision 2026-10-14: levels and progression are independent of grade. The graph is the only machine-readable order without a grade. Rows are grouped by strand, so an interleaved Aharoni/Singapore order needs a sequence column, which would replace the row-order tie-break in the generator only (an owner question; two games do not need it) |
+| Learning order | The prerequisite graph: depth of base prerequisites, then skills.md row order; prerequisites (with conditions) gate the level | Owner decision 2026-10-14: levels and progression are independent of grade. The graph is the only machine-readable order without a grade. Rows are grouped by strand, so an interleaved Aharoni/Singapore order needs a sequence column, which would replace the row-order tie-break in the generator only (an owner question). A column like that cannot move a skill after a deeper one; where a game's level order (§6) differs from the learning order, a conditional prerequisite holds the level back instead: `eq.props.commutative`'s `[unknown=both-sides] eq.sign.both-sides` keeps the balance's `turn` after `both-sides` (§6.3, depth §4.9), and the order is unchanged |
 | Prerequisite no game offers | Met for the next step; logged in `missing` when stuck | §5.12's own example, `count.set.how-many` |
 | Fast climb | Per game; the starting level's demo runs; a miss goes back one and unmarks it, except at the last level once passed there and after a mixed round | "New" is new to the game (also after a Safari wipe); one success may be a 1-in-4 guess; §5.3 returns to the last level passed on a first try; §5.6: mixing does not lower a level |
 | Down window | Emptied on every level change | A.3 computed the thresholds with an empty window at the start |
