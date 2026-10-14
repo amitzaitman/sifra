@@ -99,6 +99,8 @@ function onPair(r, id) {
 
 /** @type {(r: Round) => boolean} */
 const pair = (r) => Array.isArray(r.answer);
+/** @type {(r: Round, v: number) => number | null} */
+const notAnswer = (r, v) => (v === r.answer ? null : v);
 /** The missing part's reading of a part-unknown round. @param {Round} r */
 const reading = (r) => ({ whole: count(r, 'whole'), part: count(r, 'part'), answer: r.answer });
 
@@ -123,8 +125,9 @@ export const rules = {
     const v = Number(String(r.answer).split('').reverse().join(''));
     return v === r.answer ? null : v;
   },
-  'pv.digits-added': (r) => (pair(r) || r.answer < 10 ? null : String(r.answer).split('').reduce((s, c) => s + Number(c), 0)),
-  'pv.ones-only': (r) => (pair(r) || r.answer < 10 ? null : r.answer % 10),
+  // Catalogue: no value when it is the answer (a single-digit answer).
+  'pv.digits-added': (r) => (pair(r) ? null : notAnswer(r, String(r.answer).split('').reduce((s, c) => s + Number(c), 0))),
+  'pv.ones-only': (r) => (pair(r) ? null : notAnswer(r, r.answer % 10)),
   'bridge.whole-second': (r) => (addends(r) ? 10 + addends(r)[1] : null),
   'bridge.leftover-only': (r) => (addends(r) ? addends(r)[0] + addends(r)[1] - 10 : null),
   'bridge.stopped-at-ten': (r) => (addends(r) ? (Math.floor(addends(r)[0] / 10) + 1) * 10 : null),
