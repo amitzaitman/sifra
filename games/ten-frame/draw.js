@@ -378,6 +378,20 @@ function lids(parent, cells, cover) {
 }
 
 /**
+ * The small '?' dome on the top edge of the bracket around a run (design 6.6), on the run's centre.
+ * Under a row of counters, a centre over a cell moves to the column line on its left, so the dome
+ * sits between two counters and hides neither (5 + ? = 10: between the second and third).
+ * @param {Box} top the run's first row
+ * @param {boolean} under the run starts in a lower row, under counters
+ * @returns {Box}
+ */
+export function domeOver(top, under) {
+  const cells = Math.round((top.w + GAP) / (1 + GAP));
+  const x = top.x + top.w / 2 - (under && cells % 2 ? (1 + GAP) / 2 : 0);
+  return { x: x - 0.37, y: top.y - 0.12 - 0.3, w: 0.74, h: 0.6 };
+}
+
+/**
  * A frame: the parts of a number (num.parts.split: a tag for the whole, a --frame tray) or the
  * whole ten (num.parts.make-ten: the tray is the whole). The unknown is under the cover, or its
  * empty cells are wrapped by the '?' bracket.
@@ -407,8 +421,7 @@ export function drawFrame(host, d) {
   if (!d.solved && bracket) {
     if (run.length) {
       wrap = outline(host, L, [runPath(run, 0.12)], 'tf-line-unknown tf-bracket');
-      const top = segments(run)[0];
-      covers = [lid(host, { x: top.x + top.w / 2 - 0.37, y: top.y - 0.12 - 0.3, w: 0.74, h: 0.6 }, d.cover, '?', 'is-small')];
+      covers = [lid(host, domeOver(segments(run)[0], run[0].row > 0), d.cover, '?', 'is-small')];
     } else covers = [lid(host, { x: empty.x + 0.13, y: empty.y + 0.2, w: 0.74, h: 0.6 }, d.cover, '?', 'is-small')];
   }
   const chip = d.tag === null ? null : at(host, 'tf-chip tf-tag', L.tag, String(d.tag));

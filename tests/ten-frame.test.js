@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as game from '../games/ten-frame/game.js';
-import { layoutBundles, layoutFrame, layoutTree, runPath } from '../games/ten-frame/draw.js';
+import { disc, domeOver, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
 import { pictureOf } from '../games/ten-frame/picture.js';
 import { rng } from '../lib/rng.js';
 
@@ -83,6 +83,41 @@ test('runPath: one rectangle in a row, a stepped outline over two rows, two rect
   assert.equal(joined(4, 2), 1, 'joined: one outline for one group, also across the row end');
   assert.equal(joined(4, 5), 1);
   assert.equal(runPath(L.cells.slice(3, 10), 0.1, true), runPath(L.cells.slice(3, 10), 0.1), 'rows that overlap: the same step');
+});
+
+test('level 5: the small ? dome sits on the bracket\'s top edge and hides no counter (design 6.6)', () => {
+  const L = layoutFrame({ rows: 2, whole: true, tag: true });
+  // The dome as app.css draws it (top corners 50%/80%, bottom 20%), grown by its 3px halo at 320px.
+  const pad = 0.07;
+  const inDome = (b, x, y) => {
+    const [l, r, t, bt] = [b.x - pad, b.x + b.w + pad, b.y - pad, b.y + b.h + pad];
+    if (x < l || x > r || y < t || y > bt) return false;
+    const top = y < b.y + b.h / 2;
+    const [rx, ry] = top ? [Math.min(b.w, b.h) / 2 + pad, b.h * 0.8 + pad] : [b.h / 5 + pad, b.h / 5 + pad];
+    const [cx, cy] = [x < (l + r) / 2 ? l + rx : r - rx, top ? t + ry : bt - ry];
+    const corner = (x < (l + r) / 2 ? x < cx : x > cx) && (top ? y < cy : y > cy);
+    return !corner || ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  };
+  for (let k = 0; k < 10; k++) {
+    const run = L.cells.slice(k);
+    const top = segments(run)[0];
+    const dome = domeOver(top, run[0].row > 0);
+    const mid = dome.x + dome.w / 2;
+    assert.ok(mid >= top.x - 0.12 && mid <= top.x + top.w + 0.12, `${k} + ?: on the bracket's top edge`);
+    assert.equal(dome.y + dome.h / 2, top.y - 0.12, `${k} + ?: centred on the bracket's line`);
+    for (const c of L.cells.slice(0, k)) {
+      const d = disc(c);
+      const [r, cx, cy] = [d.w / 2, d.x + d.w / 2, d.y + d.h / 2];
+      let [all, hid] = [0, 0];
+      for (let i = 0; i < 100; i++) for (let j = 0; j < 100; j++) {
+        const [x, y] = [d.x + ((i + 0.5) / 100) * d.w, d.y + ((j + 0.5) / 100) * d.h];
+        if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+        all += 1;
+        if (inDome(dome, x, y)) hid += 1;
+      }
+      assert.ok(hid / all <= 0.01, `${k} + ?: counter ${c.i + 1} ${Math.round((100 * hid) / all)}% hidden`);
+    }
+  }
 });
 
 test('bundles: digits above the sticks are a pitch apart and clear of an outline around them; two frames have room for a 10 above', () => {
