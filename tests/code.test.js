@@ -47,8 +47,12 @@ test('games never touch storage, wait for animationend, or make their own cover'
   ]);
 });
 
-test('no grade at run time: lib/, app.js and data/skills.js never name one (owner decision 2026-10-14)', () => {
-  none(scan(['app.js', 'data/skills.js', ...lib], /(?<![a-z])grade/i, 'a grade: levels and progression are independent of grade'));
+test('no grade at run time or on screen: no deployed file names one (owner decision 2026-10-14, pedagogy 1.2)', () => {
+  // Every deployed text file (architecture 1), parents labels included; Hebrew compared without
+  // nikud, so both spellings of "class" (with and without yod) are caught.
+  const deployed = [...site, ...listFiles(['.svg']).filter((f) => f.startsWith('assets/'))];
+  const grade = /(?<![a-z])grade|כי?תה|כי?תות/i;
+  none(deployed.flatMap((file) => read(file).split('\n').flatMap((line, i) => (grade.test(plain(line)) ? [`${file}:${i + 1}: a grade: levels and progression are independent of grade`] : []))));
 });
 
 test('lib/ imports nothing and stays under 600 lines', () => {

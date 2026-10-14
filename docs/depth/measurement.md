@@ -45,7 +45,7 @@
   רגיל. אין `symbols`: בלי השעון אין מה לקרוא.
 - **פרמטרים בשעון:** `ask` מקבל גם `read` (קוראים שעון ובוחרים כרטיס), `match` (רואים כרטיס ובוחרים
   שעון) ו-`wind` (מגלגלים שעון בחצים). `precision` הוא פרמטר חדש: `hour`, `half`, `quarter` ו-`five`
-  (כיתה ב), ובכיתה ג גם `minute`. לעניין R3 הוא נחשב טווח, כמו `max`: ברמה עם `precision` חדש המראה
+  (בבית הספר, כיתה ב), ובהמשך גם `minute` (כיתה ג). לעניין R3 הוא נחשב טווח, כמו `max`: ברמה עם `precision` חדש המראה
   יכול לחזור ל-`objects`.
 - **סדר:** `meas.length.compare`, אחר כך `meas.length.units`, ובנפרד `meas.time.clock`. שאר המדידות
   של כיתות א–ב (`meas.money.coins`, `meas.volume.compare`, `meas.mass.units`, `meas.capacity.units`)

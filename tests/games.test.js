@@ -239,11 +239,12 @@ export function checkRound(game, level, index, round) {
       if (!forms.some((form) => fits(left, form.left) && fits(right, form.right))) fail(`R2: ${show(equation)} is not a ${round.eqform ?? 'standard'} form of (${round.structure}, ${round.unknown})`);
     }
   }
-  // R2: a new story structure starts small, up to 5, whatever the skill ("equation" is not a story).
+  // R2: a new structure starts small. The ceiling is the structure's own (the "תקרה" column of the
+  // §4.6 table, from its depth tables' level 1), never a grade; `equation` has none.
   const first = game.levels.findIndex((l) => [l.structure].flat().includes(round.structure)) === index;
-  if (round.structure && round.structure !== 'equation' && first) {
+  const ceiling = FORMS.find((f) => f.structure === round.structure)?.start ?? null;
+  if (round.structure && first && ceiling !== null && !judging) {
     const numbers = equation ? [...equation.left, ...equation.right, ...[round.answer].flat()] : groups.map((g) => g.count);
-    const ceiling = 5;
     if (Math.max(...numbers.filter((n) => typeof n === 'number')) > ceiling) fail(`R2: the first level of ${round.structure} goes above ${ceiling}`);
   }
   // R4 and R5, choice rounds.
@@ -354,4 +355,26 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }, parts.levels[1]] }).join(), /model frame comes back after tree/);
   assert.match(checkGame({ ...parts, levels: [parts.levels[1], { ...parts.levels[1], id: 'x', look: 'objects' }] }).join(), /look objects comes back/);
   assert.match(checkGame({ ...parts, meta: { ...parts.meta, grades: [1] } }).join(), /meta has no grade/);
+});
+
+test('R2: the first level of a structure keeps the ceiling of its §4.6 row, not a grade', () => {
+  const r2 = (game, level, round) => checkRound(game, level, 0, round).filter((p) => p.startsWith('R2'));
+  // A story structure starts up to 5: the parts fixture's first level, with a whole of 6.
+  const split = parts.levels[0];
+  const story = structuredClone(parts.makeRound(split, rng(3)));
+  assert.deepEqual(r2(parts, split, story), []);
+  story.picture.find((g) => g.role === 'whole').count = 6;
+  story.equation.right = [6];
+  assert.match(r2(parts, split, story).join(), /first level of part-whole goes above 5/);
+  // frac.unit.of-set level 1 (§4.11): half of 2-10 on 2 plates, no equation yet. share starts up to 12.
+  const half = { id: 'half', skill: 'frac.unit.of-set', demo: true, structure: 'share', unknown: 'group-size', max: 10, model: 'plates', look: 'objects', options: 3, terms: true };
+  const plates = (whole) => ({ skill: half.skill, structure: 'share', unknown: 'group-size', look: 'objects', model: 'plates', eqform: 'standard',
+    text: '', terms: [], helpPicture: null, equation: null, answer: whole / 2, choices: [],
+    picture: [{ role: 'whole', count: whole, shown: 'tag' }, { role: 'unknown', count: whole / 2, shown: 'covered' }, { role: 'part', count: whole / 2, shown: 'items' }] });
+  const game = { ...parts, levels: [half] };
+  assert.equal(FORMS.find((f) => f.structure === 'share')?.start, 12);
+  assert.deepEqual(r2(game, half, plates(10)), []);
+  assert.match(r2(game, half, plates(14)).join(), /first level of share goes above 12/);
+  // equation has no ceiling (§6 starts it at 10 and 20).
+  assert.equal(FORMS.find((f) => f.structure === 'equation')?.start, null);
 });

@@ -83,7 +83,7 @@ test('the level is kept after a reload: one first try climbs to level 2', async 
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-kind', 'new');
 });
 
-test('review: a level passed yesterday opens the session with a review round, from any game of the band', async ({ page }) => {
+test('review: a level passed yesterday opens the session with a review round from another game where the child passed a level', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await seedStore(page, storeWith({
     games: { parts: ladderAt('split-sym', { passed: ['split-5', 'split-10'] }) },

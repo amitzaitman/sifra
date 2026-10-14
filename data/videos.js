@@ -66,7 +66,7 @@ export const TOPICS = [
     ],
   },
   {
-    title: 'חִלּוּק בְּאֶפֶס (מִכִּתָּה ג)',
+    title: 'חִלּוּק בְּאֶפֶס',
     videos: [{ label: 'חִלּוּק בְּאֶפֶס', who: 'לַיְלָדִים', url: 'https://www.youtube.com/watch?v=rK66BFWDnoE' }],
   },
 ];

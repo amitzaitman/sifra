@@ -91,7 +91,8 @@ interface Skill {
 interface RuleInfo { types: string[]; display: string }
 /** data/forms.js: 'n' for a number, '?', operators, '∘' for + or − */
 interface Shape { left: string[]; right: string[] }
-interface FormRow { structure: string; unknown: string; forms: Shape[]; reversed: Shape[] }
+/** start: the ceiling of the structure's first level in a game (R2), null for none (equation) */
+interface FormRow { structure: string; unknown: string; forms: Shape[]; reversed: Shape[]; start: number | null }
 
 /** One counted round of a session (architecture 3.3). index -1: filled in when it starts. */
 interface Spec {

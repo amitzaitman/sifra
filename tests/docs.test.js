@@ -1,12 +1,12 @@
 // Consistency checks for the docs: skill ids, prerequisites, error rules, displays,
-// models, totals, meteg and links. Run: npm test
+// models, totals, meteg, links and the §4.6 ceilings. Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  DEPTH, ERRORS, FILE_NAME, METEG, ROOT, RULE_ID, SHARED, SKILLS, SKILL_ID, SKILL_TOKEN,
-  allows, boldBlock, bullet, findCycles, isEarly, kindOf, listFiles, parseCatalogue, parseParams,
+  DEPTH, ERRORS, FILE_NAME, MEANING, METEG, NO_PREREQS, ROOT, RULE_ID, SHARED, SKILLS, SKILL_ID, SKILL_TOKEN,
+  allows, boldBlock, bullet, findCycles, formRows, isEarly, kindOf, listFiles, parseCatalogue, parseParams,
   parsePrereqs, parseSkills, parseStrands, proseLines, read, sections, tableIds, ticked, underHeading,
   withoutCode,
 } from '../scripts/docs-parse.js';
@@ -290,6 +290,22 @@ test('9. every relative link in the .md files points to an existing file', () =>
         if (!existsSync(absolute)) problems.push(`${file}:${i + 1}: broken link (${target})`);
       }
     });
+  }
+  assertNone(problems);
+});
+
+test('10. the §4.6 table: every row has a ceiling (a number or a dash), the same for every row of a structure', () => {
+  const problems = [];
+  const ceilings = new Map();
+  const rows = formRows(read(MEANING));
+  if (!rows.length) problems.push(`${MEANING}: the table under "טבלת ההתאמה" is missing`);
+  for (const row of rows) {
+    const [structure, unknown, , , ceiling] = row;
+    const where = `${MEANING}: ${structure} ${unknown}`;
+    if (row.length !== 5) problems.push(`${where}: row has ${row.length} cells, expected 5`);
+    else if (!/^\d+$/.test(ceiling) && ceiling !== NO_PREREQS) problems.push(`${where}: ceiling "${ceiling}" is not a number or ${NO_PREREQS}`);
+    else if (ceilings.has(structure) && ceilings.get(structure) !== ceiling) problems.push(`${where}: ceiling ${ceiling}, an earlier row of ${structure} says ${ceilings.get(structure)}`);
+    else ceilings.set(structure, ceiling);
   }
   assertNone(problems);
 });

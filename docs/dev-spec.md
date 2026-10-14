@@ -79,9 +79,12 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   has an icon element (`[data-icon]`).
 - **R2 [auto]:** the [§4.6](depth/addsub-meaning.md) table is encoded as data. `(structure, unknown)` must be a row; the
   equation's shape must match the row's form (or its reversed form when `eqform: 'reversed'`).
-  Over 200 seeds every declared pair appears. On the first level of a story structure (not
-  `equation`) in a game's list, `max(numbers) <= 5`, whatever the skill: there is no grade to relax
-  it (owner decision 2026-10-14). Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
+  Over 200 seeds every declared pair appears. On the first level of a structure in a game's list,
+  `max(numbers) <= ceiling`, where `ceiling` is the structure's "תקרה" column in the same table: 5
+  for the addition and subtraction stories, the level 1 range of its depth tables for `equal-groups`
+  (50), `array` (25) and `share` (12), and none for `equation`. The ceiling belongs to the structure,
+  never to a grade (owner decision 2026-10-14). `numbers` are the equation's numbers and the answer,
+  or the picture groups' counts when `equation` is `null`. Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
   return `equation: null`: R2 checks the structure and unknown only, and R1 uses the no-equation
   branch.
 - **R3 [auto]:** each skill's allowed model order (the "מודל" line of each skill in its strand file under `depth/`; the line is defined in [§4.1](depth/README.md)) is encoded as data.

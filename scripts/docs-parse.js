@@ -420,23 +420,31 @@ export function shapeOf(form) {
 }
 
 /**
- * The §4.6 table (structure, unknown, forms, reversed forms) as shapes.
+ * The rows of the §4.6 table, as cells.
  * @param {string} text addsub-meaning.md
- * @returns {{ structure: string, unknown: string, forms: Shape[], reversed: Shape[] }[]}
+ * @returns {string[][]}
  */
-export function parseForms(text) {
+export function formRows(text) {
   return (boldBlock(text, 'טבלת ההתאמה') ?? '')
     .split('\n')
     .filter((line) => line.startsWith('| `'))
-    .map((line) => {
-      const [structure, unknown, forms, reversed] = cells(line);
-      return {
-        structure: ticked(structure)[0],
-        unknown: ticked(unknown)[0],
-        forms: ticked(forms).map(shapeOf),
-        reversed: ticked(reversed).map(shapeOf),
-      };
-    });
+    .map(cells);
+}
+
+/**
+ * The §4.6 table (structure, unknown, forms, reversed forms) as shapes, with the start ceiling
+ * of the structure's first level (R2): a number, or null for the dash (no ceiling).
+ * @param {string} text addsub-meaning.md
+ * @returns {{ structure: string, unknown: string, forms: Shape[], reversed: Shape[], start: number | null }[]}
+ */
+export function parseForms(text) {
+  return formRows(text).map(([structure, unknown, forms, reversed, start]) => ({
+    structure: ticked(structure)[0],
+    unknown: ticked(unknown)[0],
+    forms: ticked(forms).map(shapeOf),
+    reversed: ticked(reversed).map(shapeOf),
+    start: /^\d+$/.test(start ?? '') ? Number(start) : null,
+  }));
 }
 
 /**
