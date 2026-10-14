@@ -1,14 +1,20 @@
-// The balance (pedagogy 6.3, depth 4.9): "=" as "the same as", a pan per side (R7). A level per
-// row of the 6.3 table; row 5 is two (max 10, then 20).
+// The balance (pedagogy 6.3, depth 4.9): "=" as "the same as"; each side of the exercise is a pan,
+// left to right (R7). A level per row of the 6.3 table; row 5 is two (max 10, then 20).
 import { SKILLS } from '../../data/skills.js';
 import { drawFace, renderBalance } from './view.js';
 
 export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 1, css: new URL('game.css', import.meta.url).href };
 
-const pans = { structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false };
+// What levels share; each level is a complete object (architecture 2.2).
+const pans = {
+  structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false,
+};
 const missing = { ...pans, skill: 'eq.sign.missing', max: 10 };
-const symbols = { ...missing, unknown: ['right-part', 'left-part', 'result-left'], eqform: ['standard', 'reversed'], look: /** @type {Level['look']} */ ('symbols') };
-/** @type {Level[]} */
+const symbols = {
+  ...missing, unknown: ['right-part', 'left-part', 'result-left'], eqform: ['standard', 'reversed'],
+  look: /** @type {Level['look']} */ ('symbols'),
+};
+/** The level table of pedagogy 6.3; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
   { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', max: 10, look: 'objects', options: 3, demo: true },
   { id: 'missing-right', ...missing, unknown: 'right-part', demo: true },
@@ -25,7 +31,7 @@ export const levels = [
 
 export const text = [];
 
-/** @typedef {Group & { side: 'left' | 'right' }} Piece a group and its side */
+/** @typedef {Group & { side: 'left' | 'right' }} Piece a group and its side of the exercise (pan or row) */
 
 /** @type {(r: Round) => Piece[]} */
 const groupsOf = (r) => (r.look === 'symbols' ? r.helpPicture : r.picture) ?? [];
@@ -37,32 +43,33 @@ const partsOf = (r) => groupsOf(r).filter((g) => g.role === 'part');
 const isResult = (r) => r.unknown === 'result-right' || r.unknown === 'result-left';
 /** @type {(r: Round) => boolean} the unknown is a part (a number of steps) */
 const isPart = (r) => r.unknown === 'right-part' || r.unknown === 'left-part';
-/** @type {(r: Round) => boolean} a reversed form: the lone number or result left of "=" */
+/** @type {(r: Round) => boolean} a reversed form: the lone number or the result stands left of "=" */
 const reversedForm = (r) => r.eqform === 'reversed' || r.unknown === 'result-left';
-/** @type {(id: string) => boolean} */
+/** @type {(id: string) => boolean} an equal.* rule (depth 4.9) */
 const isEqual = (id) => id.startsWith('equal.');
 /** @type {(r: Round, side: string) => Piece[]} */
 const onSide = (r, side) => groupsOf(r).filter((g) => g.side === side);
 
+/** @type {(r: Round) => number | null} the whole's number */
 const whole = (r) => groupsOf(r).find((g) => g.role === 'whole')?.count ?? null;
-/** The part next to the unknown, else the first. */
+/** @type {(r: Round) => number | null} the part next to the unknown, else the first */
 const part = (r) => {
   const parts = partsOf(r);
   return (parts.find((g) => g.side === unknownOf(r)?.side) ?? parts[0])?.count ?? null;
 };
-/** Every number of the exercise. */
+/** @type {(r: Round) => number | null} every number of the exercise added */
 const addAll = (r) => (unknownOf(r) ? groupsOf(r).filter((g) => g.role !== 'unknown').reduce((n, g) => n + g.count, 0) : null);
-/** The other side's number at the unknown's place, else its last. */
+/** @type {(r: Round) => number | null} the other side's number at the unknown's place, else its last */
 const copy = (r) => {
   const u = unknownOf(r);
   if (!u) return null;
   const other = onSide(r, u.side === 'left' ? 'right' : 'left');
   return (other[onSide(r, u.side).indexOf(u)] ?? other.at(-1))?.count ?? null;
 };
-/** @type {(f: (card: any) => Equation) => (r: Round) => Equation | null} a rule on the answer card */
+/** @type {(f: (card: any) => Equation) => (r: Round) => Equation | null} a rule on a judging round's answer card */
 const onCard = (f) => (r) => (Array.isArray(r.answer?.left) ? f(r.answer) : null);
 
-/** The §4.2 formulas (one per rule). */
+/** The §4.2 formulas on this game's rounds (one per rule). @type {Record<string, (r: Round) => any>} */
 export const rules = {
   'given.whole': (r) => whole(r),
   'given.part': (r) => part(r),
@@ -100,9 +107,12 @@ export const rules = {
 const piece = (side, role, count) => ({ side, role, count, shown: role === 'unknown' ? 'covered' : 'items' });
 
 /**
- * A wrong choice per rule in the skill's order, each value once, slips only where no real error
- * gives it; ascending. A reversed form puts equal.* first (depth 4.9; architecture 4.2).
- * @type {(round: Round, level: Level) => Choice[] | null}
+ * One wrong choice per rule in the skill's order, each value once, slips only where no real error
+ * gives the value; ascending. null when there are not enough. In a reversed form the equal.* rules
+ * come first (depth 4.9, eq.sign.missing; architecture 4.2).
+ * @param {Round} round
+ * @param {Level} level
+ * @returns {Choice[] | null}
  */
 function choose(round, level) {
   const listed = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
@@ -125,7 +135,13 @@ function choose(round, level) {
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
 
-/** @type {(level: Level, rng: Rng) => { unknown: string, eqform: string }} per seed; symbols: 40% reversed (R8) */
+/**
+ * The unknown and the form, per seed when a level lists several: level 4 gives c = a + ? and
+ * ? = a + b; the symbols levels every form met so far, 40% reversed (R8).
+ * @param {Level} level
+ * @param {Rng} rng
+ * @returns {{ unknown: string, eqform: string }}
+ */
 function formOf(level, rng) {
   if (!Array.isArray(level.unknown)) return { unknown: /** @type {string} */ (level.unknown), eqform: 'standard' };
   if (level.look === 'symbols' && rng.next() < 0.4) return { unknown: 'right-part', eqform: 'reversed' };
@@ -133,18 +149,29 @@ function formOf(level, rng) {
   return { unknown, eqform: level.look !== 'symbols' && unknown === 'right-part' ? 'reversed' : 'standard' };
 }
 
-/** @type {(level: Level, rng: Rng) => any} a try at a round's numbers, picture and exercise; null if one breaks the skill */
+/** @typedef {{ unknown: string, eqform: string, groups: Piece[], equation: Equation | null, answer: number }} Drawn */
+
+/**
+ * One try at a round's numbers, picture and exercise; null when they break the skill's rules.
+ * @param {Level} level
+ * @param {Rng} rng
+ * @returns {Drawn | null}
+ */
 function draw(level, rng) {
   const max = level.max;
   const low = max > 10 ? 8 : 4;
   const { unknown, eqform } = formOf(level, rng);
   if (level.skill === 'eq.sign.same-as') {
-    // Every total alike; parts of 2 or more, but 6 is 1 + 5 or 5 + 1 (given.part and op.other differ).
+    // Two parts on the left, the right pan empty: the child picks the pile that balances. Every
+    // total alike; parts of 2 or more, but 6 is 1 + 5 or 5 + 1 (so given.part and op.other differ).
     const c = rng.int(5, max);
+    /** @type {(a: number) => boolean} no equal parts, and neither part twice the other */
     const ok = (a) => a !== c - a && c - a !== 2 * a && a !== 2 * (c - a);
+    /** @type {(lo: number) => number[]} the first parts from lo up, each part at least lo */
     const splits = (lo) => Array.from({ length: c - 2 * lo + 1 }, (_, i) => lo + i).filter(ok);
     const a = rng.pick(splits(2).length ? splits(2) : splits(1));
-    return { unknown, eqform, groups: [piece('left', 'part', a), piece('left', 'part', c - a), piece('right', 'unknown', c)], equation: null, answer: c };
+    const groups = [piece('left', 'part', a), piece('left', 'part', c - a), piece('right', 'unknown', c)];
+    return { unknown, eqform, groups, equation: null, answer: c };
   }
   if (level.skill === 'eq.sign.missing') {
     if (unknown === 'result-left') {
@@ -183,14 +210,14 @@ function draw(level, rng) {
     return { unknown, eqform, groups, equation: { left: [a, '+', sum - a], right: ['?', '+', c] }, answer: sum - c };
   }
   if (level.skill === 'eq.props.commutative') {
-    // a + b = b + ?: parts up to five, a row each, so the turned row lies on the other.
+    // a + b = b + ?: parts of at most five, one row each, so the turned row lies on the other.
     const a = rng.int(1, 5);
     const b = rng.int(1, 5);
     if (a === b) return null;
     const groups = [piece('left', 'part', a), piece('left', 'part', b), piece('right', 'part', b), piece('right', 'unknown', a)];
     return { unknown, eqform, groups, equation: { left: [a, '+', b], right: [b, '+', '?'] }, answer: a };
   }
-  // relational: a + b = c + ?, c one or two from a: seeing beats computing.
+  // eq.sign.relational: a + b = c + ?, c one or two from a: seeing beats computing.
   const a = rng.int(5, 12);
   const b = rng.int(3, 9);
   const d = rng.pick([-2, -1, 1, 2]);
@@ -201,8 +228,10 @@ function draw(level, rng) {
 
 /**
  * A judging round (architecture 2.3): four cards, the true one c = a + b (the form a child who
- * reads "=" as "write the answer" rejects), an empty balance.
- * @type {(level: Level, rng: Rng) => Round}
+ * reads "=" as "write the answer" rejects); no equation row; an empty balance.
+ * @param {Level} level
+ * @param {Rng} rng
+ * @returns {Round}
  */
 function judge(level, rng) {
   let c;
@@ -221,7 +250,11 @@ function judge(level, rng) {
   return round;
 }
 
-/** @type {(level: Level, rng: Rng) => Round} */
+/**
+ * @param {Level} level
+ * @param {Rng} rng
+ * @returns {Round}
+ */
 export function makeRound(level, rng) {
   if (level.model === 'cards') return judge(level, rng);
   for (let n = 0; n < 1000; n++) {
@@ -230,8 +263,8 @@ export function makeRound(level, rng) {
     const symbols = level.look === 'symbols';
     /** @type {Round} */
     const round = {
-      skill: level.skill, structure: /** @type {string} */ (level.structure), unknown: made.unknown, look: level.look, model: level.model, eqform: made.eqform,
-      picture: symbols ? [] : made.groups, helpPicture: symbols ? made.groups : null, equation: made.equation, text: '', terms: [],
+      skill: level.skill, structure: /** @type {string} */ (level.structure), unknown: made.unknown, look: level.look,
+      model: level.model, eqform: made.eqform, picture: symbols ? [] : made.groups, helpPicture: symbols ? made.groups : null, equation: made.equation, text: '', terms: [],
       answer: made.answer, choices: [],
     };
     const choices = choose(round, level);
@@ -240,5 +273,24 @@ export function makeRound(level, rng) {
   throw new Error(`balance: no round for level ${level.id}`);
 }
 
-// render(host, round, ctx) and face(host, value, round): view.js.
-export { renderBalance as render, drawFace as face };
+/**
+ * The picture (view.js).
+ * @param {HTMLElement} host
+ * @param {Round} round
+ * @param {RenderContext} ctx
+ * @returns {RoundView}
+ */
+export function render(host, round, ctx) {
+  return renderBalance(host, round, ctx);
+}
+
+/**
+ * A card's face: a pile without a digit (same-as), an exercise on one line (judging), else false.
+ * @param {HTMLElement} host
+ * @param {any} value
+ * @param {Round} round
+ * @returns {boolean}
+ */
+export function face(host, value, round) {
+  return drawFace(host, value, round);
+}
