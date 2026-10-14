@@ -197,7 +197,7 @@ const DISPLAYS = [
   ['split-pairs', 'given.whole'], ['split-pairs', 'op.other'], ['split-pairs', 'zero.counted-as-one'], ['split-pairs', 'slip.near'],
   ['teen-bundle', 'pv.teen-reversed'], ['teen-bundle', 'pv.digits-added'], ['teen-bundle', 'pv.ones-only'], ['teen-bundle', 'slip.near'],
   ['bridge-frames', 'bridge.whole-second'], ['bridge-frames', 'bridge.leftover-only'], ['bridge-frames', 'bridge.stopped-at-ten'],
-  ['teen-symbols', 'given.whole'], ['teen-symbols', 'given.part'], ['teen-symbols', 'slip.near'],
+  ['teen-symbols', 'given.whole'], ['teen-symbols', 'given.part'], ['teen-symbols', 'slip.near'], ['split-5', 'op.other'],
 ];
 
 for (const [level, rule] of DISPLAYS) {
@@ -613,3 +613,36 @@ test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both;
   expect(await said(row(page))).toBe(spoken(round.equation, ['4']));
   for (const stick of await ones.all()) await expect(stick).toHaveCSS('background-color', 'rgb(214, 51, 108)');
 });
+
+for (const [level, ok, what] of [['ten-cover', (r) => r.answer === 5, '5 + 5'], ['split-10', (r) => r.equation.left[0] === 4 && r.answer === 4, 'a double, 4 + 4']]) {
+  test(`${what}: the cover holds the unknown's cells, the cards keep two real errors and a slip, and the tour ends on the answer`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    const { round, answerAt } = await devAt(page, level, ok);
+    const whole = round.answer * 2;
+    // given.part would be the answer: its card gives way to a slip (number sense 4.4).
+    expect(round.choices.map((c) => c.rule).filter(Boolean).sort()).toEqual(['given.whole', 'op.other', 'slip.near']);
+    expect(round.choices.map((c) => c.value).filter((v) => v !== round.answer && Math.abs(v - round.answer) !== 1)).toEqual([whole, whole + round.answer]);
+    const picture = page.locator('[data-area="picture"]');
+    await expect(picture.locator('.tf-disc[data-role="part"]')).toHaveCount(round.answer);
+    const lids = picture.locator('.tf-lid');
+    const covered = await picture.locator('.tf-cell').evaluateAll((cells, n) => {
+      const boxes = [...document.querySelectorAll('[data-area="picture"] .tf-lid')].map((l) => l.getBoundingClientRect());
+      return cells.map((c) => c.getBoundingClientRect()).filter((c) => boxes.some((b) => c.left >= b.left - 1 && c.right <= b.right + 1 && c.top >= b.top - 1 && c.bottom <= b.bottom + 1)).length;
+    });
+    expect(covered, 'the cover holds the unknown\'s cells').toBe(round.answer);
+    expect(await lids.count()).toBeGreaterThan(0);
+    for (const i of round.choices.keys()) {
+      if (i === answerAt) continue;
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-hint]')).toBeVisible();
+    await expect(page.locator('[data-tour]')).toHaveText(Array.from({ length: round.answer }, (_, j) => String(j + 1)));
+    await quiet(page);
+    await expectCalm(page);
+    await expectInPanel(page);
+    await card(page, answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await expect(row(page)).toHaveText(`${round.answer}+${round.answer}=${whole}`);
+  });
+}

@@ -11,6 +11,8 @@ const SEEDS = 200;
 const level = (id) => game.levels.find((l) => l.id === id);
 const rounds = (id, n = SEEDS) => Array.from({ length: n }, (_, i) => game.makeRound(level(id), rng(i + 1)));
 const sum = (pair) => pair[0] + pair[1];
+/** A group's count in a round's picture (its help picture in symbols look). */
+const count = (r, role) => (r.look === 'symbols' ? r.helpPicture : r.picture).find((g) => g.role === role)?.count;
 
 test('R6: frame cells go left to right, top row first, five to a row; past the frames they go on below', () => {
   for (const [frames, rows] of [[1, 1], [1, 2], [2, 2]]) {
@@ -210,4 +212,39 @@ test('bundles with the ones unknown: the tag sits over the bundle and the cover,
     assert.ok(B.tag.y >= 0 && B.tag.x >= 0 && B.tag.x + B.tag.w <= B.dw);
   }
   assert.equal(layoutBundles({ ones: 4 }).tag, null, 'level 8 draws no tag');
+});
+
+test('doubles and 5 + 5: about one round in five, where given.part gives the answer and its card gives way (number sense 4.4)', () => {
+  const double = (r) => count(r, 'part') === r.answer;
+  for (const id of ['split-5', 'split-10', 'split-bond', 'ten-empty', 'ten-cover', 'ten-symbols']) {
+    const lvl = level(id);
+    const all = rounds(id);
+    const doubles = all.filter(double);
+    assert.ok(doubles.length >= SEEDS * 0.13 && doubles.length <= SEEDS * 0.27, `${id}: ${doubles.length} of ${SEEDS}`);
+    for (const r of doubles) {
+      const where = `${id} ${JSON.stringify(r.equation)}`;
+      assert.equal(game.rules['given.part'](r), r.answer, where);
+      const rules = r.choices.map((c) => c.rule).filter(Boolean);
+      assert.ok(!rules.includes('given.part'), where);
+      // The next rule in the list fills its place: on a 4-card level that is the slip (answer +-1);
+      // on the 3-card level 1, op.other, so two real errors stay (R4).
+      assert.deepEqual(rules.sort(), lvl.options === 4 ? ['given.whole', 'op.other', 'slip.near'] : ['given.whole', 'op.other'], where);
+      if (lvl.options === 4) assert.ok([r.answer - 1, r.answer + 1].includes(r.choices.find((c) => c.rule === 'slip.near').value));
+    }
+    // The other rounds keep the given part's card (with nothing under the cover the part is the
+    // whole, and given.whole, first in the list, tags it).
+    for (const r of all.filter((x) => !double(x) && x.answer !== 0)) {
+      assert.ok(r.choices.some((c) => c.rule === 'given.part'), `${id}: ${JSON.stringify(r.equation)} keeps the given part`);
+    }
+    if (lvl.skill === 'num.parts.make-ten') {
+      assert.ok(doubles.every((r) => r.answer === 5), `${id}: 5 + 5 is the only double of ten`);
+      const parts = new Set(all.map((r) => count(r, 'part')));
+      for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 9]) assert.ok(parts.has(k), `${id}: ${k} + ? = 10 appears`);
+    } else {
+      const halves = new Set(doubles.map((r) => r.answer));
+      assert.deepEqual([...halves].sort(), lvl.max === 5 ? [2] : [2, 3, 4, 5], `${id}: every double up to ${lvl.max}`);
+    }
+  }
+  const zero = rounds('split-10').filter((r) => r.answer === 0).length;
+  assert.ok(zero >= SEEDS * 0.05 && zero <= SEEDS * 0.16, `split-10 still covers nothing in about one round in ten: ${zero}`);
 });

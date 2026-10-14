@@ -192,18 +192,28 @@ function roundOf(level, groups, equation, answer, eqform = 'standard') {
 const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard')
   : level.eqform ?? 'standard');
 
+/** About one round in five is a double, or 5 + 5 in making ten (number sense 4.4; decisions.md 2026-10-14). */
+const DOUBLES = 0.2;
+
 /**
  * The parts of a number: part + ? = whole. In the ten-frame level about one round in ten covers
- * nothing (the answer is 0: the cover stands on an empty cell); a bond never does.
+ * nothing (the answer is 0: the cover stands on an empty cell); a bond never does. About one round
+ * in five is a double (4 + ? = 8): there given.part is the answer, so its card gives way to the
+ * next rule (number sense 4.4).
  * @param {Level} level
  * @param {Rng} rng
  */
 function splitRound(level, rng) {
   let whole;
   let part;
-  if (level.model === 'frame' && level.max === 10 && rng.next() < 0.1) {
+  const zero = level.model === 'frame' && level.max === 10 ? 0.1 : 0;
+  const roll = rng.next();
+  if (roll < zero) {
     whole = rng.int(3, 9);
     part = whole;
+  } else if (roll < zero + DOUBLES) {
+    part = rng.int(2, Math.floor(level.max / 2));
+    whole = 2 * part;
   } else {
     do {
       whole = rng.int(3, level.max);
@@ -226,13 +236,16 @@ function pairsRound(level, rng) {
 
 /**
  * Making ten: k + ? = 10, or in symbols also 10 − k = ? and 10 = k + ?. The frame is the whole.
- * The level with visible empty cells sometimes shows a full frame (the answer is 0).
+ * The level with visible empty cells sometimes shows a full frame (the answer is 0). About one
+ * round in five is 5 + ? = 10: there given.part is the answer, so its card gives way to a slip.
  * @param {Level} level
  * @param {Rng} rng
  */
 function tenRound(level, rng) {
   const open = Boolean(VARIANT[level.id]?.open);
-  const k = open && rng.next() < 0.1 ? 10 : rng.pick([1, 2, 3, 4, 6, 7, 8, 9]);
+  const full = open ? 0.1 : 0;
+  const roll = rng.next();
+  const k = roll < full ? 10 : roll < full + DOUBLES ? 5 : rng.pick([1, 2, 3, 4, 6, 7, 8, 9]);
   const eqform = eqformOf(level, rng);
   const minus = eqform === 'standard' && level.look === 'symbols' && rng.next() < 0.5;
   const equation = eqform === 'reversed' ? { left: [10], right: [k, '+', '?'] }
