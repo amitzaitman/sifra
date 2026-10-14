@@ -176,6 +176,32 @@ test('judging over 500 seeds: each form is sometimes true and sometimes false, a
   assert.deepEqual([...rules].sort(), ['equal.copy', 'equal.reject-reversed', 'op.other', 'slip.card']);
 });
 
+test('judging: the cards are the catalogue\'s (depth 4.9, errors.md), on 5 + 2 = 7 in each form of the true card', () => {
+  const standard = { left: [5, '+', 2], right: [7] };
+  const reversed = { left: [7], right: [5, '+', 2] };
+  const same = { left: [7], right: [7] };
+  /** @type {(answer: Equation) => Round} */
+  const round = (answer) => ({ ...rounds('true-false')[0], answer, fact: [5, 2] });
+  for (const answer of [standard, reversed, same]) {
+    const r = round(answer);
+    const where = JSON.stringify(answer);
+    assert.deepEqual(balance.rules['op.other'](r), { left: [5, '+', 2], right: [3] }, where);
+    assert.deepEqual(balance.rules['equal.copy'](r), { left: [5], right: [5, '+', 2] }, where);
+    assert.deepEqual(balance.rules['slip.card'](r), { left: [7], right: [8] }, where);
+    // A true card with a lone number on the left is turned down for the standard form.
+    assert.deepEqual(balance.rules['equal.reject-reversed'](r), answer === standard ? null : { left: [5, '+', 2], right: [8] }, where);
+  }
+  // Depth 4.9's false cards beside each form of the true card.
+  const lists = { standard: ['equal.copy', 'op.other', 'slip.card'], reversed: ['equal.reject-reversed', 'op.other', 'slip.card'], same: ['equal.copy', 'equal.reject-reversed', 'op.other'] };
+  const seen = new Set();
+  for (const r of rounds('true-false')) {
+    const form = formOf(r.answer);
+    seen.add(form);
+    assert.deepEqual(r.choices.map((c) => c.rule).filter(Boolean).sort(), lists[form], `${form}: ${JSON.stringify(r.choices)}`);
+  }
+  assert.deepEqual([...seen].sort(), ['reversed', 'same', 'standard']);
+});
+
 test('design 10: the unknown and the cover keep a --halo where they meet cubes and the frame; the frame has no role', () => {
   const css = readFileSync(new URL('../games/balance/game.css', import.meta.url), 'utf8');
   assert.match(css, /\.bl-cube\[data-role="unknown"\] \{ box-shadow: 0 0 0 3px var\(--halo\)/);
