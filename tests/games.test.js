@@ -254,6 +254,10 @@ export function checkRound(game, level, index, round) {
   if (right.length !== 1 || !isDeepStrictEqual(right[0].value, round.answer)) fail('R4: exactly one choice has no rule, and it is the answer');
   choices.forEach((c, i) => choices.findIndex((d) => isDeepStrictEqual(c.value, d.value)) !== i && fail(`R4: ${show(c.value)} is offered twice`));
   const listed = skillOf(level.skill)?.rules ?? [];
+  // Ties go to the rule first in the skill's list (R4), but in a reversed form (the lone number or
+  // the result left of '=') the equal.* rules come first (depth 4.9, eq.sign.missing).
+  const reversed = Boolean(equation) && equation.left.length === 1 && equation.right.length > 1;
+  const order = reversed ? [...listed.filter((r) => r.startsWith('equal.')), ...listed.filter((r) => !r.startsWith('equal.'))] : listed;
   const wrong = choices.filter((c) => c.rule !== null);
   for (const { value, rule } of wrong) {
     if (!RULES[rule]) fail(`R4: ${rule} is not in the §4.2 catalogue`);
@@ -268,8 +272,8 @@ export function checkRound(game, level, index, round) {
       continue;
     }
     if (!predicts(formula(round), value)) fail(`R4: ${rule} gives ${show(formula(round))}, the choice is ${show(value)}`);
-    const earlier = listed.slice(0, listed.indexOf(rule)).find((q) => game.rules[q] && predicts(game.rules[q](round), value));
-    if (earlier) fail(`R4: ${show(value)} is tagged ${rule}, but ${earlier} comes first in the skill's list and gives it too`);
+    const earlier = order.slice(0, order.indexOf(rule)).find((q) => game.rules[q] && predicts(game.rules[q](round), value));
+    if (earlier) fail(`R4: ${show(value)} is tagged ${rule}, but ${earlier} comes first${reversed ? ' in a reversed form' : ' in the skill\'s list'} and gives it too`);
   }
   const real = wrong.filter((c) => !c.rule.startsWith('slip.')).length;
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
@@ -345,6 +349,13 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(judged((r) => { r.choices.find((c) => c.rule === null).value.right = [99]; }), /the answer but false/);
   assert.match(judged((r) => { wrongCard(r).value.right = ['?']; }), /R8: the card/);
   assert.match(judged((r) => { r.equation = { left: [1, '+', '?'], right: [2] }; }), /equation null/);
+  // A reversed form (c = a + ?): equal.copy comes before given.whole (depth 4.9).
+  const missing = scale.levels.findIndex((l) => l.id === 'right');
+  const plain = scale.makeRound(scale.levels[missing], rng(3));
+  const flipped = { ...structuredClone(plain), equation: { left: plain.equation.right, right: plain.equation.left } };
+  const copying = { ...scale, rules: { ...scale.rules, 'equal.copy': (r) => r.equation.left[0] } };
+  assert.match(checkRound(copying, scale.levels[missing], missing, flipped).join('\n'), /given\.whole, but equal\.copy comes first in a reversed form/);
+  assert.doesNotMatch(checkRound(copying, scale.levels[missing], missing, plain).join('\n'), /comes first/);
   const bad = { ...parts, levels: [parts.levels[1], { ...parts.levels[0], id: 'split-10', model: 'tree', look: 'objects', colour: 'red' }] };
   const problems = checkGame(bad).join('\n');
   assert.match(problems, /used twice/);

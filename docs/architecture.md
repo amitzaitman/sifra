@@ -89,9 +89,10 @@ dev-spec A.1 is the shape, with these precisions:
 - Plain data only (survives `structuredClone`). In both milestone games `text` is `''` and `terms` is `[]`.
 - `rules[id](round)` returns the predicted value. When the catalogue formula says "or" (`slip.near`, `slip.far`) it
   returns `{ oneOf: [a, b] }`, and a choice with that rule equals one of them.
-- **Judging round** (`eq.sign.true-false`, balance level 9): the answer is a card, an equation object with numbers
-  and operators on both sides and no `'?'`; every choice is such a card; the answer card is true and every other card
-  false. `equation` is `null` (the exercises are on the cards, the equation row stays empty), there is no `unknown`
+- **Judging round** (`eq.sign.true-false`, the balance's `true-false` level): the answer is a card, an equation object
+  with numbers and operators on both sides and no `'?'`; every choice is such a card; the answer card is true and every
+  other card false. `equation` is `null` (the exercises are on the cards, so the equation row is empty until the round
+  is solved; then the game writes the true card there with `setEquation`, so the full exercise is on screen, R5), there is no `unknown`
   and no §4.6 row, and `picture` is the game's own stage (it may hold no groups). Values compare by deep equality,
   whatever their key order. The shell's card label reads the tokens (`5 + 2 = 7`); `face` draws the card on one
   line and may set its own `aria-label`.
@@ -112,7 +113,8 @@ dev-spec A.1 is the shape, with these precisions:
 //   mode         'play' | 'demo' | 'thumb' (a still picture for home and the end screen). host is in the page in
 //                every mode, thumbs too, so render may measure it
 //   solved       thumb only: draw the solved picture, without the cover
-//   setEquation  (equation) => void: rewrite the equation row (ten-frame level 10, "10 + 3")
+//   setEquation  (equation) => void: rewrite the equation row (ten-frame level 10, "10 + 3"; a judging round's
+//                true card when solved)
 //   onAttempt    (value) => void: commit of a build round; unused in milestone 1
 // RoundView: { miss, solve, picture, demo, label }
 //   miss(choice, step) => Promise<void>   choice is { value, rule, display }; step is 1, 2 or 3
@@ -139,7 +141,9 @@ dev-spec A.1 is the shape, with these precisions:
    `view.miss({ value, rule, display }, step)` (`display` from RULES), and unlocks. After step 3 only the answer card
    is left, ringed (design §6.5).
 4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`); from step 2
-   it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2); at step 3 the tour: one `[data-tour]`
+   it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2; a 3-option level's first miss is
+   step 2 and still a first miss: its display stays to the next tap, also with reduced motion, and the hint joins
+   it); at step 3 the tour: one `[data-tour]`
    per digit, the last one the answer (from 1 on the unknown when it is a part, on from the known part when it is
    the whole; R5). It resolves when the display has ended and, at step 3, the tour; it does not wait for the
    hint's pulse, which goes on after the cards unlock (design §7.1-§7.2: the cards lock only while a display runs,
@@ -415,7 +419,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - R4: the answer in `[min ?? 0, max]`; rules in the skill's SKILLS list and in RULES; `oneOf` accepted;
   `choices.length === options`; 3 only on the skill's first level in the game's list or for relation answers; at
   least `min(2, wrong choices)` non-`slip.*` rules when the skill lists two or more; numbers ascending; no
-  `keyword.*` in v1.
+  `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except that in a
+  reversed form (the lone number or the result left of `=`) the `equal.*` rules come first (depth §4.9,
+  `eq.sign.missing`; section 6). Every formula stays the catalogue's, whatever the form.
 - R5 (auto): every rule used has a display in RULES. R8: levels whose `eqform` is an array are 25% non-standard.
 
 ### 4.3 Units
@@ -452,7 +458,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - `page.clock.install()` before every `goto`; never wait a fixed time. Exactly one real-time 60 s test in the suite
   (site.spec.js, chromium): one page per registered game, each on a round with a cover, waiting together: the
   first level drawn without a tap whose round at seed 1 has a `'?'` in its exercise (a level may cover nothing:
-  balance level 1 leaves a pan empty for the child to fill).
+  the balance's `same` level leaves a pan empty for the child to fill).
 - Tests rebuild a round in Node from `data-level`, `data-seed` and `data-structure` by importing the game and
   lib/rng.js. Storage is seeded with `page.addInitScript()`; "yesterday" comes from `page.clock.setFixedTime()`.
   Game specs open fixture.html or index.html routes with a fixed seed where the round matters, and assert what they
@@ -533,7 +539,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 | Storage key | One key, `sifra`, with `schema` | One key forever; migrate() steps by schema |
 | `symbols` look | The first miss shows the help picture before the display | Displays run on the picture (R5, step 1) |
 | Answer in the equation | `.eq-answer`, not `data-role`; `aria-hidden` until solved, then a new node | design §3 gives `[data-role="unknown"]` a background, and R6 [browser] expects roles on quantities only; design §6.4 wants the live region to say the solved equation |
-| Judging rounds | Answer and choices are cards, `equation` null, R1 per card (2.3, 4.2) | dev-spec A.2 R1 has no branch for "no unknown, the child judges cards" (§4.9 `eq.sign.true-false`, §6.3 level 9) |
+| Judging rounds | Answer and choices are cards, `equation` null, R1 per card (2.3, 4.2) | dev-spec A.2 R1 has no branch for "no unknown, the child judges cards" (§4.9 `eq.sign.true-false`; the §6.3 row of that skill, the balance's `true-false` level) |
+| Ties in a reversed form | `equal.*` first, then the skills.md order; the generic test (4.2) checks it | R4 keeps "the rule first in skills.md", depth §4.9 (`eq.sign.missing`) says "in the reversed form the `equal.*` rules come first". The more specific sentence is applied until the owner decides between it and a per-form order in skills.md |
 | Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
 | Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |

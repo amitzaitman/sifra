@@ -1,5 +1,4 @@
-/* The balance (design 6.8, 7). The cube is (W - 78px) / 10 up to 28px, less when the pans need more
-   rows than the stage's height holds; places are in units of the cube (--c --r --w --h). */
+/* The balance (design 6.8, 7): cube (W - 78px) / 10 to 28px, less when rows need it; places in cubes. */
 @property --rows { syntax: '<number>'; inherits: true; initial-value: 2; }
 @property --len { syntax: '<number>'; inherits: true; initial-value: 10; }
 
@@ -20,7 +19,7 @@
 [data-game="balance"] .bl-pole { position: absolute; top: var(--yb); bottom: 4px; left: calc(50% - 3px); width: 6px; border-radius: 3px; background: var(--frame); }
 [data-game="balance"] .bl-beam { position: absolute; top: calc(var(--yb) - 5px); left: calc(50% - var(--half) - 6px); width: calc(var(--half) * 2 + 12px); height: 10px; border-radius: 5px; background: var(--frame); transform: rotate(calc(var(--t) * 12deg)); transition: transform var(--t-beam) var(--ease); }
 [data-game="balance"] .bl-pivot { position: absolute; top: calc(var(--yb) - 8px); left: calc(50% - 8px); width: 16px; height: 16px; border-radius: 50%; background: var(--frame); box-shadow: 0 0 0 3px var(--panel); }
-/* One stop of 12 degrees for any difference (R8); the pans hang straight; ghosts land first. */
+/* One 12 degree stop for any difference (R8); ghosts land first. */
 [data-game="balance"] .bl-scene[data-tilt="left"] { --t: -1; }
 [data-game="balance"] .bl-scene[data-tilt="right"] { --t: 1; }
 [data-game="balance"] .bl-pan { --s: -1; position: absolute; top: var(--yb); bottom: var(--gc); left: calc(50% + var(--half) * var(--s) - var(--pan) / 2); width: var(--pan); transform: translate(calc(var(--half) * -.0219 * var(--s) * var(--t) * var(--t)), calc(var(--half) * .2079 * var(--s) * var(--t))); transition: transform var(--t-beam) var(--ease); }
@@ -41,7 +40,6 @@
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
-[data-game="balance"] .bl-cube.is-hop { animation: balance-hop var(--t-blink) var(--ease); }
 
 /* The stretched cover (design 6.6). */
 [data-game="balance"] .bl-lid { width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
@@ -54,6 +52,8 @@
 [data-game="balance"] .bl-ring { left: calc(var(--u) * var(--c) - 5px); bottom: calc(var(--u) * var(--r) - 5px); width: calc(var(--u) * var(--w) + 7px); height: calc(var(--u) * var(--h, 1) + 7px); border: 3px solid var(--role-added-edge); border-radius: calc(var(--cube) * .25 + 5px); box-shadow: inset 0 0 0 2px var(--halo); animation: balance-ring var(--t-blink) var(--ease) backwards; }
 [data-game="balance"] .bl-ring.is-late { animation-delay: .25s; }
 [data-game="balance"] .bl-ring.is-hint, [data-game="balance"] .bl-ring.is-tour { border-color: var(--role-unknown); }
+/* A hint ring in the colour of the role it marks (design 7.2). */
+[data-game="balance"] .bl-ring.is-hint.is-part { border-color: var(--role-part-edge); }
 [data-game="balance"] .bl-zero, [data-game="balance"] .bl-mark, [data-game="balance"] .bl-digit { display: grid; place-items: center; width: var(--cube); height: var(--cube); border-radius: 50%; color: var(--role-added-edge); font-size: max(14px, calc(var(--cube) * .6)); font-weight: 800; line-height: 1; }
 [data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
 [data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
@@ -81,11 +81,12 @@
 [data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
 [data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
-[data-game="balance"] .bl-set .bl-copy { border: 3px solid var(--role-part-edge); }
 [data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
 [data-game="balance"] .bl-set .bl-lid > .cover { border-radius: calc(var(--dot) / 2) calc(var(--dot) / 2) calc(var(--dot) * .2) calc(var(--dot) * .2); }
 [data-game="balance"] .bl-set .bl-ring { left: calc(var(--cell) * var(--x) + var(--inset) - 6px); top: calc(var(--cell) * var(--y) + var(--inset) - 6px); width: calc(var(--cell) * (var(--w) - 1) + var(--dot) + 12px); height: calc(var(--dot) + 12px); border-radius: calc(var(--dot) / 2 + 6px); }
-[data-game="balance"] .bl-turn { position: absolute; left: 0; top: 0; width: calc(var(--cell) * var(--w)); height: var(--cell); opacity: 0; animation: balance-turn 1000ms var(--ease); }
+/* The turn (depth 4.9): the first row's copy turns over about its middle onto the second row. */
+[data-game="balance"] .bl-set .bl-twin { opacity: 0; transform-origin: calc(var(--cell) * (var(--line) / 2 - var(--x)) - var(--inset)) 50%; animation: balance-turn 700ms var(--ease); }
+[data-game="balance"] .bl-set .is-slow > .bl-twin { animation-duration: 1000ms; }
 
 /* Cards: a pile in ink; judging cards two by two, one line each (R7). */
 [data-game="balance"] .bl-pile { display: flex; flex-wrap: wrap-reverse; gap: 3px; width: 72px; }
@@ -109,8 +110,7 @@
 @keyframes balance-digit { from { opacity: 0; transform: scale(.4); } }
 @keyframes balance-appear { from { opacity: 0; } }
 @keyframes balance-drop { from { opacity: 0; transform: translateY(-60%); } }
-@keyframes balance-hop { 50% { transform: translateY(-60%); } }
-@keyframes balance-turn { 0% { opacity: .9; transform: none; }
-  80% { opacity: .9; transform: translateY(calc(var(--cell) * 1.6)) rotate(180deg); }
-  100% { opacity: 0; transform: translateY(calc(var(--cell) * 1.6)) rotate(180deg); }
+@keyframes balance-turn { 0% { opacity: 1; transform: none; }
+  85% { opacity: 1; transform: translateY(calc(var(--cell) * 1.6)) rotateY(180deg); }
+  100% { opacity: 0; transform: translateY(calc(var(--cell) * 1.6)) rotateY(180deg); }
 }
