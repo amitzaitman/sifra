@@ -460,6 +460,27 @@ test('relational: the hint moves the cubes that make a into c to the first group
   }
 });
 
+test('relational: the next tap puts the cubes the wrong way moved back at once, colours too (design 7.2)', async ({ page }) => {
+  const { round } = await devAt(page, 'relational', 1);
+  const wrong = wrongOf(round);
+  const moved = wrong.find((i) => round.choices[i].rule === 'equal.compensate-wrong');
+  await card(page, moved).click();
+  await unlocked(page);
+  // What the real cubes are doing the moment the next display is drawn.
+  await page.evaluate(() => {
+    const scene = document.querySelector('.bl-scene');
+    new MutationObserver((_, watch) => {
+      if (!scene.querySelector(':scope > [data-display]')) return;
+      watch.disconnect();
+      const cubes = [...scene.querySelectorAll(':scope > .bl-pan .bl-cube')];
+      window['atDisplay'] = cubes.flatMap((c) => c.getAnimations()).filter((a) => a instanceof CSSTransition && a.transitionProperty === 'background-color').length;
+    }).observe(scene, { childList: true });
+  });
+  await card(page, wrong.find((i) => i !== moved)).click();
+  const fading = await (await page.waitForFunction(() => window['atDisplay'] !== undefined && { n: window['atDisplay'] })).jsonValue();
+  expect(fading.n, 'no cube fades back while the next display is drawn').toBe(0);
+});
+
 test('? = a + b: the cover over the sum\'s places in rows of five; the tour counts on over what was under it, a + 1 to the answer', async ({ page }) => {
   const { round, answerAt } = await devAt(page, 'missing-reversed', 1);
   expect(round.unknown).toBe('result-left');

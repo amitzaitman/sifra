@@ -16,7 +16,8 @@
   --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 6px + 3px * var(--rows));
   position: absolute; left: calc(50% - var(--w) / 2); top: calc(50% - var(--h) / 2); width: var(--w); height: var(--h); transition: --rows var(--t-move) var(--ease);
 }
-[data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none; }
+/* A reset goes at once: this wins over every element's own transition (a cube's colour fade too). */
+[data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none !important; }
 [data-game="balance"] .bl-base { position: absolute; bottom: 0; left: calc(50% - var(--cube) - 10px); width: calc(var(--cube) * 2 + 20px); height: 8px; border-radius: 4px; background: var(--frame); }
 [data-game="balance"] .bl-pole { position: absolute; top: var(--yb); bottom: 4px; left: calc(50% - 3px); width: 6px; border-radius: 3px; background: var(--frame); }
 [data-game="balance"] .bl-beam { position: absolute; top: calc(var(--yb) - 5px); left: calc(50% - var(--half) - 6px); width: calc(var(--half) * 2 + 12px); height: 10px; border-radius: 5px; background: var(--frame); transform: rotate(calc(var(--t) * 12deg)); transition: transform var(--t-beam) var(--ease); }
