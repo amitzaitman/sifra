@@ -6,6 +6,16 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "typecheck": "tsc -p tsconfig.json",
+    "e2e": "playwright test",
+    "check": "npm test && npm run typecheck && npm run e2e",
+    "gen": "node scripts/gen-data.js",
+    "start": "node start.js",
+    "icons": "node scripts/render-icons.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "typescript": "5.9.3"
   }
 }
