@@ -5,7 +5,8 @@
 
 [data-game="balance"] .bl-stage { position: absolute; inset: 0; padding: clamp(8px, 3vw, 16px); container-type: size; }
 [data-game="balance"] .bl-stage.is-thumb { inset: auto; left: 50%; top: 50%; width: 300px; height: 170px; padding: 0; transform: translate(-50%, -50%) scale(var(--k, .3)); }
-[data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 16px; }
+/* The thumb's gap under the pans clears the 12 degree drop (about 15px here) and the 8px base. */
+[data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 30px; }
 
 [data-game="balance"] .bl-scene {
   --t: 0; --gx: 78px; --gt: 12px; --gc: 68px;
