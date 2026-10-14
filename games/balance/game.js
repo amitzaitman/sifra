@@ -3,7 +3,7 @@
 import { SKILLS } from '../../data/skills.js';
 import { drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', grades: [1, 2], version: 1, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 1, css: new URL('game.css', import.meta.url).href };
 
 const pans = { structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false };
 const missing = { ...pans, skill: 'eq.sign.missing', max: 10 };
