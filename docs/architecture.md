@@ -650,6 +650,15 @@ Until then these are not choices made. One list for both games.
   the game makes it two levels (`missing-symbols`, `missing-symbols-20`), so §6.3's levels 6-10 are the game's 7-11
   (levels are named by id here). Either keep two levels and number §6.3 the same way, or make row 5 one level with
   `max: 20`.
+- **When a game goes live, and where the iPhone check runs.** decisions.md ("בדיקות"), CLAUDE.md, the README and
+  section 7 say the iPhone check is logged before a game goes live, but `device-checks.md` checks the site at its
+  GitHub Pages address, and CI deploys every push to main with every registered game. So a merge puts a game on
+  the public site before its check can be done. `start.js` listens on 127.0.0.1 only, and a phone on the local
+  network would load plain http, which is not a secure context (no storage manager), so the saving checks would not
+  match Pages. Either "live" means "shared with children" and the check runs on Pages right after the merge
+  (decisions.md's milestone list already plans it so), or a per-game flag keeps a merged game off the home page
+  until its row is logged (as `VERIFIED` does for the parents link; `#/play/<id>` still reaches it on Pages), or the
+  check runs before the merge from a local server (a host option for `start.js`; the saving checks still need Pages).
 
 ## 7. Work split
 
