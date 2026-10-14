@@ -9,8 +9,8 @@ Status: planning, no code yet. The pedagogy doc comes before the first game.
 ## Where things are
 
 - `docs/decisions.md`: the owner's decisions and why (Hebrew). Don't reverse one without asking.
-- `docs/pedagogy.md`: the rules every game follows, the grade 1-6 map, grade 1-2 depth (being written).
-- `docs/skills.md`: skill ids (being written). Ids are stable: never rename one that a game or a saved record uses.
+- `docs/pedagogy.md`: the binding rules (R1-R11) every game follows, the grade 1-6 map, grade 1-2 depth, the error-rule catalogue, the first two games and the owner's open questions (§8.1). Draft: the owner hasn't answered §8.1 yet. Appendix A is for developers.
+- `docs/skills.md`: every skill id with prerequisites and error-rule ids. Ids are stable: never rename one that a game or a saved record uses.
 
 ## Product rules
 
