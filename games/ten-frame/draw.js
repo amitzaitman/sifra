@@ -456,7 +456,7 @@ export function drawBundles(host, d) {
   if (tagged) {
     const { l, r, y, end } = L.bracket;
     outline(host, L, [`M${n(l)} ${n(end)}V${n(y)}H${n(r)}V${n(end)}`], 'tf-line-frame tf-bracket-whole', false);
-    const chip = at(host, 'tf-chip tf-tag', L.tag, String(d.tag));
+    const chip = at(host, 'tf-chip tf-tag on-bracket', L.tag, String(d.tag));
     const bundle = countable(at(host, 'tf-bundle', L.bundle));
     bundle.dataset.role = 'part';
     bundle.append(el('span', 'tf-band'));
