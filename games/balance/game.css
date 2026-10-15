@@ -73,6 +73,11 @@
 [data-game="balance"] .bl-ring.is-hint.is-part { border-color: var(--role-part-edge); }
 [data-game="balance"] .bl-zero, [data-game="balance"] .bl-mark, [data-game="balance"] .bl-digit { display: grid; place-items: center; width: var(--cube); height: var(--cube); border-radius: 50%; color: var(--role-added-edge); font-size: max(14px, calc(var(--cube) * .6)); font-weight: 800; line-height: 1; }
 [data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
+/* A ring with 0 on an empty place (design 7.1) is 5px wider than the place, so its hole is clearly
+   wider than the 0: it grows up and to the right, into the row above and the next place, both empty
+   when nothing is to be found (a + ? = a), and keeps the place's left and bottom, so its halo stops
+   in the 3px gap before the cubes beside and below it. The 0, whose ink sits high, is centred in it. */
+[data-game="balance"] .bl-stack > .bl-zero { width: calc(var(--cube) + 5px); height: calc(var(--cube) + 5px); padding-top: .08em; }
 [data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-mark { background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-added-edge); animation: balance-digit 150ms var(--ease) backwards; }
 /* A jump (design 7.1): from the top of one mark to the top of the next, drawn over every mark, and

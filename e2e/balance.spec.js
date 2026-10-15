@@ -910,6 +910,72 @@ test('a ring round the bottom row keeps a 3px --halo off the bowl\'s rim, and a 
 });
 
 /**
+ * What is wrong with each ring with 0 on a pan (design 7.1): its 0's ink keeps 2.5px or more of
+ * white inside the ring's line on every side, and the ring with its halo stays off the cubes beside
+ * and below it and inside the bowl's rim.
+ * @returns {string[]}
+ */
+function zeroRingProblems() {
+  const out = [];
+  const ctx = document.createElement('canvas').getContext('2d');
+  for (const z of document.querySelectorAll('.bl-scene .bl-zero')) {
+    const b = z.getBoundingClientRect();
+    const s = getComputedStyle(z);
+    const range = document.createRange();
+    range.selectNodeContents(z);
+    const t = range.getBoundingClientRect();
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText('0');
+    const [kx, ky] = [t.width / m.width, t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)];
+    const base = t.top + ky * m.fontBoundingBoxAscent;
+    const line = parseFloat(s.borderTopWidth);
+    const room = Math.min(base - ky * m.actualBoundingBoxAscent - b.top, b.bottom - base - ky * m.actualBoundingBoxDescent,
+      t.left - kx * m.actualBoundingBoxLeft - b.left, b.right - t.left - kx * m.actualBoundingBoxRight) - line;
+    if (room < 2.5) out.push(`${z.className}: ${Math.round(room * 10) / 10}px between the 0 and its ring`);
+    const halo = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset'))
+      .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
+    const pan = z.closest('.bl-pan').getAttribute('data-pan');
+    const reach = { left: b.left - halo, right: b.right + halo, top: b.top - halo, bottom: b.bottom + halo };
+    for (const cube of document.querySelectorAll(`.bl-scene > .bl-pan[data-pan="${pan}"] > .bl-stack > .bl-cube`)) {
+      const c = cube.getBoundingClientRect();
+      const over = Math.min(reach.right - c.left, c.right - reach.left, reach.bottom - c.top, c.bottom - reach.top);
+      if (over > 0.25) out.push(`${z.className}: ${Math.round(over * 10) / 10}px over a cube`);
+    }
+    const bowl = document.querySelector(`.bl-scene > .bl-pan[data-pan="${pan}"] .bl-bowl`).getBoundingClientRect();
+    const rim = Math.min(reach.left - bowl.left, bowl.right - reach.right, bowl.bottom - reach.bottom) - 3;
+    if (rim < -0.25) out.push(`${z.className}: ${Math.round(-rim * 10) / 10}px over the bowl's rim`);
+  }
+  return out;
+}
+
+test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, and it keeps off the cubes and the rim (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 8 + ? = 8 (the place in the second row), 2 + ? = 2 and 4 + ? = 4 (the bottom row, at its end).
+  for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const seed of [3, 7, 19]) {
+      const { round } = await devAt(page, 'missing-right', seed);
+      expect(round.answer, `seed ${seed}`).toBe(0);
+      const where = `${width}px ${JSON.stringify(round.equation.left)}`;
+      const plate = round.choices.findIndex((c) => c.rule === 'zero.counted-as-one');
+      await card(page, plate).click();
+      await unlocked(page);
+      await expect(page.locator('.bl-zero.is-wrong')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, card 1`).toEqual([]);
+      for (const i of wrongOf(round).filter((i) => i !== plate)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('.bl-zero.is-tour')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, the tour`).toEqual([]);
+      await card(page, round.choices.findIndex((c) => c.rule === null)).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, solved`).toEqual([]);
+    }
+  }
+});
+
+/**
  * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
  * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
  * row above), and its top stays under the ink of the digits of the marks above it.
