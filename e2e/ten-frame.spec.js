@@ -1019,6 +1019,26 @@ test('the bond\'s count-up at 320px: every digit on a white label that holds it,
   }
 });
 
+test('home thumbs at 320 and 360px: a cover\'s halo leaves the whole tray\'s edge round it (design 6.6, 6.7)', async ({ page }) => {
+  await seedStore(page, storeWith({ games: { [ID]: ladderAt('ten-cover') } }));
+  await page.clock.install({ time: NOW });
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 640 });
+    await page.goto(`${INDEX}#/`);
+    const thumb = page.locator(`a[href="#/play/${ID}"] [data-thumb]`);
+    await expect(thumb.locator('.tf-lid .cover').first()).toBeVisible();
+    const left = await thumb.evaluate((el) => {
+      const tray = el.querySelector('.tf-tray[data-role="whole"]').getBoundingClientRect();
+      return [...el.querySelectorAll('.tf-lid .cover')].map((c) => {
+        const b = c.getBoundingClientRect();
+        const halo = parseFloat(getComputedStyle(c).boxShadow.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]);
+        return Math.min(tray.right - (b.right + halo), tray.bottom - (b.bottom + halo), b.left - halo - tray.left);
+      });
+    });
+    for (const px of left) expect(px, `${width}px: navy left beside a cover`).toBeGreaterThanOrEqual(0.5);
+  }
+});
+
 test('the picture label says one in the singular (R1 templates)', async ({ page }) => {
   await devAt(page, 'split-5', (r) => r.equation.left[0] === 1);
   await expect(page.locator('[data-area="picture"]')).toHaveAttribute('aria-label', /עִגּוּל אֶחָד וּמִכְסֶה$/);
