@@ -348,7 +348,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
     }
     // What does not fit stays in one ring (design 7.1): dots stand too close for a ring each. Its
     // line runs halfway between dots, 0.35 units apart, and crosses nothing, so it has no halo.
-    if (excess.length) under(root, outline(root, L, [runPath(excess, 0.175, true)], 'tf-line-added tf-blink-in', false));
+    // Over two rows it joins round the rows' end, not under the dots that fit.
+    if (excess.length) under(root, outline(root, L, [runPath(excess, 0.175, 'end')], 'tf-line-added tf-blink-in', false));
   }
   if (!digits) return;
   // One dot in a ring, drawn under the others: its line passes 1.5px off the dot and the halo

@@ -966,6 +966,52 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
   }
 });
 
+test('the bond\'s overflow: what does not fit is one ring over two rows, joined round the rows\' end, never along the dots that fit (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const other = (r) => r.choices.find((c) => c.rule === 'op.other')?.value;
+  // 5 = 1 + ? with 6 and 1 + ? = 10 with 11: one dot at a row's end, one at the next row's start;
+  // pairs of 3 with 6 and 3: the left part's excess the same way.
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, ok] of [['split-bond', (r) => r.answer === 4 && other(r) === 6], ['split-bond', (r) => r.answer === 9 && other(r) === 11],
+      ['split-pairs', (r) => r.equation.right[0] === 3 && other(r)?.[0] === 6]]) {
+      await page.goto('about:blank');
+      const { round } = await devAt(page, level, ok);
+      await card(page, round.choices.findIndex((c) => c.rule === 'op.other')).click();
+      await unlocked(page);
+      const problems = await page.locator('[data-display="overflow"]').evaluate((root) => {
+        const out = [];
+        const paths = [...root.querySelectorAll('.tf-line-added .tf-line')].map((p) => /** @type {SVGPathElement} */ (p));
+        const svg = /** @type {SVGSVGElement} */ (paths[0].ownerSVGElement);
+        const inside = (b) => {
+          const pt = new DOMPoint(b.left + b.width / 2, b.top + b.height / 2).matrixTransform(svg.getScreenCTM().inverse());
+          return paths.some((p) => p.isPointInFill(pt));
+        };
+        const ghosts = [...root.querySelectorAll('.tf-ghost')].map((g) => g.getBoundingClientRect()).map((b) => ({ b, ringed: inside(b) }));
+        // A line in the gap under or over a dot that fits lies there only as the edge of a ringed dot beyond it.
+        for (const path of paths) {
+          const m = path.getScreenCTM();
+          for (let t = 0, len = path.getTotalLength(); t <= len; t += 0.02) {
+            const p = path.getPointAtLength(t).matrixTransform(m);
+            for (const { b } of ghosts.filter((g) => !g.ringed)) {
+              const gap = (b.width * 0.35) / 0.95;
+              if (p.x < b.left || p.x > b.right) continue;
+              const below = p.y > b.bottom && p.y < b.bottom + gap;
+              const above = p.y < b.top && p.y > b.top - gap;
+              if (!below && !above) continue;
+              const beyond = ghosts.some((g) => g.ringed && Math.abs(g.b.left - b.left) < 1 && (below ? Math.abs(g.b.top - b.bottom - gap) < 1 : Math.abs(b.top - g.b.bottom - gap) < 1));
+              if (!beyond) out.push(`a line ${below ? 'under' : 'over'} the dot that fits at ${Math.round(b.left)},${Math.round(b.top)}`);
+            }
+          }
+        }
+        return [...new Set(out)];
+      });
+      expect(problems, `${width}px ${level} ${JSON.stringify(round.equation)}`).toEqual([]);
+      await expect(page.locator('[data-display="overflow"] .tf-line-added .tf-line'), level).toHaveCount(level === 'split-pairs' ? 2 : 1);
+    }
+  }
+});
+
 test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, draws under the last digit, and stays whole under the circle\'s ring (design 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });

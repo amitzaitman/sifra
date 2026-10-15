@@ -94,6 +94,37 @@ test('runPath: one rectangle in a row, a stepped outline over two rows, two rect
   assert.ok(steps.includes(`V${Math.round((L.cells[9].y + 1 + 0.27) * 1000) / 1000}`), 'the last row\'s bottom on the border');
 });
 
+test('runPath, join \'end\': what does not fit in a bond is one outline, joined round the rows\' end, under no dot that fits (design 7.1)', () => {
+  const T = layoutTree({ whole: 10 });
+  const dots = Array.from({ length: 15 }, (_, i) => ({ ...T.rightAt(i), row: Math.floor(i / 5), col: i % 5 }));
+  /** The path's horizontal segments: [y, x0, x1]. */
+  const flats = (d) => {
+    const out = [];
+    let [x, y] = [0, 0];
+    for (const [, c, v] of d.matchAll(/([MHVZ])\s*(-?[\d.]*)/g)) {
+      if (c === 'M') [x, y] = d.slice(1).split(/[H\s]/).slice(0, 2).map(Number);
+      else if (c === 'H') {
+        out.push([y, Math.min(x, Number(v)), Math.max(x, Number(v))]);
+        x = Number(v);
+      } else if (c === 'V') y = Number(v);
+    }
+    return out;
+  };
+  // 5 = 1 + ?, 6 chosen: places 4 and 5 do not fit; 10 = 1 + ?, 11 chosen: places 9 and 10.
+  for (const from of [4, 9]) {
+    const run = dots.slice(from, from + 2);
+    const d = runPath(run, 0.175, 'end');
+    assert.equal(d.split('M').length - 1, 1, 'one outline');
+    const [upper, lower] = run;
+    // In the gap between the two rows, a line lies only over or under a dot of the run.
+    for (const [y, x0, x1] of flats(d)) {
+      if (y <= upper.y + upper.h || y >= lower.y) continue;
+      const near = run.filter((c) => x0 >= c.x - 0.175 - 1e-9 && x1 <= c.x + c.w + 0.175 + 1e-9);
+      assert.ok(near.length, `a line along the gap from ${x0} to ${x1}, under dots that fit: ${d}`);
+    }
+  }
+});
+
 test('level 5: the small ? dome sits on the bracket\'s top edge and hides no counter (design 6.6)', () => {
   const L = layoutFrame({ rows: 2, whole: true, tag: true });
   // The dome as app.css draws it (top corners 50%/80%, bottom 20%), grown by its 3px halo at 320px.

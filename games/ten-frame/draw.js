@@ -169,14 +169,17 @@ export function layoutBundles({ ones, tag = false }) {
  * An SVG path around a run of cells (or dots) in fill order, rows of one frame, padded: one
  * rectangle, a stepped outline when the rows overlap, or two rectangles. With join, rows that
  * do not overlap are still one outline: the boxes and a line along the gap between the rows,
- * from the lower row's end to the upper row's start (one group, one label). A run over more than
- * two rows (dots in rows of five) is always one stepped outline.
+ * from the lower row's end to the upper row's start (one group, one label). With join 'end' the
+ * line goes round the rows' end instead, down past the last column and back along the lower
+ * row's bottom, under nothing, for a run whose lower row is its last place (what does not fit
+ * in a bond: the gap holds the places that fit). A run over more than two rows (dots in rows of
+ * five) is always one stepped outline.
  * A pad per side keeps a line off the cells round a frame's run: `out` on an edge on the frame's
  * border (the top row's top, column 0's left, column 4's right, the last row's bottom), `in` on an
  * edge inside the tray, where a gap of GAP lies between the run and the next cell.
  * @param {(Box & { row: number, col: number })[]} cells
  * @param {number | { out: number, in: number, rows: number }} pad
- * @param {boolean} [join]
+ * @param {boolean | 'end'} [join]
  * @returns {string}
  */
 export function runPath(cells, pad, join = false) {
@@ -195,7 +198,12 @@ export function runPath(cells, pad, join = false) {
   const s = rows.map(span);
   if (rows.length === 1) return rect(s[0]);
   const cols = (row) => cells.filter((c) => c.row === row).map((c) => c.col);
-  if (!join && rows.length === 2 && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(s[0]) + rect(s[1]);
+  const apart = rows.length === 2 && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]));
+  if (apart && !join) return rect(s[0]) + rect(s[1]);
+  if (apart && join === 'end') {
+    const [u, w] = s;
+    return `M${n(u.l)} ${n(u.t)}H${n(u.r)}V${n(w.b)}H${n(w.l)}V${n(w.t)}H${n(w.r)}V${n(w.b)}H${n(u.r)}V${n(u.b)}H${n(u.l)}Z`;
+  }
   // Down the right side, stepping in the gap between rows, then up the left side. A step is the
   // middle of the gap; with a pad per side, the edge of the row that reaches further, padded `in`.
   /** @type {(a: any, b: any, upper: boolean) => number} the step between rows a and b */
