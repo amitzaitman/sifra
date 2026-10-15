@@ -347,25 +347,30 @@ test('"show me how": a demo, then the same round from the start, logged as how',
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', help: ['how'], demo: ['how'], wrong: [] });
 });
 
+/**
+ * Plays a session to its end screen, each round right on the first try (demos run through).
+ * @param {import('@playwright/test').Page} page
+ */
+async function playToEnd(page) {
+  for (let n = 0; n < 30; n++) {
+    const screen = page.locator('main[data-screen]');
+    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
+    const name = await screen.getAttribute('data-screen');
+    if (name === 'end') return;
+    if (name === 'round') {
+      await look(page);
+      await card(page, (await roundOf(page)).answerAt).click();
+    }
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+}
+
 test('a session of 8 rounds ends on the solved pictures, and a round after it plays again', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await playAt(page, 'split-10');
-  const play = async () => {
-    for (let n = 0; n < 30; n++) {
-      const screen = page.locator('main[data-screen]');
-      await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
-      const name = await screen.getAttribute('data-screen');
-      if (name === 'end') return;
-      if (name === 'round') {
-        await look(page);
-        await card(page, (await roundOf(page)).answerAt).click();
-      }
-      await expect(page.locator('[data-next]')).toBeVisible();
-      await look(page);
-      await page.locator('[data-next]').click();
-    }
-  };
-  await play();
+  await playToEnd(page);
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
   for (const thumb of await page.locator('.end-thumbs [data-thumb]').all()) {
     await expect(thumb.locator('.cover')).toHaveCount(0);
@@ -920,27 +925,27 @@ test('a home thumb at a bridging level draws the second addend light (owner deci
   await expectRoleColours(page);
 });
 
-test('the closing of bridging ten: no hairline of a counter round its magenta veil, also where a disc sits off the pixel grid (design 6.9)', async ({ page }) => {
-  // 412x839 put discs off the grid: a veil whose entry animation still filled kept a layer of its own,
-  // and a one-device-pixel hairline of the part's fill and edge showed round the magenta.
-  await page.setViewportSize({ width: 412, height: 839 });
-  const { round, answerAt } = await devAt(page, 'bridge-frames', (r) => r.equation.left[0] === 9 && r.equation.left[2] === 9);
-  await toTheTour(page, round, answerAt);
-  await card(page, answerAt).click();
-  await expect(page.locator('[data-next]')).toBeVisible();
-  await quiet(page);
-  await page.addStyleTag({ content: '[data-game] .tf-layer { visibility: hidden !important; }' });
-  const discs = await page.locator('[data-area="picture"] .tf-disc').evaluateAll((els) => els.map((d) => {
+/**
+ * Pixels near the edge of each disc (within `band` device pixels) that are off, from screenshots
+ * decoded in the page, in any engine. 'veil': neither magenta, white nor a blend of the two; 'part':
+ * any of the part's colours, its fill, light shade or edge, alone or blended (warm: red and green
+ * well above blue).
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} discs
+ * @param {number} band
+ * @param {'veil' | 'part'} mode
+ */
+async function rimPixels(page, discs, band, mode) {
+  const boxes = await discs.evaluateAll((els) => els.map((d) => {
     const b = d.getBoundingClientRect();
     return { x: b.x, y: b.y, w: b.width };
   }));
   const dpr = await page.evaluate(() => window.devicePixelRatio);
   let off = 0;
-  for (const d of discs) {
+  for (const d of boxes) {
     const pad = 3;
     const shot = await page.screenshot({ clip: { x: d.x - pad, y: d.y - pad, width: d.w + 2 * pad, height: d.w + 2 * pad } });
-    // Within 2.5 device pixels of the counter's edge every pixel is magenta, white or a blend of the two.
-    off += await page.evaluate(async ({ png, r }) => {
+    off += await page.evaluate(async ({ png, r, band, mode }) => {
       const img = new Image();
       img.src = `data:image/png;base64,${png}`;
       await img.decode();
@@ -952,14 +957,48 @@ test('the closing of bridging ten: no hairline of a counter round its magenta ve
       let n = 0;
       for (let y = 0; y < img.height; y++) {
         for (let x = 0; x < img.width; x++) {
-          if (Math.abs(Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2) - r) > 2.5) continue;
+          if (Math.abs(Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2) - r) > band) continue;
           const i = (y * img.width + x) * 4;
-          const t = (data[i + 1] - 51) / (255 - 51);
-          if (Math.hypot(data[i] - (214 + 41 * t), data[i + 1] - (51 + 204 * t), data[i + 2] - (108 + 147 * t)) > 25) n += 1;
+          const [red, green, blue] = [data[i], data[i + 1], data[i + 2]];
+          if (mode === 'part') {
+            if (red > blue + 40 && green > blue + 10) n += 1;
+            continue;
+          }
+          const t = (green - 51) / (255 - 51);
+          if (Math.hypot(red - (214 + 41 * t), green - (51 + 204 * t), blue - (108 + 147 * t)) > 25) n += 1;
         }
       }
       return n;
-    }, { png: shot.toString('base64'), r: (d.w / 2) * dpr });
+    }, { png: shot.toString('base64'), r: (d.w / 2) * dpr, band, mode });
   }
-  expect(off, 'pixels round the counters that are neither magenta, white nor between them').toBe(0);
+  return off;
+}
+
+test('the closing of bridging ten: no hairline of a counter round its magenta veil, also where a disc sits off the pixel grid (design 6.9)', async ({ page }) => {
+  // 412x839 put discs off the grid: a veil whose entry animation still filled kept a layer of its own,
+  // and a one-device-pixel hairline of the part's fill and edge showed round the magenta.
+  await page.setViewportSize({ width: 412, height: 839 });
+  const { round, answerAt } = await devAt(page, 'bridge-frames', (r) => r.equation.left[0] === 9 && r.equation.left[2] === 9);
+  await toTheTour(page, round, answerAt);
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await quiet(page);
+  await page.addStyleTag({ content: '[data-game] .tf-layer { visibility: hidden !important; }' });
+  // Within 2.5 device pixels of the counter's edge every pixel is magenta, white or a blend of the two.
+  expect(await rimPixels(page, page.locator('[data-area="picture"] .tf-disc'), 2.5, 'veil'),
+    'pixels round the counters that are neither magenta, white nor between them').toBe(0);
+});
+
+test('the end screen of a bridging session: no hairline of a counter round its magenta veil in the solved thumbs (design 6.9)', async ({ page }) => {
+  // A thumb's veil reaches half a pixel past its counter, and a one-device-pixel ring of the counter's
+  // fill and edge showed round the magenta, most on the first frame's top row.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await playAt(page, 'bridge-frames');
+  await playToEnd(page);
+  const counters = page.locator('.end-thumbs > [data-thumb][data-solved] .tf-disc.is-counter');
+  expect(await counters.count()).toBeGreaterThanOrEqual(8 * 11);
+  await expectRoleColours(page);
+  // The thumb's grey tray meets its white cell about 2.4 device pixels out: count only the part's colours.
+  expect(await rimPixels(page, counters, 2, 'part'), 'pixels of the part\'s colours round the counters').toBe(0);
 });

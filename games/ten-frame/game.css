@@ -33,6 +33,9 @@
    is 8% of a cell and the veil reaches half a pixel past (thumbs never move; rounds keep the 3px edge). */
 [data-game="ten-frame"][data-thumb] .tf-disc.is-counter[data-role="part"] { box-shadow: inset 0 0 0 max(1px, calc(var(--u) * 0.08)) var(--role-part-edge); }
 [data-game="ten-frame"][data-thumb] .tf-disc > .tf-veil { inset: -0.5px; }
+/* In a solved thumb every counter is under its veil: its fill keeps its colour (R6) but is painted 1px
+   inside, without the edge, so no antialiased hairline of either shows round the magenta (design 6.9). */
+[data-game="ten-frame"][data-thumb][data-solved] .tf-disc.is-counter { padding: 1px; background-clip: content-box; box-shadow: none; }
 [data-game="ten-frame"] [data-role="unknown"] { pointer-events: none; }
 
 /* The whole's tag (num.parts.split): a white chip on the top edge, the digit in --role-whole. */
