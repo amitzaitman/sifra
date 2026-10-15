@@ -102,6 +102,26 @@ function typed(value, types) {
 }
 
 /**
+ * Whether a rule's value could be a card of this round (R4): of the rule's type, not the answer; a
+ * number a whole number of at most 4 digits; a pair not one that makes the whole (architecture 6,
+ * "Pair cards"); an exercise card false.
+ * @param {any} value
+ * @param {string[]} types
+ * @param {Round} round
+ */
+function offerable(value, types, round) {
+  if (value === null || value === undefined || !typed(value, types) || isDeepStrictEqual(value, round.answer)) return false;
+  const whole = (n) => Number.isInteger(n) && n >= 0;
+  if (typeof value === 'number') return whole(value) && String(value).length <= 4;
+  if (Array.isArray(value) && value.every((v) => typeof v === 'number')) {
+    const sum = (pair) => pair.reduce((a, b) => a + b, 0);
+    return value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
+  }
+  if (typed(value, ['card'])) return exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
+  return true;
+}
+
+/**
  * R1 and R8 of a judging round (architecture 2.3, eq.sign.true-false): the answer is a card, the
  * cards are the exercises, and the equation row is empty. Every card has numbers and operators on
  * both sides and no '?'; the answer card is true and every other card false.
@@ -280,6 +300,16 @@ export function checkRound(game, level, index, round) {
   }
   const real = wrong.filter((c) => !c.rule.startsWith('slip.')).length;
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
+  // R4: slip.* only when no known error fits: beside a slip, every real rule of the skill that the game
+  // has is on a card already (any of its values, for "or"), or gives nothing the round could offer.
+  const slip = wrong.find((c) => c.rule.startsWith('slip.'));
+  for (const id of slip ? listed.filter((r) => !r.startsWith('slip.') && game.rules[r] && RULES[r]) : []) {
+    const predicted = game.rules[id](round);
+    const values = predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf) ? predicted.oneOf : [predicted];
+    if (values.some((v) => choices.some((c) => isDeepStrictEqual(c.value, v)))) continue;
+    const free = values.find((v) => offerable(v, RULES[id].types, round));
+    if (free !== undefined) fail(`R4: ${slip.rule} is offered, but ${id} gives ${show(free)}, a real error not on a card`);
+  }
   const values = choices.map((c) => c.value);
   if (values.every((v) => typeof v === 'number') && values.some((v, i) => i > 0 && v <= values[i - 1])) fail(`R4: numbers not ascending: ${show(values)}`);
   for (const a of judging ? [...round.answer.left, ...round.answer.right] : [round.answer].flat()) {
@@ -352,6 +382,9 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(judged((r) => { r.choices.find((c) => c.rule === null).value.right = [99]; }), /the answer but false/);
   assert.match(judged((r) => { wrongCard(r).value.right = ['?']; }), /R8: the card/);
   assert.match(judged((r) => { r.equation = { left: [1, '+', '?'], right: [2] }; }), /equation null/);
+  // A slip while a real error fits and is on no card (R4): equal.copy's a = a + b beside slip.card.
+  const copyCard = { ...scale, rules: { ...scale.rules, 'equal.copy': (r) => ({ left: [r.answer.right[0]], right: [...r.answer.right] }) } };
+  assert.match(checkRound(copyCard, scale.levels[judge], judge, cards).join('\n'), /slip\.card is offered, but equal\.copy gives/);
   // A reversed form (c = a + ?): equal.copy comes before given.whole (depth 4.9).
   const missing = scale.levels.findIndex((l) => l.id === 'right');
   const plain = scale.makeRound(scale.levels[missing], rng(3));

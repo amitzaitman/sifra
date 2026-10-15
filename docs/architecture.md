@@ -463,8 +463,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   of a mixed level has an earlier level of its own.
 - R4: the answer in `[min ?? 0, max]`; rules in the skill's SKILLS list and in RULES; `oneOf` accepted;
   `choices.length === options`; 3 only on the skill's first level in the game's list or for relation answers; at
-  least `min(2, wrong choices)` non-`slip.*` rules when the skill lists two or more; numbers ascending; no
-  `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except where a
+  least `min(2, wrong choices)` non-`slip.*` rules when the skill lists two or more; beside a `slip.*` choice, every
+  real rule of the skill that the game has is on a card already or gives nothing the round could offer (of its
+  type, not the answer, a number of at most 4 digits, a pair that does not make the whole, a false card); numbers
+  ascending; no `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except where a
   depth section sets the order for one form (R4): in a reversed form of `eq.sign.missing` (the lone number or the
   result left of `=`) the `equal.*` rules come first (depth §4.9; section 6). Every formula stays the catalogue's,
   whatever the form.
