@@ -594,7 +594,8 @@ export const BUNDLES_PART = {
   prep: () => [],
   /** The bundle gets a 10 label, and the cover over the ones a ring (7.2). @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
-    chipAt(root, pic.t.L.bundle, '10');
+    // Nine ones make the unit small: the chip is held in pixels round its 14px digits (game.css).
+    chipAt(root, pic.t.L.bundle, '10', 'is-held');
     at(root, 'tf-ring is-around is-hint', pic.t.L.places);
   },
   /**

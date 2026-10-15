@@ -34,6 +34,17 @@
    drawing, which isolates it). Flashed, it keeps its ring inside its edge (design 7.1). */
 [data-game="ten-frame"] .tf-tag { z-index: 1; color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
 [data-game="ten-frame"] .tf-tag.is-flashed { box-shadow: inset 0 0 0 3px var(--role-added-edge), 0 0 0 2px var(--frame); }
+/* Over nine sticks a round's unit is about 20px at 320px, but the digits stay 14px: the tag on the
+   bracket is held at 22px or more (the digits and a flash ring of 3px above and below them), and
+   the hint's 10 chip at 26 x 18px, both centred on their place. Digits sit high in a line box of
+   line-height 1, so 0.12em on top centres their ink. */
+[data-game="ten-frame"] .tf-tag.on-bracket {
+  height: max(calc(var(--dy) * var(--u)), 22px); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: 0 -50%; padding-top: 0.12em;
+}
+[data-game="ten-frame"] .tf-chip.is-held {
+  width: max(calc(var(--dx) * var(--u)), 26px); height: max(calc(var(--dy) * var(--u)), 18px); padding-top: 0.12em;
+  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+}
 /* Over nine sticks a thumb's unit is about 10px: there the tag grows around its 14px digits,
    centred on its place on the bracket. */
 [data-game="ten-frame"][data-thumb] .tf-tag.on-bracket {

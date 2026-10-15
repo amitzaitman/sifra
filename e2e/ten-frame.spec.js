@@ -1680,6 +1680,57 @@ test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both;
   for (const stick of await ones.all()) await expect(stick).toHaveCSS('background-color', 'rgb(214, 51, 108)');
 });
 
+/**
+ * How far the ink of an element's digits lies from each of its edges, read from a screenshot by
+ * their colour.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} selector
+ * @param {number[]} rgb the digits' colour
+ */
+async function inkRoom(page, selector, rgb) {
+  const b = await page.locator(selector).first().evaluate((e) => e.getBoundingClientRect().toJSON());
+  const png = (await page.screenshot({ clip: { x: b.x, y: b.y, width: b.width, height: b.height } })).toString('base64');
+  return page.evaluate(async ({ data, b, rgb }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    const k = img.width / b.width;
+    let [t, bo, l, r] = [Infinity, -1, Infinity, -1];
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const i = (y * img.width + x) * 4;
+        if (Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) < 70) [t, bo, l, r] = [Math.min(t, y), Math.max(bo, y), Math.min(l, x), Math.max(r, x)];
+      }
+    }
+    return { top: t / k, bottom: b.height - (bo + 1) / k, left: l / k, right: b.width - (r + 1) / k };
+  }, { data: png, b, rgb });
+}
+
+test('level 9 with nine ones (19 = 10 + ?): the tag\'s digits stay clear of its flash ring, and the hint\'s 10 chip holds its digits with room (design 4, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    await page.goto('about:blank');
+    const { round } = await devAt(page, 'teen-symbols', (r) => r.answer === 9 && r.choices.some((c) => c.rule === 'given.whole'));
+    await page.locator('[data-show-picture]').click();
+    const at = (rule) => round.choices.findIndex((c) => c.rule === rule);
+    await card(page, at('given.whole')).click();
+    await unlocked(page);
+    await expect(page.locator('[data-area="picture"] .tf-tag')).toHaveClass(/is-flashed/);
+    // The tag's digits in --role-whole, a pixel or more inside its 3px ring.
+    const tag = await inkRoom(page, '[data-area="picture"] .tf-tag', [14, 58, 138]);
+    for (const [side, room] of Object.entries(tag)) expect(room, `${width}px: the tag's digits, ${side}`).toBeGreaterThanOrEqual(3 + 1);
+    await card(page, at('given.part')).click();
+    await unlocked(page);
+    // The 10 on the bundle in --ink, 2px or more from the chip's edges.
+    const chip = await inkRoom(page, '[data-hint] .tf-chip', [20, 33, 61]);
+    for (const [side, room] of Object.entries(chip)) expect(room, `${width}px: the hint's 10, ${side}`).toBeGreaterThanOrEqual(2);
+  }
+});
+
 for (const [level, ok, what] of [['ten-cover', (r) => r.answer === 5, '5 + 5'], ['split-10', (r) => r.equation.left[0] === 4 && r.answer === 4, 'a double, 4 + 4']]) {
   test(`${what}: the cover holds the unknown's cells, the cards keep two real errors and a slip, and the tour ends on the answer`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
