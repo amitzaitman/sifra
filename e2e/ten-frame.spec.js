@@ -1018,7 +1018,7 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
   // Three dots in one row (the last digit 3 in it); 0 and 8: a row of five and a row of three;
   // 0 and 10, 10 and 0: a grown 10 at the end of a row.
   for (const [level, ok] of [['split-bond', (r) => r.answer === 3], ['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8],
-    ['split-pairs', (r) => r.answer[1] === 10], ['split-pairs', (r) => r.answer[0] === 10]]) {
+    ['split-pairs', (r) => r.answer[1] === 10], ['split-pairs', (r) => r.answer[0] === 10], ['split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0]]) {
     const { round, answerAt } = await devAt(page, level, ok);
     await page.evaluate(defineInkOf);
     await toTheTour(page, round, answerAt);
@@ -1046,6 +1046,21 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
       return room >= 1 ? [] : [`the last ${el.textContent} ${Math.round(room * 10) / 10}px off its group's line`];
     }));
     expect(grown, `${level} ${JSON.stringify(round.answer)}`).toEqual([]);
+    // An empty part's ring with 0 stands under its own circle, its line a pixel or more off the
+    // circle's hint ring above it.
+    const zero = [round.answer].flat().indexOf(0);
+    if (zero >= 0 && round.answer.length === 2) {
+      const at = await page.evaluate((side) => {
+        const z = document.querySelector('[data-area="picture"] .tf-ring.is-zero').getBoundingClientRect();
+        const c = document.querySelectorAll('[data-area="picture"] .tf-base .tf-circle')[1 + side].getBoundingClientRect();
+        const hint = [...document.querySelectorAll('[data-hint] .tf-ring.is-hint')].map((r) => r.getBoundingClientRect())
+          .find((r) => Math.abs(r.left + r.width / 2 - (c.left + c.width / 2)) < 1);
+        return { x: z.left + z.width / 2, from: c.left, to: c.right, gap: z.top - hint.bottom };
+      }, zero);
+      expect(at.x, `${level} ${JSON.stringify(round.answer)}: the ring with 0 under its circle`).toBeGreaterThan(at.from);
+      expect(at.x).toBeLessThan(at.to);
+      expect(at.gap, `${level} ${JSON.stringify(round.answer)}: the ring with 0 off the hint's ring`).toBeGreaterThanOrEqual(1);
+    }
     const problems = await page.evaluate(() => {
       const out = [];
       // What is drawn takes a point: the dots, and each outline's line and halo.
