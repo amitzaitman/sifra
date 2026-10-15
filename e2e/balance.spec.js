@@ -1049,6 +1049,28 @@ test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, 
   }
 });
 
+test('small part cubes stay yellow: where an overflow or balance display needs 6-8 rows, a part\'s edge thins with the cube (design 3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 13 + ? = 14 with 27 (eight rows), 1 + 15 = ? + 8 with 24, 7 + 13 = ? + 5 with 25.
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed, value] of [['missing-symbols-20', 1, 27], ['both-sides-symbols', 1, 24], ['both-sides-symbols', 4, 25]]) {
+      const { round } = await devAt(page, level, seed);
+      await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.value === value)).click();
+      await unlocked(page);
+      const shares = await page.locator('.bl-scene > .bl-pan > .bl-stack').evaluateAll((stacks) => stacks.flatMap((st) => [...st.querySelectorAll('.bl-cube[data-role="part"]')].map((p) => {
+        const b = p.getBoundingClientRect();
+        const inset = getComputedStyle(p).boxShadow.split(/,(?![^(]*\))/).find((e) => e.includes('inset'));
+        const edge = inset ? parseFloat(inset.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) : 0;
+        return { what: `${b.width.toFixed(1)}px, its edge ${edge.toFixed(2)}px`, share: Math.max(0, b.width - 2 * edge) ** 2 / b.width ** 2 };
+      })));
+      expect(shares.length).toBeGreaterThan(0);
+      for (const { what, share } of shares) expect(share, `${width}px ${level} ${seed} with ${value}: a part cube ${what}`).toBeGreaterThanOrEqual(0.4);
+    }
+  }
+});
+
 /**
  * Where the hint's dashed outline of a missing cube leaves the cover's dome (design 6.6, 7.3): the
  * outer edge of each dash, as drawn (scaled, with its corner radii), stays half a pixel or more
