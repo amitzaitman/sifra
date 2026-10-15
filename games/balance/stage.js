@@ -289,8 +289,11 @@ export function drawBalance(host, data) {
         node.append(data.cover(mark));
         return node;
       };
+      // A bridge across (the pieces share no column) runs over the places between them and goes
+      // down into the lower piece by a tab where its dome is flat (game.css).
       return [...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid' : 'bl-lid is-even', p, k ? '' : '?')),
-        ...bridges(pieces).map((b) => lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''))];
+        ...bridges(pieces).flatMap((b) => [lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''),
+          ...(b.across ? [lid('bl-lid bl-bridge is-tab', { col: b.to, row: b.row, w: 1 }, '')] : [])])];
     });
     pans[name] = { el: node, stack, layout, cubes, lids };
   }

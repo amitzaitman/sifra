@@ -77,8 +77,15 @@
 /* Over the hint's dashed places, the '?' of a piece over an even number of places sits on the place
    right of its middle, not squeezed between two of them (design 7.3). */
 [data-game="balance"] .bl-scene:has([data-hint] .bl-dash) .bl-lid.is-even > .cover::after { translate: calc(var(--u) / 2) 0; }
+/* Bridges join the pieces (design 6.6): over the columns two pieces share, 4px over the 3px gap and
+   into both pieces; in a thumb, scaled by --k, a device pixel into each, so no pale seam shows. */
 [data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
-[data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); width: calc(var(--u) * var(--w) + 15px); }
+[data-game="balance"] .is-thumb .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3px - 1px / var(--k, 1)); height: calc(3px + 2px / var(--k, 1)); }
+/* Across (the pieces share no column), the bridge runs over the empty places after the run, 2px
+   above the gap, so 2px of white stay over the cubes below it: from inside the upper piece to
+   where the lower piece's dome is flat (half a cube in), and a tab goes down into that piece. */
+[data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); bottom: calc(var(--u) * var(--r) - 1px); width: calc(var(--u) * var(--w) + var(--cube) / 2 + 11px); height: 4px; }
+[data-game="balance"] .bl-stack > .bl-bridge.is-tab { left: calc(var(--u) * var(--c) + var(--cube) / 2 - 2px); bottom: calc(var(--u) * var(--r) - 5px); width: 4px; height: 8px; }
 [data-game="balance"] .bl-bridge > .cover { border-radius: 0; box-shadow: none; }
 
 [data-game="balance"] .bl-ring { left: calc(var(--u) * var(--c) - 5px); bottom: calc(var(--u) * var(--r) - 5px); width: calc(var(--u) * var(--w) + 7px); height: calc(var(--u) * var(--h, 1) + 7px); border: 3px solid var(--role-added-edge); border-radius: calc(var(--cube) * .25 + 5px); box-shadow: inset 0 0 0 2px var(--halo); animation: balance-ring var(--t-blink) var(--ease) backwards; }

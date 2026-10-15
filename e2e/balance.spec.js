@@ -1237,7 +1237,9 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover stretc
   expect(r6.y).toBeLessThan(r1.y);
   const lids = page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)');
   await expect(lids).toHaveCount(2);
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge')).toHaveCount(1);
+  // The pieces share no column: one bridge across, and its tab down into the first piece.
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge.is-across')).toHaveCount(1);
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge.is-tab')).toHaveCount(1);
   await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid .cover[data-mark="?"]')).toHaveCount(1);
   const [lid1, lid2] = [await lids.nth(0).boundingBox(), await lids.nth(1).boundingBox()];
   const cube = await page.locator('.bl-pan[data-pan="left"] .bl-cube').first().boundingBox();
@@ -1277,6 +1279,103 @@ test('two known numbers on a pan: one pile in rows of five, the second number in
   // The cover's first piece spans the first row, as the right pan's first five cubes do.
   const [lid, c0, c1] = [await lids.first().boundingBox(), await right.nth(0).boundingBox(), await right.nth(1).boundingBox()];
   expect(Math.abs(lid.width - ((Math.min(5, a + b) - 1) * (c1.x - c0.x) + c0.width))).toBeLessThan(2);
+});
+
+/**
+ * A cover over two rows that share no column, read in the page and from a screenshot: its bridge
+ * leaves white over every cube under it, and from the upper piece the cover's magenta reaches the
+ * lower piece (design 6.6: the pieces are joined).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+async function coverAcross(page) {
+  const { bar, cubes, pieces } = await page.evaluate(() => {
+    const stack = document.querySelector('.bl-scene > .bl-pan[data-pan="left"] > .bl-stack');
+    const box = (e) => e.getBoundingClientRect().toJSON();
+    return { bar: box(stack.querySelector('.bl-bridge.is-across')), cubes: [...stack.querySelectorAll('.bl-cube:not([data-role="unknown"])')].map(box),
+      pieces: [...stack.querySelectorAll('.bl-lid:not(.bl-bridge)')].map(box) };
+  });
+  const out = [];
+  for (const c of cubes) {
+    if (c.right <= bar.left || c.left >= bar.right || c.bottom < bar.bottom) continue;
+    if (c.top - bar.bottom < 1.5) out.push(`${Math.round((c.top - bar.bottom) * 10) / 10}px between the bridge and a cube under it`);
+  }
+  const all = [bar, ...pieces];
+  const clip = { x: Math.min(...all.map((b) => b.left)) - 2, y: Math.min(...all.map((b) => b.top)) - 2 };
+  Object.assign(clip, { width: Math.max(...all.map((b) => b.right)) + 2 - clip.x, height: Math.max(...all.map((b) => b.bottom)) + 2 - clip.y });
+  const png = (await page.screenshot({ clip })).toString('base64');
+  const apart = await page.evaluate(async ({ data, clip, pieces }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const [w, h] = [img.width, img.height];
+    const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+    const k = w / clip.width;
+    const magenta = (x, y) => x >= 0 && y >= 0 && x < w && y < h && Math.abs(d[(y * w + x) * 4] - 214) + Math.abs(d[(y * w + x) * 4 + 1] - 51) + Math.abs(d[(y * w + x) * 4 + 2] - 108) < 90;
+    // A point in each piece, 2px above its bottom, under its '?'.
+    const seeds = pieces.map((b) => [Math.round((b.left + b.width / 2 - clip.x) * k), Math.round((b.bottom - 2 - clip.y) * k)]);
+    const seen = new Uint8Array(w * h);
+    const queue = [seeds[0]];
+    seen[seeds[0][1] * w + seeds[0][0]] = 1;
+    while (queue.length) {
+      const [x, y] = queue.pop();
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (magenta(nx, ny) && !seen[ny * w + nx]) {
+          seen[ny * w + nx] = 1;
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    return seeds.filter(([x, y]) => !seen[y * w + x]).length;
+  }, { data: png, clip, pieces });
+  if (apart) out.push(`${apart} of ${pieces.length} pieces apart from the first`);
+  return out;
+}
+
+test('a cover over two rows that share no column: its bridge runs 2px clear of the cubes under it and reaches the lower piece (design 6.6)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 2 + ? = 6 and 4 + ? = 7: the bridge passes over the 2 or the 4.
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const seed of [2, 11]) {
+      const { round } = await devAt(page, 'missing-right', seed);
+      expect(await coverAcross(page), `${width}px ${JSON.stringify(round.equation.left)}`).toEqual([]);
+    }
+  }
+});
+
+test('home thumbs: a cover\'s bridge and its pieces meet with no pale seam, a device pixel into each (design 6.6)', async ({ context }) => {
+  // 3 + ? = 10 and ? + 8 = 16 at seed 1: bridges over the columns two pieces share.
+  for (const [level, width] of [['missing-right', 390], ['both-sides-symbols', 320], ['missing-right', 320]]) {
+    const tab = await context.newPage();
+    await tab.setViewportSize({ width, height: 844 });
+    await seedStore(tab, storeWith({ games: { balance: ladderAt(level) } }));
+    await tab.clock.install({ time: NOW });
+    await tab.goto(`${INDEX}#/`);
+    const bridge = tab.locator('[data-thumb][data-game="balance"] .bl-bridge').first();
+    await expect(bridge).toBeAttached();
+    const b = await bridge.evaluate((e) => e.getBoundingClientRect().toJSON());
+    // The bridge's band, a pixel above and below it, across its middle half; the '?' is hidden,
+    // so only the shapes show.
+    await tab.addStyleTag({ content: '[data-thumb] .cover::after { visibility: hidden; }' });
+    const clip = { x: b.left + b.width / 4, y: b.top - 1, width: b.width / 2, height: b.height + 2 };
+    const png = (await tab.screenshot({ clip })).toString('base64');
+    const worst = await tab.evaluate(async (data) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${data}`;
+      await img.decode();
+      const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, img.width, img.height).data;
+      let most = 0;
+      for (let i = 0; i < d.length; i += 4) most = Math.max(most, Math.abs(d[i] - 214) + Math.abs(d[i + 1] - 51) + Math.abs(d[i + 2] - 108));
+      return most;
+    }, png);
+    expect(worst, `${level} at ${width}px: off magenta across the bridge's band`).toBeLessThan(30);
+    await tab.close();
+  }
 });
 
 test('a cover over a run of places has the dome\'s corners at its ends, from its height, and covers each place (design 6.6)', async ({ page }) => {
