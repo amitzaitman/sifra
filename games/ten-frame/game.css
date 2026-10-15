@@ -4,7 +4,7 @@
 [data-game="ten-frame"] .tf-stage { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; container-type: size; }
 [data-game="ten-frame"] .tf-draw {
   --u: min(calc(100cqw / var(--dw)), calc(100cqh / var(--dh)));
-  position: relative; width: calc(var(--dw) * var(--u)); height: calc(var(--dh) * var(--u));
+  position: relative; width: calc(var(--dw) * var(--u)); height: calc(var(--dh) * var(--u)); isolation: isolate;
 }
 [data-game="ten-frame"] .tf-base, [data-game="ten-frame"] .tf-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 [data-game="ten-frame"] .tf-layer { pointer-events: none; }
@@ -69,6 +69,10 @@
 [data-game="ten-frame"] .tf-lid { --cover-h: calc(var(--dy) * var(--u)); }
 [data-game="ten-frame"] .tf-lid > .cover { --cover-fs: calc(var(--u) * 0.6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-lid.is-small > .cover { --cover-fs: calc(var(--u) * 0.42); }
+/* The bracket's small dome stays over the layers drawn after it (a flash ring round the tray, the
+   hint's rings), as it stays over the bracket: nothing crosses its '?' (design 6.6). The drawing
+   isolates it, so the demo's hand stays over it. */
+[data-game="ten-frame"] .tf-lid.is-small { z-index: 1; }
 /* On a bond circle the cover is the circle it covers (design 6.6), so its hint ring rounds it whole. */
 [data-game="ten-frame"] .tf-lid.is-round > .cover { --cover-fs: calc(var(--u) * 1.3); border-radius: 50%; }
 /* Over the ones (14 = 10 + ?): the '?' as big as the dome allows, and never wider than it. */

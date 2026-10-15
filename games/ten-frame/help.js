@@ -174,7 +174,9 @@ export const FRAME = {
     const real = L.cells.length;
     if (display === 'flash' && rule === 'given.whole') {
       const target = t.chip ?? t.tray;
-      ring(root, grow(t.chip ? L.tag : L.trays[0], 0.1), '', t.chip ? 'is-chip' : 'is-tray');
+      // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
+      // whole; the small dome on that line stays over the ring (game.css).
+      ring(root, grow(t.chip ? L.tag : L.trays[0], t.wrap ? 0.2 : 0.1), '', t.chip ? 'is-chip' : 'is-tray');
       return blink(pic, [target]);
     }
     if (display === 'flash') {

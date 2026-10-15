@@ -223,6 +223,45 @@ for (const [level, rule] of DISPLAYS) {
   });
 }
 
+test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring leaves the bracket whole and passes under its small \'?\' (design 6.6, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    // The run starts in the top row (the dome on the tray's top edge), and in the lower row.
+    for (const part of [1, 4, 8]) {
+      const { round } = await devAt(page, 'ten-empty', (r) => r.equation.left[0] === part);
+      await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="flash"] .tf-ring.is-tray')).toBeVisible();
+      const problems = await page.evaluate(() => {
+        const out = [];
+        const ring = document.querySelector('[data-display] .tf-ring.is-tray');
+        const r = ring.getBoundingClientRect();
+        const s = getComputedStyle(ring);
+        const inset = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e.includes('inset')).map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3])));
+        const inner = parseFloat(s.borderTopWidth) + inset;
+        // The bracket's line, 3px wide: the ring's border and inner halo stay outside it.
+        const b = document.querySelector('[data-area="picture"] .tf-bracket .tf-line').getBoundingClientRect();
+        for (const [edge, gap] of [['left', b.left - 1.5 - (r.left + inner)], ['top', b.top - 1.5 - (r.top + inner)],
+          ['right', r.right - inner - (b.right + 1.5)], ['bottom', r.bottom - inner - (b.bottom + 1.5)]]) {
+          if (gap < 0) out.push(`the ring's inner halo ${Math.round(-gap * 10) / 10}px over the bracket's ${edge} line`);
+        }
+        // Where the ring's border crosses the dome, the dome is on top.
+        const dome = document.querySelector('[data-area="picture"] .tf-lid.is-small .cover');
+        const d = dome.getBoundingClientRect();
+        const style = document.head.appendChild(document.createElement('style'));
+        style.textContent = '[data-game] .tf-ring { pointer-events: auto !important; }';
+        const y = r.top + parseFloat(s.borderTopWidth) / 2;
+        const hit = y > d.top && y < d.bottom ? document.elementFromPoint(d.left + d.width / 2, y) : dome;
+        if (hit !== dome) out.push(`the dome under ${hit?.getAttribute('class')}`);
+        style.remove();
+        return out;
+      });
+      expect(problems, `${width}px, ${part} + ? = 10`).toEqual([]);
+    }
+  }
+});
+
 test('reduced motion: a tap is taken right after a miss, and the hint is there at once', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { round, answerAt } = await playAt(page, 'ten-cover');
