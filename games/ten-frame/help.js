@@ -365,10 +365,13 @@ async function treeCount(pic, root, side, signal) {
     await count(root, [{ box: { ...p, y: p.y + 0.13 }, n: 0 }], signal);
     return settle(under(root, ring(root, box, '', 'is-round is-zero is-unknown')), signal);
   }
-  await count(root, side.dots.map((dot, j) => ({ box: side.place(j), n: j + 1, cls: 'on-unknown is-small',
+  await count(root, side.dots.map((dot, j) => ({ box: side.place(j), n: j + 1, cls: `on-unknown is-small${j > 8 ? ' is-two' : ''}`,
     before: () => show(dot) })), signal);
   if (!signal.aborted) {
-    const group = around(side.dots.map((_, j) => side.place(j)));
+    const dots = around(side.dots.map((_, j) => side.place(j)));
+    // A grown 10 passes its dot's sides: the line stands off further across, not up.
+    const wide = side.n > 9 ? 0.12 : 0;
+    const group = { ...dots, x: dots.x - wide, w: dots.w + 2 * wide };
     // Under the digits, over the circle's hint ring and its halo, clear of its line (draw.js BELOW).
     // The line crosses nothing, so it has no halo, which would cut the dots.
     await settle(under(root, outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter', false)), signal);

@@ -701,12 +701,25 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
 test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, draws under the last digit, and stays whole under the circle\'s ring (design 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });
-  // Three dots in one row (the last digit 3 in it); 0 and 8: a row of five and a row of three.
-  for (const [level, ok] of [['split-bond', (r) => r.answer === 3], ['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8]]) {
+  // Three dots in one row (the last digit 3 in it); 0 and 8: a row of five and a row of three;
+  // 0 and 10, 10 and 0: a grown 10 at the end of a row.
+  for (const [level, ok] of [['split-bond', (r) => r.answer === 3], ['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8],
+    ['split-pairs', (r) => r.answer[1] === 10], ['split-pairs', (r) => r.answer[0] === 10]]) {
     const { round, answerAt } = await devAt(page, level, ok);
+    await page.evaluate(defineInkOf);
     await toTheTour(page, round, answerAt);
     await expect(page.locator('[data-tour]').last(), level).toHaveText(lastTour(round));
-    await expect(page.locator('.tf-svg.tf-line-unknown'), level).toHaveCount(1);
+    await expect(page.locator('.tf-svg.tf-line-unknown'), level).toHaveCount(round.answer.length === 2 ? round.answer.filter(Boolean).length : 1);
+    // A grown 10 on a dot, with its 1.2px outline, stays inside the line round its group.
+    const ten = await page.evaluate(() => [...document.querySelectorAll('[data-tour="10"]')].flatMap((el) => {
+      const ink = inkOf(el);
+      const lines = [...document.querySelectorAll('.tf-line-unknown .tf-line')].map((p) => p.getBoundingClientRect());
+      const line = lines.find((l) => (ink.left + ink.right) / 2 > l.left && (ink.left + ink.right) / 2 < l.right && (ink.top + ink.bottom) / 2 > l.top && (ink.top + ink.bottom) / 2 < l.bottom);
+      if (!line) return ['a 10 outside every outline'];
+      const room = Math.min(ink.left - 1.2 - (line.left + 1.5), line.right - 1.5 - (ink.right + 1.2));
+      return room >= 0.5 ? [] : [`the 10 ${Math.round(-room * 10) / 10}px over its group's line`];
+    }));
+    expect(ten, `${level} ${JSON.stringify(round.answer)}`).toEqual([]);
     const problems = await page.evaluate(() => {
       const out = [];
       // What is drawn takes a point: the dots, and each outline's line and halo.
@@ -936,11 +949,11 @@ function defineInkOf() {
     const s = getComputedStyle(el);
     ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
     const m = ctx.measureText(el.textContent);
-    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
-    const base = t.top + k * m.fontBoundingBoxAscent;
-    const x = t.left + t.width / 2 - k * (m.width / 2);
-    return { left: x - k * m.actualBoundingBoxLeft, right: x + k * m.actualBoundingBoxRight,
-      top: base - k * m.actualBoundingBoxAscent, bottom: base + k * m.actualBoundingBoxDescent };
+    // Across by the advance, down by ascent and descent: a number may be condensed as it grows.
+    const [kx, ky] = [t.width / m.width, t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)];
+    const base = t.top + ky * m.fontBoundingBoxAscent;
+    return { left: t.left - kx * m.actualBoundingBoxLeft, right: t.left + kx * m.actualBoundingBoxRight,
+      top: base - ky * m.actualBoundingBoxAscent, bottom: base + ky * m.actualBoundingBoxDescent };
   };
 }
 

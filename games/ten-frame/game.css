@@ -165,6 +165,10 @@
   text-shadow: 0 0 1px var(--role-unknown), 1.2px 0 var(--role-unknown), -1.2px 0 var(--role-unknown), 0 1.2px var(--role-unknown), 0 -1.2px var(--role-unknown),
     .8px .8px var(--role-unknown), -.8px .8px var(--role-unknown), .8px -.8px var(--role-unknown), -.8px -.8px var(--role-unknown);
 }
+/* A 10 on a dot (a part of 10, level 4) is wider than the dot: centred on it, and grown in height
+   only, so with its outline it stays inside the line round its group (help.js; design 7.2). */
+[data-game="ten-frame"] .tf-digit.is-two { justify-content: center; }
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small.is-two { transform: scaleY(1.3); }
 [data-game="ten-frame"] .tf-tour.is-last.is-chip { transform: none; }
 /* In a row of digits above sticks the last grows to the right and up, away from the digit
    before it and from the outline below. */
