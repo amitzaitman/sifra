@@ -946,6 +946,58 @@ for (const [level, w, h, margin, reduce, pairs] of MARGINS) {
   });
 }
 
+/**
+ * A count-up digit on a disc: its blue ink pixels outside its white circle (the circle's radius from
+ * its ::before inset, plus half a device pixel), from a screenshot decoded in the page.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} digit
+ */
+async function inkOffWhite(page, digit) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = await digit.evaluate((d) => {
+    const b = d.getBoundingClientRect();
+    return { x: b.x, y: b.y, w: b.width, inset: parseFloat(getComputedStyle(d, '::before').top), dpr: window.devicePixelRatio };
+  });
+  const pad = 3;
+  const shot = await page.screenshot({ clip: { x: box.x - pad, y: box.y - pad, width: box.w + 2 * pad, height: box.w + 2 * pad } });
+  return page.evaluate(async ({ png, white }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    [canvas.width, canvas.height] = [img.width, img.height];
+    const g = canvas.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const { data } = g.getImageData(0, 0, img.width, img.height);
+    let off = 0;
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const i = (y * img.width + x) * 4;
+        if (data[i + 2] > data[i] + 30 && Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2) > white + 0.5) off += 1;
+      }
+    }
+    return off;
+  }, { png: shot.toString('base64'), white: (box.w / 2 - box.inset) * box.dpr });
+}
+
+// The count stops at ten (bridge.stopped-at-ten): its 10 used to run past its white circle, onto the counter's
+// light fill at 390px and onto its brown edge at 320px.
+for (const [w, h] of [[320, 568], [390, 844]]) {
+  test(`count-up on a disc at ${w}px: the 10 stays on its white circle, off the counter's edge (design 7.1)`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: w, height: h });
+    const { round } = await devAt(page, 'bridge-frames', (r) => r.equation.left.join() === '7,+,6');
+    await card(page, round.choices.findIndex((c) => c.rule === 'bridge.stopped-at-ten')).click();
+    await unlocked(page);
+    const ten = page.locator('[data-display] .tf-digit.on-disc').last();
+    await expect(ten).toHaveText('10');
+    expect(await inkOffWhite(page, ten), 'blue pixels of the 10 off its white circle').toBe(0);
+    for (const one of await page.locator('[data-display] .tf-digit.on-disc').all()) {
+      if (await one.textContent() !== '10') expect(await inkOffWhite(page, one), `the ${await one.textContent()} on its white circle`).toBe(0);
+    }
+  });
+}
+
 test('a home thumb at a bridging level draws the second addend light (owner decision 2026-10-15)', async ({ page }) => {
   await seedStore(page, storeWith({ games: { [ID]: ladderAt('bridge-frames') } }));
   await page.clock.install({ time: NOW });

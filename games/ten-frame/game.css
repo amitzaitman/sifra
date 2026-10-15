@@ -152,11 +152,13 @@
 [data-game="ten-frame"] .tf-tour.on-unknown, [data-game="ten-frame"] .is-solved .tf-tour.on-cell { color: var(--on-unknown); }
 [data-game="ten-frame"] .tf-tour.is-chip { border-radius: calc(var(--u) * 0.2); background: var(--surface); box-shadow: 0 0 0 3px var(--role-unknown); }
 [data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
-/* Two-digit numbers on a disc (bridging, 11-18) are smaller and set a little tighter (the right padding
-   centres them again), so the last one, grown in height only and as wide as the numbers before it, stays
-   inside its disc, also where the picture is 200px high (landscape); a thin outline in the disc's colour
-   keeps its edges off the white cell (design 7.2). */
-[data-game="ten-frame"] .tf-tour.on-unknown.is-two { font-size: max(14px, calc(var(--u) * 0.38)); letter-spacing: -0.1em; padding-right: 0.1em; }
+/* Two-digit numbers on a disc (bridging: the tour's 11-18, count-up's 10) are smaller and set a little
+   tighter (the right padding centres them again), so the tour's last one, grown in height only and as wide
+   as the numbers before it, stays inside its disc, also where the picture is 200px high (landscape); a
+   thin outline in the disc's colour keeps its edges off the white cell (design 7.2). Count-up's white
+   circle reaches the counter's edge, so its 10 stays off the edge (design 7.1). */
+[data-game="ten-frame"] .tf-digit.is-two { font-size: max(14px, calc(var(--u) * 0.38)); letter-spacing: -0.1em; padding-right: 0.1em; }
+[data-game="ten-frame"] .tf-digit.on-disc.is-two::before { inset: 3px; }
 [data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-two {
   transform: scaleY(1.3);
   text-shadow: 0 0 1px var(--role-unknown), 1px 0 var(--role-unknown), -1px 0 var(--role-unknown), 0 1px var(--role-unknown), 0 -1px var(--role-unknown);

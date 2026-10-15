@@ -613,7 +613,7 @@ export const BRIDGE = {
     if (display === 'count-up') {
       // The count stops at ten; the counters left over blink and stay ringed.
       const n = Math.min(value, counters.length);
-      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), 'on-disc');
+      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
       const left = counters.slice(value);
       left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part'));
       return blink(pic, left);
