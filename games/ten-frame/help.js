@@ -258,15 +258,18 @@ export const FRAME = {
    * Where the whole ends inside the tray, its line stays in the gap between cells (0.14 units),
    * off the cells outside it, and about 3px off the hint's ring: an unknown cell's inside the
    * whole, or the empty place's after it (answer 0). There the tour's outline, which ends at the
-   * same place, lies on it. The tag sits on it.
+   * same place, lies on it. The tag sits on it. Each ring has a 3px --halo on the tray round its
+   * cell (design 3, 7.2), drawn under the whole's line, so that line stays whole beside it.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
     const { t, d } = pic;
     const L = frameAt(pic);
     const pad = { out: 0.27, in: d.unknown ? 0.1 : 0.035, rows: d.rows };
+    const ringed = t.run.length ? t.run : [t.empty];
+    for (const c of ringed) at(root, 'tf-hint-halo', c);
     if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), pad)], 'tf-line-whole');
-    for (const c of t.run.length ? t.run : [t.empty]) at(root, 'tf-ring is-cell is-hint', c);
+    for (const c of ringed) at(root, 'tf-ring is-cell is-hint', c);
   },
 
   /** Counts the unknown from 1 on its cells, and rings them (R5: the unknown is a part). @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */

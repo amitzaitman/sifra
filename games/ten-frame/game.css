@@ -142,6 +142,9 @@
 /* The hint (7.2): a 4px ring in the colour of what it marks, kept to the end of the round. */
 [data-game="ten-frame"] .tf-ring.is-hint { border-color: var(--role-unknown); }
 [data-game="ten-frame"] .tf-ring.is-cell.is-hint { box-shadow: inset 0 0 0 4px var(--role-unknown); }
+/* Its --halo is a 3px band on the tray round the cell, apart from the ring (help.js), so the
+   magenta never meets the tray (design 3: --frame and magenta are close under deuteranopia). */
+[data-game="ten-frame"] .tf-hint-halo { border-radius: calc(var(--u) * 0.22); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-digit {
   display: grid; place-items: center; font-size: max(14px, calc(var(--u) * 0.45)); font-weight: 800; line-height: 1;
   color: var(--role-added-edge); animation: ten-frame-digit 150ms var(--ease) both; animation-delay: var(--d, 0ms);

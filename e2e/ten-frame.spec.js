@@ -486,8 +486,10 @@ test('making ten under a cover (levels 6-7): the tour\'s line runs outside the n
       await toTheTour(page, round, answerAt);
       await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
       await expect(page.locator('[data-area="picture"] .tf-line-unknown')).toHaveCount(1);
+      // Beside an unknown cell the hint's ring has its 3px --halo on the tray (design 7.3), and
+      // the rest of the edge stays navy: the tour's halo ends at the tray's edge.
       const expectEdge = async (when) => {
-        for (const [side, i, px] of await trayEdge(page)) expect(px, `${width}px ${part} + ? = 10, ${when}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(4);
+        for (const [side, i, px] of await trayEdge(page)) expect(px, `${width}px ${part} + ? = 10, ${when}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= part ? 2 : 4);
       };
       await expectEdge('the tour');
       await card(page, answerAt).click();
@@ -545,6 +547,68 @@ test('nothing to find (answer 0): the ring with 0 stands inside the hint\'s ring
       await expect(page.locator('[data-next]')).toBeVisible();
       await expect(page.locator('[data-area="picture"] .tf-ring.is-zero')).toHaveCount(1);
       expect(await page.evaluate(zeroInHint), `${where}, the closing after the hint`).toEqual([]);
+    }
+  }
+});
+
+/**
+ * What lies just outside each hint ring on a cell, read from a screenshot 1 and 2px off the middle
+ * of each side: the ring's --halo, never the tray (design 3, 7.2). Points under a cover (the
+ * bracket's small dome, with its own halo) or under the whole's tag, a label over the hint, are
+ * skipped.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+async function hintHalo(page) {
+  const { rings, lids } = await page.evaluate(() => ({
+    rings: [...document.querySelectorAll('[data-area="picture"] .tf-ring.is-cell.is-hint')].map((r) => r.getBoundingClientRect().toJSON()),
+    lids: [...document.querySelectorAll('[data-area="picture"] :is(.tf-lid:not(.is-up), .tf-tag)')].map((r) => r.getBoundingClientRect().toJSON()) }));
+  const png = (await page.screenshot()).toString('base64');
+  return page.evaluate(async ({ data, rings, lids }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const k = img.width / innerWidth;
+    const out = [];
+    rings.forEach((r, i) => {
+      for (const f of [0.3, 0.5, 0.7]) {
+        for (const off of [1, 2]) {
+          for (const [side, x, y] of [['left', r.left - off, r.top + f * r.height], ['right', r.right + off, r.top + f * r.height],
+            ['top', r.left + f * r.width, r.top - off], ['bottom', r.left + f * r.width, r.bottom + off]]) {
+            if (lids.some((l) => x > l.left - 4 && x < l.right + 4 && y > l.top - 4 && y < l.bottom + 4)) continue;
+            const p = ctx.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data;
+            if (Math.min(p[0], p[1], p[2]) < 225) out.push(`ring ${i}, ${side} ${off}px out: ${p[0]},${p[1]},${p[2]}`);
+          }
+        }
+      }
+    });
+    return out;
+  }, { data: png, rings, lids });
+}
+
+test('the hint\'s ring on a cell keeps a 3px --halo off the tray, --frame or navy, in the hint, the tour and solved (design 3, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, ok] of [['split-5', () => true], ['split-10', (r) => r.equation.left[0] === 2 && r.equation.right[0] === 5],
+      ['split-10', (r) => r.answer === 0 && r.equation.left[0] === 3], ['ten-empty', (r) => r.equation.left[0] === 4],
+      ['ten-empty', (r) => r.answer === 0], ['ten-cover', (r) => r.equation.left.includes(1)], ['ten-symbols', () => true]]) {
+      await page.goto('about:blank');
+      const { round, answerAt } = await devAt(page, level, ok);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      const where = `${width}px ${level} ${JSON.stringify(round.equation)}`;
+      for (const i of round.choices.keys()) {
+        if (i === answerAt) continue;
+        await card(page, i).click();
+        await unlocked(page);
+        if (await page.locator('[data-hint]').count()) expect(await hintHalo(page), `${where}, after card ${i}`).toEqual([]);
+      }
+      await expect(page.locator('[data-area="picture"] .tf-ring.is-cell.is-hint').first()).toBeVisible();
+      await card(page, answerAt).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      expect(await hintHalo(page), `${where}, solved`).toEqual([]);
     }
   }
 });
