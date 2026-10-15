@@ -1003,6 +1003,8 @@ function zeroRingProblems() {
     const room = Math.min(base - ky * m.actualBoundingBoxAscent - b.top, b.bottom - base - ky * m.actualBoundingBoxDescent,
       t.left - kx * m.actualBoundingBoxLeft - b.left, b.right - t.left - kx * m.actualBoundingBoxRight) - line;
     if (room < 2.5) out.push(`${z.className}: ${Math.round(room * 10) / 10}px between the 0 and its ring`);
+    // It stands on an empty place as a cube would: its hole is white, and the pan's string stops at its edge.
+    if (s.backgroundColor !== 'rgb(255, 255, 255)') out.push(`${z.className}: its hole is ${s.backgroundColor}, not white`);
     const halo = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset'))
       .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
     const pan = z.closest('.bl-pan').getAttribute('data-pan');
@@ -1019,12 +1021,13 @@ function zeroRingProblems() {
   return out;
 }
 
-test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, and it keeps off the cubes and the rim (design 7.1)', async ({ page }) => {
+test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, its hole is white over the pan\'s string, and it keeps off the cubes and the rim (design 7.1)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  // 8 + ? = 8 (the place in the second row), 2 + ? = 2 and 4 + ? = 4 (the bottom row, at its end).
+  // 8 + ? = 8 (the place in the second row), 2 + ? = 2 and 4 + ? = 4 (the bottom row, at its end),
+  // 5 + ? = 5 and 9 + ? = 9 (where the pan's string passes the place).
   for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    for (const seed of [3, 7, 19]) {
+    for (const seed of [3, 7, 19, 65, 53]) {
       const { round } = await devAt(page, 'missing-right', seed);
       expect(round.answer, `seed ${seed}`).toBe(0);
       const where = `${width}px ${JSON.stringify(round.equation.left)}`;
