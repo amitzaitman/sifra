@@ -990,54 +990,104 @@ for (const [level, w, h, margin, reduce, pairs] of MARGINS) {
 }
 
 /**
- * A count-up digit on a disc: its blue ink pixels outside its white circle (the circle's radius from
- * its ::before inset, plus half a device pixel), from a screenshot decoded in the page.
+ * A number on a counter as the child sees it, from two screenshots decoded in the page (any engine): as
+ * drawn, and with its ink transparent (its white circle and white outline stay). `ink`: the pixels the ink
+ * changes; `off`: those whose backing is not white; `gap`: for two digits, the widest run of device-pixel
+ * columns with no ink between the digits' centres (0 when they touch); `fill`: how many of 36 points just
+ * outside the white circle show the counter's own colour (part yellow or the light shade).
  * @param {import('@playwright/test').Page} page
  * @param {import('@playwright/test').Locator} digit
  */
-async function inkOffWhite(page, digit) {
+async function onWhite(page, digit) {
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = await digit.evaluate((d) => {
     const b = d.getBoundingClientRect();
-    return { x: b.x, y: b.y, w: b.width, inset: parseFloat(getComputedStyle(d, '::before').top), dpr: window.devicePixelRatio };
+    const centres = [...d.textContent].map((_, i) => {
+      const r = document.createRange();
+      r.setStart(d.firstChild, i);
+      r.setEnd(d.firstChild, i + 1);
+      const c = r.getBoundingClientRect();
+      return c.x + c.width / 2;
+    });
+    // The white circle: the digit's box is its counter's disc, less the ::before inset.
+    const white = d.offsetWidth / 2 - parseFloat(getComputedStyle(d, '::before').top);
+    return { x: b.x, y: b.y, w: b.width, h: b.height, centres, white, dpr: window.devicePixelRatio };
   });
   const pad = 3;
-  const shot = await page.screenshot({ clip: { x: box.x - pad, y: box.y - pad, width: box.w + 2 * pad, height: box.w + 2 * pad } });
-  return page.evaluate(async ({ png, white }) => {
-    const img = new Image();
-    img.src = `data:image/png;base64,${png}`;
-    await img.decode();
-    const canvas = document.createElement('canvas');
-    [canvas.width, canvas.height] = [img.width, img.height];
-    const g = canvas.getContext('2d');
-    g.drawImage(img, 0, 0);
-    const { data } = g.getImageData(0, 0, img.width, img.height);
-    let off = 0;
-    for (let y = 0; y < img.height; y++) {
-      for (let x = 0; x < img.width; x++) {
-        const i = (y * img.width + x) * 4;
-        if (data[i + 2] > data[i] + 30 && Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2) > white + 0.5) off += 1;
+  const clip = { x: box.x - pad, y: box.y - pad, width: box.w + 2 * pad, height: box.h + 2 * pad };
+  const inked = await page.screenshot({ clip });
+  await digit.evaluate((d) => d.style.setProperty('color', 'transparent', 'important'));
+  const bare = await page.screenshot({ clip });
+  await digit.evaluate((d) => d.style.removeProperty('color'));
+  return page.evaluate(async ({ shots, centres, white, dpr }) => {
+    const pixels = await Promise.all(shots.map(async (png) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      [canvas.width, canvas.height] = [img.width, img.height];
+      const g = canvas.getContext('2d');
+      g.drawImage(img, 0, 0);
+      return g.getImageData(0, 0, img.width, img.height);
+    }));
+    const [a, b] = pixels.map((p) => p.data);
+    const { width, height } = pixels[0];
+    const column = new Array(width).fill(0);
+    let [ink, off] = [0, 0];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])) <= 24) continue;
+        ink += 1;
+        column[x] += 1;
+        if (Math.min(b[i], b[i + 1], b[i + 2]) < 232) off += 1;
       }
     }
-    return off;
-  }, { png: shot.toString('base64'), white: (box.w / 2 - box.inset) * box.dpr });
+    let [gap, run] = [0, 0];
+    if (centres.length === 2) {
+      for (let x = Math.ceil(centres[0] * dpr); x <= Math.floor(centres[1] * dpr); x++) {
+        run = column[x] ? 0 : run + 1;
+        gap = Math.max(gap, run);
+      }
+    }
+    const fillColours = [[255, 194, 51], [255, 237, 184]];
+    let fill = 0;
+    for (let k = 0; k < 36; k++) {
+      const r = (white + 1.1) * dpr;
+      const x = Math.floor(width / 2 + r * Math.cos((k * Math.PI) / 18));
+      const y = Math.floor(height / 2 + r * Math.sin((k * Math.PI) / 18));
+      const i = (y * width + x) * 4;
+      if (fillColours.some((c) => Math.hypot(a[i] - c[0], a[i + 1] - c[1], a[i + 2] - c[2]) < 30)) fill += 1;
+    }
+    return { ink, off, gap, fill };
+  }, { shots: [inked, bare].map((s) => s.toString('base64')), centres: box.centres.map((c) => c - clip.x), white: box.white, dpr: box.dpr });
 }
 
-// The count stops at ten (bridge.stopped-at-ten): its 10 used to run past its white circle, onto the counter's
-// light fill at 390px and onto its brown edge at 320px.
-for (const [w, h] of [[320, 568], [390, 844]]) {
-  test(`count-up on a disc at ${w}px: the 10 stays on its white circle, off the counter's edge (design 7.1)`, async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.setViewportSize({ width: w, height: h });
-    const { round } = await devAt(page, 'bridge-frames', (r) => r.equation.left.join() === '7,+,6');
-    await card(page, round.choices.findIndex((c) => c.rule === 'bridge.stopped-at-ten')).click();
-    await unlocked(page);
-    const ten = page.locator('[data-display] .tf-digit.on-disc').last();
-    await expect(ten).toHaveText('10');
-    expect(await inkOffWhite(page, ten), 'blue pixels of the 10 off its white circle').toBe(0);
-    for (const one of await page.locator('[data-display] .tf-digit.on-disc').all()) {
-      if (await one.textContent() !== '10') expect(await inkOffWhite(page, one), `the ${await one.textContent()} on its white circle`).toBe(0);
-    }
+// The count stops at ten (bridge.stopped-at-ten). Its 10 is a two-digit number on a counter, at least 14px
+// (design 4): it keeps a gap between its digits, its ink stays on white (its white circle, and a white outline
+// where the digits pass it: at 320px and on a phone held sideways, where a counter is 20px), and at 390px its
+// counter shows its light shade round the white circle, as 1 to 9 do (design 7.1). Measured in Chromium: a gap of
+// 2-3 device pixels, every point of the rim in the counter's colour; set 0.1em tighter the digits touched.
+for (const [w, h, dpr] of [[320, 568], [390, 844], [390, 844, 3], [844, 390], [740, 360]]) {
+  test.describe(`count-up at ${w}x${h}${dpr ? `, dpr ${dpr}` : ''}`, () => {
+    if (dpr) test.use({ deviceScaleFactor: dpr });
+    test(`count-up on a disc at ${w}x${h}: the 10 apart, on white, its counter's shade round it (design 7.1)`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.setViewportSize({ width: w, height: h });
+      const { round } = await devAt(page, 'bridge-frames', (r) => r.equation.left.join() === '7,+,6');
+      await card(page, round.choices.findIndex((c) => c.rule === 'bridge.stopped-at-ten')).click();
+      await unlocked(page);
+      await quiet(page);
+      const digits = page.locator('[data-display] .tf-digit.on-disc');
+      await expect(digits).toHaveText(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+      for (const [j, one] of (await digits.all()).entries()) {
+        const seen = await onWhite(page, one);
+        expect(seen.ink, `the ${j + 1} is drawn`).toBeGreaterThan(20);
+        expect(seen.off, `ink pixels of the ${j + 1} off white`).toBe(0);
+        if (w === 390) expect(seen.fill, `the ${j + 1}'s counter round its white circle, of 36 points`).toBeGreaterThanOrEqual(30);
+        if (j === 9) expect(seen.gap, 'device-pixel columns between the 1 and the 0').toBeGreaterThanOrEqual(1);
+      }
+    });
   });
 }
 
