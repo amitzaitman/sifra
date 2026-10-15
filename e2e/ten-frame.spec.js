@@ -1357,6 +1357,43 @@ test('home thumbs at 320 and 360px: a cover\'s halo leaves the whole tray\'s edg
   }
 });
 
+/**
+ * The share of each part's area inside its edge (its inset box-shadow), in the yellow of the part:
+ * on small things a fixed edge leaves a brown ring (design 3: the part is a yellow fill with an edge).
+ * @param {import('@playwright/test').Locator} root
+ */
+const yellowShare = (root) => root.evaluate((el) => [...el.querySelectorAll('[data-role="part"]')].map((p) => {
+  const b = p.getBoundingClientRect();
+  const inset = getComputedStyle(p).boxShadow.split(/,(?![^(]*\))/).find((e) => e.includes('inset'));
+  const edge = inset ? parseFloat(inset.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) : 0;
+  return { what: `${p.className.replace('tf-at ', '')} ${b.width.toFixed(1)}px, its edge ${edge.toFixed(2)}px`,
+    share: Math.max(0, b.width - 2 * edge) * Math.max(0, b.height - 2 * edge) / (b.width * b.height) };
+}));
+
+test('small parts stay yellow: in home thumbs at 320px and in the build display, a part\'s edge leaves most of it its colour (design 3)', async ({ page, context }) => {
+  // The game's card shows its level's thumb: counters, a bond's dots, sticks, two frames. A tab
+  // is seeded once, so each level has its own.
+  for (const level of ['ten-cover', 'split-bond', 'teen-bundle', 'bridge-frames']) {
+    const home = await context.newPage();
+    await home.setViewportSize({ width: 320, height: 568 });
+    await seedStore(home, storeWith({ games: { [ID]: ladderAt(level) } }));
+    await home.clock.install({ time: NOW });
+    await home.goto(`${INDEX}#/`);
+    const thumb = home.locator(`a[href="#/play/${ID}"] [data-thumb]`);
+    await expect(thumb.locator(`[data-role="part"].${{ 'split-bond': 'tf-dot', 'teen-bundle': 'tf-stick' }[level] ?? 'tf-disc'}`).first()).toBeVisible();
+    for (const { what, share } of await yellowShare(thumb)) expect(share, `${level} thumb: ${what}`).toBeGreaterThanOrEqual(0.4);
+    await home.close();
+  }
+  // 91 for 19: nine ghost bundles shrink the drawing to sticks about 5.5px wide.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  const { round } = await devAt(page, 'teen-bundle', (r) => r.choices.some((c) => c.rule === 'pv.teen-reversed' && c.value === 91));
+  await card(page, round.choices.findIndex((c) => c.rule === 'pv.teen-reversed')).click();
+  await unlocked(page);
+  await expect(page.locator('[data-display="build"]')).toBeVisible();
+  for (const { what, share } of await yellowShare(page.locator('[data-area="picture"]'))) expect(share, `the build display: ${what}`).toBeGreaterThanOrEqual(0.4);
+});
+
 test('the picture label says one in the singular (R1 templates)', async ({ page }) => {
   await devAt(page, 'split-5', (r) => r.equation.left[0] === 1);
   await expect(page.locator('[data-area="picture"]')).toHaveAttribute('aria-label', /עִגּוּל אֶחָד וּמִכְסֶה$/);
