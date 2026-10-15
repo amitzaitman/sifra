@@ -79,7 +79,7 @@
 [data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + var(--half)); }
 [data-game="balance"] .bl-op { color: var(--ink-soft); }
 [data-game="balance"] .bl-q { color: var(--role-unknown); }
-[data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); }
+[data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); font-variant-numeric: proportional-nums; }
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 /* The last number grows 1.3; its cube, and the white disc on a known cube, never do (design 7.3). */
 [data-game="balance"] .bl-digit.is-last { align-content: center; font-size: calc(1.3 * max(14px, var(--cube) * .6)); }
