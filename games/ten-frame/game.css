@@ -51,13 +51,10 @@
 
 /* Bundles (place value 4.5): ten sticks tied with a band, and loose sticks; veils show the whole. */
 [data-game="ten-frame"] .tf-bundle, [data-game="ten-frame"] .tf-stick { border-radius: calc(var(--u) * 0.2); }
+/* Ten sticks: a line every 10%, 2px on a wide bundle and 3% of a narrow one (a thumb's, or a build display's at
+   320px, about 20-26px), where 2px lines would fill it: most of it stays its colour. */
 [data-game="ten-frame"] .tf-bundle[data-role="part"] {
   background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge);
-  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-part-edge) calc(10% - 2px) 10%);
-}
-/* A thumb's bundle is about 20-26px wide, where 2px lines fill it: there each line is 3% of the bundle, so most of
-   it stays part yellow (rounds keep 2px lines). */
-[data-game="ten-frame"][data-thumb] .tf-bundle[data-role="part"] {
   background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - min(2px, 3%)), var(--role-part-edge) calc(10% - min(2px, 3%)) 10%);
 }
 [data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
@@ -104,7 +101,7 @@
 [data-game="ten-frame"] .tf-ghost { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost); }
 [data-game="ten-frame"] .tf-ghost.is-dot { border-width: 2px; }
 [data-game="ten-frame"] .tf-ghost.is-bundle, [data-game="ten-frame"] .tf-ghost.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
-[data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-added-edge) calc(10% - 2px) 10%); }
+[data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - min(2px, 3%)), var(--role-added-edge) calc(10% - min(2px, 3%)) 10%); }
 [data-game="ten-frame"] .tf-place { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--surface); }
 [data-game="ten-frame"] .tf-place.is-target { border-color: var(--role-part-edge); background: none; }
 [data-game="ten-frame"] .tf-place.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }

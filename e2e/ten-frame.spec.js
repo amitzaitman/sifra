@@ -589,6 +589,33 @@ async function partPixels(page) {
   }, png);
 }
 
+test('bundles at 320px: the build display\'s narrow ghost bundles keep their light fill between the stick lines (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  // 91 for 19: nine ghost bundles shrink the drawing to bundles about 24px wide.
+  const { round } = await devAt(page, 'teen-bundle', (r) => r.choices.some((c) => c.rule === 'pv.teen-reversed' && c.value === 91));
+  await card(page, round.choices.findIndex((c) => c.rule === 'pv.teen-reversed')).click();
+  await unlocked(page);
+  const ghost = page.locator('[data-display="build"] .tf-ghost.is-bundle').first();
+  const b = await ghost.boundingBox();
+  // Inside the 2px dashed edge, the share of the lines' dark blue; the rest is the ghost's light blue.
+  const png = (await page.screenshot({ clip: { x: b.x + 3, y: b.y + 3, width: b.width - 6, height: b.height - 6 } })).toString('base64');
+  const dark = await page.evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    let n = 0;
+    // --role-added-edge (11, 111, 166) against --role-added-ghost (154, 213, 244): nearer the first.
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 82) n += 1;
+    return n / (d.length / 4);
+  }, png);
+  expect(b.width, 'a narrow bundle').toBeLessThan(30);
+  expect(dark, 'dark lines over the ghost bundle').toBeLessThan(0.5);
+});
+
 test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour and after a first try (motion on)', async ({ page }) => {
   // Where a veil's layer snapped apart from its stick at the Pixel 7's and the iPhone's pixel ratios.
   for (const [width, answer] of [[320, 11], [360, 16]]) {
