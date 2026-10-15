@@ -3,7 +3,7 @@
 import { SKILLS } from '../../data/skills.js';
 import { drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 2, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 3, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
 const pans = {
@@ -110,10 +110,10 @@ export const rules = {
     const fact = factOf(r);
     return fact && r.answer.left.length === 1 ? { left: [fact[0], '+', fact[1]], right: [fact[0] + fact[1] + 1] } : null;
   },
-  // A card without an operation, the exercise's result and the next number: 7 = 8.
-  'slip.card': (r) => {
+  // Judging: "=" as "becomes", a card without an operation: the exercise's first number, then its result, 5 = 7.
+  'equal.becomes': (r) => {
     const fact = factOf(r);
-    return fact ? { left: [fact[0] + fact[1]], right: [fact[0] + fact[1] + 1] } : null;
+    return fact ? { left: [fact[0]], right: [fact[0] + fact[1]] } : null;
   },
 };
 
@@ -241,12 +241,13 @@ function draw(level, rng) {
 }
 
 /**
- * The false cards beside each form of the true card (depth 4.9): real errors, and a slip in the form no real
- * error fills. Reversed: equal.copy gives way to it, an open owner question (depth 4.9, pedagogy 8.1).
+ * The false cards beside each form of the true card (depth 4.9): real errors only (R4), so that every
+ * round shows two standard cards, one reversed and one without an operation. Reversed: equal.copy is
+ * a second reversed card, so it is not offered.
  */
 const FALSE_CARDS = {
-  standard: ['op.other', 'equal.copy', 'slip.card'],
-  reversed: ['equal.reject-reversed', 'op.other', 'slip.card'],
+  standard: ['op.other', 'equal.copy', 'equal.becomes'],
+  reversed: ['equal.reject-reversed', 'op.other', 'equal.becomes'],
   same: ['equal.reject-reversed', 'op.other', 'equal.copy'],
 };
 

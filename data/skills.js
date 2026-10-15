@@ -90,7 +90,7 @@ export const SKILLS = [
   {"id":"addsub.multi.whole-tens","requires":{"base":["pv.numeral.read","addsub.facts.recall"],"when":[]},"rules":["pv.tens-as-ones","op.other","pv.miscount-ten"]},
   {"id":"addsub.multi.one-digit","requires":{"base":["pv.numeral.read","addsub.facts.recall"],"when":[{"if":{"bridge":"=ten"},"add":["addsub.facts.bridge-add"]}]},"rules":["pv.ones-as-tens","bridge.stopped-at-ten","multi.smaller-from-larger","pv.miscount-ten","count.start-included"]},
   {"id":"addsub.multi.to-next-ten","requires":{"base":["num.parts.make-ten","pv.numeral.read"],"when":[]},"rules":["given.whole","given.part","op.other","multi.digits-to-ten","slip.near"]},
-  {"id":"eq.sign.true-false","requires":{"base":["eq.sign.missing","eq.sign.both-sides"],"when":[]},"rules":["equal.reject-reversed","equal.copy","op.other","equal.accepts-chain","op.swapped-subtraction","slip.card"]},
+  {"id":"eq.sign.true-false","requires":{"base":["eq.sign.missing","eq.sign.both-sides"],"when":[]},"rules":["equal.reject-reversed","equal.copy","op.other","equal.accepts-chain","op.swapped-subtraction","equal.becomes","slip.card"]},
   {"id":"eq.sign.relational","requires":{"base":["eq.sign.both-sides"],"when":[]},"rules":["equal.compensate-wrong","equal.add-to-equal","equal.copy"]},
   {"id":"eq.props.distributive","requires":{"base":["muldiv.meaning.array"],"when":[]},"rules":[]},
   {"id":"muldiv.facts.divide","requires":{"base":["muldiv.facts.skip-count"],"when":[]},"rules":["groups.subtracted","groups.one-group-off","op.other","slip.near"]},

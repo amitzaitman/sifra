@@ -90,6 +90,7 @@ export const RULES = {
   "equal.add-to-equal": {"types":["number"],"display":"balance"},
   "equal.reject-reversed": {"types":["card"],"display":"balance"},
   "equal.accepts-chain": {"types":["card"],"display":"balance"},
+  "equal.becomes": {"types":["card"],"display":"balance"},
   "equal.compensate-wrong": {"types":["number"],"display":"balance"},
   "groups.added": {"types":["number"],"display":"running-sums"},
   "groups.answered-groups": {"types":["number"],"display":"circle-groups"},

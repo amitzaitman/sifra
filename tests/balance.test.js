@@ -147,8 +147,8 @@ test('judging: one true card, the others false, each with its rule; every card m
     const [a, b] = round.fact;
     const numbers = new Set([a, b, a + b, a + b + 1, Math.abs(a - b)]);
     assert.ok(round.choices.every((c) => [...c.value.left, ...c.value.right].every((t) => typeof t !== 'number' || numbers.has(t))), JSON.stringify(round.choices));
-    // Two real errors at least (R4); the slip beside a reversed true card is an open owner question (depth 4.9).
-    assert.ok(round.choices.filter((c) => c.rule && !c.rule.startsWith('slip.')).length >= 2);
+    // Real errors only: a known error fits every form, so no slip (R4, depth 4.9).
+    assert.ok(round.choices.every((c) => !c.rule?.startsWith('slip.')), JSON.stringify(round.choices));
     assert.ok(!round.choices.some((c) => c.rule === 'equal.accepts-chain'), 'its form (an operation on both sides) is not a level 1 form');
   }
 });
@@ -173,7 +173,7 @@ test('judging over 500 seeds: each form is sometimes true and sometimes false, a
     const share = right / cards;
     assert.ok(share > 0.18 && share < 0.32, `${form}: ${right} of ${cards} cards true (${share.toFixed(2)})`);
   }
-  assert.deepEqual([...rules].sort(), ['equal.copy', 'equal.reject-reversed', 'op.other', 'slip.card']);
+  assert.deepEqual([...rules].sort(), ['equal.becomes', 'equal.copy', 'equal.reject-reversed', 'op.other']);
 });
 
 test('judging: the cards are the catalogue\'s (depth 4.9, errors.md), on 5 + 2 = 7 in each form of the true card', () => {
@@ -187,12 +187,12 @@ test('judging: the cards are the catalogue\'s (depth 4.9, errors.md), on 5 + 2 =
     const where = JSON.stringify(answer);
     assert.deepEqual(balance.rules['op.other'](r), { left: [5, '+', 2], right: [3] }, where);
     assert.deepEqual(balance.rules['equal.copy'](r), { left: [5], right: [5, '+', 2] }, where);
-    assert.deepEqual(balance.rules['slip.card'](r), { left: [7], right: [8] }, where);
+    assert.deepEqual(balance.rules['equal.becomes'](r), { left: [5], right: [7] }, where);
     // A true card with a lone number on the left is turned down for the standard form.
     assert.deepEqual(balance.rules['equal.reject-reversed'](r), answer === standard ? null : { left: [5, '+', 2], right: [8] }, where);
   }
   // Depth 4.9's false cards beside each form of the true card.
-  const lists = { standard: ['equal.copy', 'op.other', 'slip.card'], reversed: ['equal.reject-reversed', 'op.other', 'slip.card'], same: ['equal.copy', 'equal.reject-reversed', 'op.other'] };
+  const lists = { standard: ['equal.becomes', 'equal.copy', 'op.other'], reversed: ['equal.becomes', 'equal.reject-reversed', 'op.other'], same: ['equal.copy', 'equal.reject-reversed', 'op.other'] };
   const seen = new Set();
   for (const r of rounds('true-false')) {
     const form = formOf(r.answer);
