@@ -632,9 +632,9 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
  * What is wrong with the tour's last number n, read in the page (design 7.2, 7.3): it is 1.3 times
  * the number before it and at least 2px clear of it, it covers none of it, nothing covers it (it
  * stays inside its cube, where no ring goes, or is drawn over the ring), its cube is drawn no
- * wider than the one before it, +1px, and a cube after it in its row shows whole: the number and
- * its 1.5px outline end before that cube, which is on top at both its ends (only the ring may
- * touch its edge).
+ * wider than the one before it, +1px (an outline of the number in the cube's colour counts as
+ * cube), and a cube after it in its row shows whole: the number and any outline end before that
+ * cube, which is on top at both its ends (only the ring may touch its edge).
  * @param {number} n
  * @returns {string[]}
  */
@@ -672,11 +672,18 @@ function lastNumberProblems(n) {
     if (atEnds(drawn, p, 0.5).some((e) => e !== before)) out.push(`${at}: ${n - 1} is covered`);
     const inCube = t.left >= c.left - 0.5 && t.right <= c.right + 0.5;
     if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => e !== digit)) out.push(`${at}: ${n} is covered`);
-    // A box drawn under the number (the white disc on a known cube) counts as its cube.
+    // What is drawn counts as its cube: a box under the number (the white disc on a known cube),
+    // and an outline in the cube's own colour around the number's text (each text-shadow's offset
+    // plus its blur), which reads as cube where it passes the cube's edge.
     const own = digit.getBoundingClientRect();
     const style = getComputedStyle(digit);
     const painted = style.backgroundColor !== 'rgba(0, 0, 0, 0)' || style.boxShadow !== 'none';
-    const wide = painted ? Math.max(c.right, own.right) - Math.min(c.left, own.left) : c.width;
+    const fill = getComputedStyle(cube).backgroundColor;
+    const shadows = [...style.textShadow.matchAll(/(rgba?\([^)]*\)) (-?[\d.]+)px (-?[\d.]+)px(?: ([\d.]+)px)?/g)];
+    const reach = (list) => Math.max(0, ...list.map((m) => Math.abs(Number(m[2])) + Number(m[4] ?? 0)));
+    const outline = reach(shadows.filter((m) => m[1] === fill));
+    const boxes = [c, ...(painted ? [own] : []), ...(outline ? [{ left: t.left - outline, right: t.right + outline }] : [])];
+    const wide = Math.max(...boxes.map((b) => b.right)) - Math.min(...boxes.map((b) => b.left));
     const next = cubeAt(before).getBoundingClientRect().width;
     if (wide > next + 1) out.push(`${at}: ${n}'s cube is drawn ${r(wide)}px wide, ${n - 1}'s ${r(next)}px`);
     // The next place in its row: in ? + 5, the 5's first cube, as wide as its twins (compare.size).
@@ -684,7 +691,8 @@ function lastNumberProblems(n) {
     const after = [...cube.parentElement.querySelectorAll('.bl-cube')].find((e) => place(e, '--r') === place(cube, '--r') && place(e, '--c') === place(cube, '--c') + 1);
     if (after) {
       const a = after.getBoundingClientRect();
-      if (t.right + 1.5 > a.left) out.push(`${at}: ${n} ends ${r(t.right + 1.5 - a.left)}px into the cube after it, outline included`);
+      const end = t.right + reach(shadows);
+      if (end > a.left) out.push(`${at}: ${n} ends ${r(end - a.left)}px into the cube after it, outline included`);
       if (atEnds(drawn, a, 0.5).some((e) => e !== after)) out.push(`${at}: the cube after ${n} is covered`);
     }
   }

@@ -59,7 +59,9 @@
 }
 [data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
 [data-game="ten-frame"] .tf-band { position: absolute; left: -8%; right: -8%; top: 42%; height: 14%; border-radius: 4px; background: var(--frame); }
-[data-game="ten-frame"] .tf-veil { position: absolute; inset: 0; border-radius: inherit; }
+/* A 0.5px rim in its own colour covers the counter's antialiased edge, so no hairline of the part's
+   edge shows round the shown unknown. */
+[data-game="ten-frame"] .tf-veil { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 0.5px var(--role-unknown); }
 
 /* Covers (6.6): the shared .cover in a box, with --halo; a run over two rows is joined by a bridge.
    --cover-h is the box's height: app.css sizes the dome's corners from it, so a cover over a run
@@ -67,7 +69,8 @@
 [data-game="ten-frame"] .tf-lid { --cover-h: calc(var(--dy) * var(--u)); }
 [data-game="ten-frame"] .tf-lid > .cover { --cover-fs: calc(var(--u) * 0.6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-lid.is-small > .cover { --cover-fs: calc(var(--u) * 0.42); }
-[data-game="ten-frame"] .tf-lid.is-round > .cover { --cover-fs: calc(var(--u) * 1.3); }
+/* On a bond circle the cover is the circle it covers (design 6.6), so its hint ring rounds it whole. */
+[data-game="ten-frame"] .tf-lid.is-round > .cover { --cover-fs: calc(var(--u) * 1.3); border-radius: 50%; }
 /* Over the ones (14 = 10 + ?): the '?' as big as the dome allows, and never wider than it. */
 [data-game="ten-frame"] .tf-lid.is-tall > .cover { --cover-fs: calc(var(--u) * min(2.04, var(--dx) * 0.8)); }
 [data-game="ten-frame"] .tf-span { background: var(--role-unknown); }
@@ -100,6 +103,9 @@
 [data-game="ten-frame"] .tf-gone { border: 3px solid var(--role-removed); border-radius: 50%; background: var(--surface); }
 [data-game="ten-frame"] .tf-ring { border: 3px solid var(--role-added-edge); border-radius: calc(var(--u) * 0.3); box-shadow: 0 0 0 3px var(--halo), inset 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-round { border-radius: 50%; }
+/* Round a part (a yellow disc or circle) a ring has no inner halo, so the part keeps its 3px edge
+   (design 3) and its size; the ring is drawn clear of that edge. */
+[data-game="ten-frame"] .tf-ring.on-part { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
 [data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
@@ -131,8 +137,11 @@
 [data-game="ten-frame"] .tf-tour.on-unknown, [data-game="ten-frame"] .is-solved .tf-tour.on-cell { color: var(--on-unknown); }
 [data-game="ten-frame"] .tf-tour.is-chip { border-radius: calc(var(--u) * 0.2); background: var(--surface); box-shadow: 0 0 0 3px var(--role-unknown); }
 [data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
+/* A two-digit last number on a disc (bridging, 11-18) is wider than the disc at 1.3 both ways: it
+   grows in height only, as wide as the numbers before it, and stays on its disc (design 7.2). */
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown:not(.is-small) { transform: scaleY(1.3); }
 /* On a small dot (the bond) the grown digit passes the dot's edge: a thin outline in the dot's
-   colour keeps it whole there (design 7.2), as on the balance's cubes. */
+   colour keeps it whole there (design 7.2). */
 [data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small {
   text-shadow: 0 0 1px var(--role-unknown), 1.2px 0 var(--role-unknown), -1.2px 0 var(--role-unknown), 0 1.2px var(--role-unknown), 0 -1.2px var(--role-unknown),
     .8px .8px var(--role-unknown), -.8px .8px var(--role-unknown), .8px -.8px var(--role-unknown), -.8px -.8px var(--role-unknown);

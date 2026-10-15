@@ -178,7 +178,7 @@ export const FRAME = {
       return blink(pic, [target]);
     }
     if (display === 'flash') {
-      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1)));
+      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part'));
       return blink(pic, t.parts);
     }
     const lids = liftForDisplay(pic);
@@ -240,7 +240,9 @@ export const FRAME = {
       return settle(ring(root, grow(disc(t.empty), 0.08), '', 'is-round is-zero is-unknown'), signal);
     }
     await count(root, t.run.map((c, j) => ({ box: c, n: j + 1, cls: 'on-cell' })), signal);
-    if (!signal.aborted) await settle(outline(root, L, [runPath(t.run, 0.1)], 'tf-line-unknown tf-enter'), signal);
+    // A bracket around the empty cells is already the ring, and a second outline's halo would
+    // cut its '?' dome (design 6.6, 7.3).
+    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, 0.1)], 'tf-line-unknown tf-enter'), signal);
   },
 
   /** The cover lifts and the unknown fills in, in fill order (design 6.9). @param {Pic} pic */
@@ -313,7 +315,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
 function treeWholeHint(pic, root) {
   const { L, wholeDots } = pic.t;
   const boxes = [L.top, ...wholeDots.map((_, i) => L.wholeAt(i))];
-  outline(root, L, [boxPath(around(boxes), 0.22, 1.2)], 'tf-line-whole');
+  // Padded so the line's 9px halo clears the circle and the last dot at 320px (unit about 17.5px).
+  outline(root, L, [boxPath(around(boxes), 0.28, 1.2)], 'tf-line-whole');
 }
 
 /**
@@ -348,7 +351,9 @@ export const TREE = {
     const { t, d } = pic;
     if (display === 'flash') {
       const circle = rule === 'given.whole' ? t.top : t.left.circle;
-      ring(root, grow(rule === 'given.whole' ? t.L.top : t.L.left, 0.12));
+      // A ring round the part's circle clears its 3px edge, and the ring's halo the dots below.
+      if (rule === 'given.whole') ring(root, grow(t.L.top, 0.12));
+      else ring(root, grow(t.L.left, 0.17), '', 'is-round on-part');
       return blink(pic, [circle]);
     }
     treeGhosts(pic, root, [{ place: t.right.place, n: value }], d.unknown, display === 'count-up');
@@ -609,7 +614,7 @@ export const BRIDGE = {
       const n = Math.min(value, counters.length);
       for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), 'on-disc');
       const left = counters.slice(value);
-      left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms'));
+      left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part'));
       return blink(pic, left);
     }
     // label-ten: the full first frame is the ten that was forgotten.
@@ -636,10 +641,9 @@ export const BRIDGE = {
     const L = t.L;
     const [top, bottom] = [pic.top, pic.bottom];
     const m = 10 - top.length;
-    const label = (cells, n) => {
-      const first = segments(cells)[0];
-      chipAt(root, { x: first.x, y: first.y - 0.5, w: first.w, h: 0.6 }, String(n));
-    };
+    // A group's number on a white chip (0.72 high) centred over a box at y, by default on the top
+    // edge of the group's first row.
+    const label = (cells, n, box = segments(cells)[0], y = box.y - 0.2) => chipAt(root, { x: box.x, y: y - 0.3, w: box.w, h: 0.6 }, String(n));
     const group = (cells, n) => {
       if (!cells.length) return;
       outline(root, L, [runPath(cells, 0.12, true)], 'tf-line-part');
@@ -653,8 +657,17 @@ export const BRIDGE = {
       if (going.length) label(going, going.length);
       group(bottom.slice(m).map((_, j) => L.place(10 + m + j)), bottom.length - m);
     } else {
-      group([...Array(10 - d.a).keys()].map((j) => L.place(d.a + j)), 10 - d.a);
-      group(bottom.map((_, j) => L.place(10 + j)), bottom.length);
+      // The first frame full: the counters that came fill its second row, under its first, so
+      // each group's number goes below it: theirs in the gap between the frames, the rest's
+      // below its first row, over the second frame's empty cells. No chip covers a counter, and
+      // both outlines go first, so neither cuts a chip.
+      const came = [...Array(10 - d.a).keys()].map((j) => L.place(d.a + j));
+      const rest = bottom.map((_, j) => L.place(10 + j));
+      for (const cells of [came, rest]) outline(root, L, [runPath(cells, 0.12, true)], 'tf-line-part');
+      label(came, came.length, segments(came)[0], (L.place(5).y + 1 + L.place(10).y) / 2);
+      // Under the cells of its first row that have none below them, the chip's top on their bottom edge.
+      const open = rest.filter((c) => c.row === 0 && !rest.some((r) => r.row === 1 && r.col === c.col));
+      if (open.length) label(rest, rest.length, around(open), open[0].y + 1 + 0.36);
     }
   },
   /**

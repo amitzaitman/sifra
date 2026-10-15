@@ -119,6 +119,9 @@ main {
 .card.is-correct { background: var(--role-unknown-tint); box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown); transform: none; }
 .card.is-shown { box-shadow: 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
 .card.is-shown.is-correct { box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown), 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
+/* The focus ring goes round the shown answer's ring (3-7px out), not over it, and over the empty
+   slots beside it (design 6.5). */
+.card.is-shown:focus-visible { position: relative; z-index: 1; outline-offset: 10px; }
 
 /* "הַבָּא" (design 6.9): in the cards' place, the arrow after the word. */
 .next {

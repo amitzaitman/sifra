@@ -56,6 +56,9 @@
 [data-game="balance"] .bl-lid { --cover-h: var(--cube); width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
 [data-game="balance"] .bl-lid > .cover { --cover-fs: calc(var(--cube) * .6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-lid.is-back > .cover { animation: balance-drop var(--t-move) var(--ease); }
+/* Over the hint's dashed places, the '?' of a piece over an even number of places sits on the place
+   right of its middle, not squeezed between two of them (design 7.3). */
+[data-game="balance"] .bl-scene:has([data-hint] .bl-dash) .bl-lid.is-even > .cover::after { translate: calc(var(--u) / 2) 0; }
 [data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
 [data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); width: calc(var(--u) * var(--w) + 15px); }
 [data-game="balance"] .bl-bridge > .cover { border-radius: 0; box-shadow: none; }
@@ -81,17 +84,18 @@
 /* The last number grows 1.3; its cube, and the white disc on a known cube, never do (design 7.3). */
 [data-game="balance"] .bl-digit.is-last { align-content: center; font-size: calc(1.3 * max(14px, var(--cube) * .6)); }
 /* Two digits at 1.3 are wider than a small cube: drawn in the hint's pan at the cube's place, above
-   the ring, and outlined in the cube's colour (white on a known cube) where they pass its edge. On
-   the unknown, where a cube of the other number may follow in the row (? + 5), they grow in height
-   only, as wide as the numbers before them, so they stay on their cube (design 7.3). */
-[data-game="balance"] .bl-stack > .bl-digit.is-over {
-  --edge: var(--role-unknown); inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1;
-  text-shadow: 0 0 1px var(--edge), 1.5px 0 var(--edge), -1.5px 0 var(--edge), 0 1.5px var(--edge), 0 -1.5px var(--edge), 1px 1px var(--edge), -1px 1px var(--edge), 1px -1px var(--edge), -1px -1px var(--edge);
-}
+   the ring. On the unknown, where a cube of the other number may follow in the row (? + 5), they
+   grow in height only, as wide as the numbers before them and like them with no outline, so they
+   stay on their cube and nothing magenta passes its edge (design 7.3). */
+[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1; }
 [data-game="balance"] .bl-stack > .bl-digit.is-over:not(.on-known) { font-size: max(14px, calc(var(--cube) * .6)); transform: scaleY(1.3); }
 /* A known cube's count ends its pan, so nothing follows it in the row: the digits grow both ways,
-   from 1px inside the cube's left edge on, away from the number before it, over the white disc. */
-[data-game="balance"] .bl-stack > .bl-digit.is-over.on-known { --edge: var(--halo); padding: 1px; justify-content: start; background-clip: content-box; }
+   from 1px inside the cube's left edge on, away from the number before it, over the white disc,
+   outlined in --halo where they pass its edge. */
+[data-game="balance"] .bl-stack > .bl-digit.is-over.on-known {
+  --edge: var(--halo); padding: 1px; justify-content: start; background-clip: content-box;
+  text-shadow: 0 0 1px var(--edge), 1.5px 0 var(--edge), -1.5px 0 var(--edge), 0 1.5px var(--edge), 0 -1.5px var(--edge), 1px 1px var(--edge), -1px 1px var(--edge), 1px -1px var(--edge), -1px -1px var(--edge);
+}
 
 [data-game="balance"] .bl-set {
   --len: 10; --rows: 1; --cell: min(48px, calc((100cqw - 8px) / var(--len)), calc((100cqh - 8px) / (var(--rows) + 1.6)));

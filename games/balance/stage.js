@@ -224,7 +224,7 @@ export function drawBalance(host, data) {
         node.append(data.cover(mark));
         return node;
       };
-      return [...pieces.map((p, k) => lid('bl-lid', p, k ? '' : '?')),
+      return [...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid' : 'bl-lid is-even', p, k ? '' : '?')),
         ...bridges(pieces).map((b) => lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''))];
     });
     pans[name] = { el: node, stack, layout, cubes, lids };
