@@ -532,13 +532,23 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       const digits = steps.slice(j, j + pace).map(([target, n]) => {
         const last = j + pace >= steps.length ? ' is-last' : '';
         const kind = `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`;
-        // A two-digit last number, grown 1.3, is wider than a small cube: it goes in the hint's pan
-        // at its cube's place, above the ring that follows; the cube keeps its size (design 7.3).
+        // A two-digit last number grows 1.3 in height only: it goes in the hint's pan at its cube's
+        // place, above the ring that follows; the cube keeps its size (design 7.3).
         const side = last && n > 9 ? /** @type {Side | undefined} */ (target.closest('.bl-pan')?.getAttribute('data-pan')) : undefined;
         const digit = side
           ? put(hint[side], `${kind} is-over`, { col: target.style.getPropertyValue('--c'), row: target.style.getPropertyValue('--r') }, n)
           : put(target, kind, undefined, n);
         digit.dataset.tour = String(n);
+        // Two tabular digits at 14px are 1.36em, wider than a small cube: condensed to its width
+        // less 2px each side, so the cube's colour shows round them; on a known cube, less its 2px
+        // edge and 1px more each side, so they sit on white inside the edge (design 4, 7.3).
+        if (n > 9) {
+          digit.textContent = '';
+          put(digit, 'bl-fit', undefined, n);
+          const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(digit).fontSize);
+          const room = target.offsetWidth - (target.dataset.role === 'unknown' ? 4 : 6);
+          digit.style.setProperty('--sx', Math.min(1, room / wide).toFixed(3));
+        }
         return digit;
       });
       await Promise.all(digits.map((digit) => settle(digit, signal)));

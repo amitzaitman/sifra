@@ -669,9 +669,9 @@ function lastNumberProblems(n) {
     if (t.height / p.height < 1.25) out.push(`${at}: ${n} is ${r(t.height / p.height)} times ${n - 1}`);
     const apart = Math.max(t.left - p.right, p.left - t.right, t.top - p.bottom, p.top - t.bottom);
     if (apart < 2) out.push(`${at}: ${n} is ${r(apart)}px from ${n - 1}`);
-    if (atEnds(drawn, p, 0.5).some((e) => e !== before)) out.push(`${at}: ${n - 1} is covered`);
+    if (atEnds(drawn, p, 0.5).some((e) => !before.contains(e))) out.push(`${at}: ${n - 1} is covered`);
     const inCube = t.left >= c.left - 0.5 && t.right <= c.right + 0.5;
-    if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => e !== digit)) out.push(`${at}: ${n} is covered`);
+    if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => !digit.contains(e))) out.push(`${at}: ${n} is covered`);
     // What is drawn counts as its cube: a box under the number (the white disc on a known cube),
     // and an outline in the cube's own colour around the number's text (each text-shadow's offset
     // plus its blur), which reads as cube where it passes the cube's edge.
@@ -723,6 +723,67 @@ test('the tour\'s last number: 1.3 times the one before it, clear of it and of t
       await expect(page.locator('[data-tour]').last(), where).toHaveText(String(last));
       await expect(page.locator('[data-hint] .bl-ring.is-tour'), where).not.toHaveCount(0);
       await expect.poll(() => page.evaluate(lastNumberProblems, last), where).toEqual([]);
+    }
+  }
+});
+
+/**
+ * What is wrong with each two-digit tour number (design 4, 7.3), read in the page: at 14px at
+ * least, its digits' box (as drawn) is inside its cube with 1.5px of the cube's colour each side
+ * on the unknown, and inside a known cube's 2px edge with 0.5px of white; its ink, measured from
+ * its font, is inside the cube (a known cube's edge) from top to bottom too (the last one grows
+ * 1.3 in height).
+ * @returns {string[]}
+ */
+function twoDigitProblems() {
+  const out = [];
+  const ctx = document.createElement('canvas').getContext('2d');
+  const r = (x) => Math.round(x * 10) / 10;
+  for (const digit of document.querySelectorAll('[data-tour]')) {
+    const text = digit.textContent;
+    if (text.length < 2) continue;
+    const box = digit.getBoundingClientRect();
+    const cube = document.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube'));
+    const known = cube.getAttribute('data-role') !== 'unknown';
+    const c = cube.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(digit);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(digit.querySelector('*') ?? digit);
+    if (parseFloat(s.fontSize) < 14) out.push(`${text}: ${s.fontSize}`);
+    // Measured at 200px, where whole-pixel metrics are precise: k turns them into pixels as drawn
+    // (the text box is the font's ascent and descent, scaled with the digits).
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText(text);
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    const base = t.top + k * m.fontBoundingBoxAscent;
+    const [side, high] = known ? [2.5, 2] : [1.5, 1];
+    const room = Math.min(t.left - c.left, c.right - t.right);
+    if (room < side) out.push(`${text} on a${known ? ' known' : 'n unknown'} cube: ${r(room)}px from its side, not ${side}`);
+    const top = Math.min(base - k * m.actualBoundingBoxAscent - c.top, c.bottom - base - k * m.actualBoundingBoxDescent);
+    if (top < high) out.push(`${text} on a${known ? ' known' : 'n unknown'} cube: its ink ${r(top)}px from its top or bottom, not ${high}`);
+  }
+  return out;
+}
+
+test('two-digit tour numbers stay inside their cube, condensed, at 14px at least; the last grows in height only, on the unknown and on a known cube (design 4, 7.3)', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // On the unknown: 6 + 11 = ? + 5 (10 to 12), 12 + 3 = ? + 2, ? + 2 = 14, 16 + 3 = ? + 8, 1 + ? = 13,
+  // ? = 12 + 4 (13 to 16). On known cubes, 10 last: 6 + 4 = 10 and 3 + 7 = 10 (both pans), and same-as 3 + 7.
+  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 52],
+    ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 4], ['same', 4]];
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed] of rounds) {
+      const { round } = await devAt(page, level, seed);
+      for (const i of wrongOf(round)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed}`;
+      await expect(page.locator('[data-tour]').last(), where).toHaveText(/^\d\d$/);
+      expect(await page.evaluate(twoDigitProblems), where).toEqual([]);
     }
   }
 });

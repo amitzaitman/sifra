@@ -83,17 +83,21 @@
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 /* The last number grows 1.3; its cube, and the white disc on a known cube, never do (design 7.3). */
 [data-game="balance"] .bl-digit.is-last { align-content: center; font-size: calc(1.3 * max(14px, var(--cube) * .6)); }
-/* Two digits at 1.3 are wider than a small cube: drawn in the hint's pan at the cube's place, above
-   the ring. On the unknown, where a cube of the other number may follow in the row (? + 5), they
-   grow in height only, as wide as the numbers before them and like them with no outline, so they
-   stay on their cube and nothing magenta passes its edge (design 7.3). */
-[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1; }
-[data-game="balance"] .bl-stack > .bl-digit.is-over:not(.on-known) { font-size: max(14px, calc(var(--cube) * .6)); transform: scaleY(1.3); }
-/* A known cube's count ends its pan, so nothing follows it in the row: the digits grow both ways,
-   from 1px inside the cube's left edge on, away from the number before it, over the white disc,
-   outlined in --halo where they pass its edge. */
+/* Two tabular digits at 14px (1.36em) are wider than a small cube: they are condensed to its width
+   less 2px each side (--sx, from the cube's width), so its colour shows round them; their height,
+   and so the 14px, stays (design 4, 7.3). Centred on the cube whatever their width (a grid item
+   wider than its cell would start at its left). */
+[data-game="balance"] .bl-fit { position: absolute; left: 50%; top: 50%; translate: -50% -50%; white-space: nowrap; transform: scaleX(var(--sx, 1)); }
+/* The last two-digit number is drawn in the hint's pan at its cube's place, above the ring, and
+   grows 1.3 in height only, so it stays on its cube whatever follows it there: a cube of the other
+   number (? + 5), the ring, the pan's string. Its cube, and the white disc on a known cube, keep
+   their size (design 7.3). */
+[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1; font-size: max(14px, calc(var(--cube) * .6)); }
+[data-game="balance"] .bl-stack > .bl-digit.is-over > .bl-fit { transform: scale(var(--sx, 1), 1.3); }
+/* On a known cube the grown digits pass the white disc's edge at its corners: outlined in --halo
+   there, and clipped inside the cube's 2px edge, so the cube keeps its outline and its size. */
 [data-game="balance"] .bl-stack > .bl-digit.is-over.on-known {
-  --edge: var(--halo); padding: 1px; justify-content: start; background-clip: content-box;
+  --edge: var(--halo); padding: 1px; background-clip: content-box; clip-path: inset(2px round calc(var(--cube) * .25 - 2px));
   text-shadow: 0 0 1px var(--edge), 1.5px 0 var(--edge), -1.5px 0 var(--edge), 0 1.5px var(--edge), 0 -1.5px var(--edge), 1px 1px var(--edge), -1px 1px var(--edge), 1px -1px var(--edge), -1px -1px var(--edge);
 }
 
