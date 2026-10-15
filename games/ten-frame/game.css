@@ -94,6 +94,7 @@
 [data-game="ten-frame"] .tf-line-whole .tf-line { stroke: var(--role-whole); }
 [data-game="ten-frame"] .tf-line-part .tf-line { stroke: var(--role-part-edge); }
 [data-game="ten-frame"] .tf-line-frame .tf-line { stroke: var(--frame); }
+[data-game="ten-frame"] .tf-line-added .tf-line { stroke: var(--role-added-edge); }
 [data-game="ten-frame"] .tf-bracket.is-gone { opacity: 0; animation: ten-frame-out var(--t-move) var(--ease); }
 
 /* Displays (7.1): ghosts, rings and digits in --role-added-edge; what is chosen, never the answer. */
@@ -115,11 +116,14 @@
 /* A ring around a thing's own box, in pixels at every unit: its inner halo is a 3px gap off the
    thing, then its 3px line, so the thing keeps its edge and its size (design 7.1). */
 [data-game="ten-frame"] .tf-ring.is-around {
-  left: calc(var(--x) * var(--u) - 6px); top: calc(var(--y) * var(--u) - 6px);
-  width: calc(var(--dx) * var(--u) + 12px); height: calc(var(--dy) * var(--u) + 12px);
-  border-radius: calc(var(--u) * 0.2 + 6px);
+  --out: 6px;
+  left: calc(var(--x) * var(--u) - var(--out)); top: calc(var(--y) * var(--u) - var(--out));
+  width: calc(var(--dx) * var(--u) + 2 * var(--out)); height: calc(var(--dy) * var(--u) + 2 * var(--out));
+  border-radius: calc(var(--u) * 0.2 + var(--out));
 }
 [data-game="ten-frame"] .tf-ring.is-around.is-round { border-radius: 50%; }
+/* Round a bond's dot, whose neighbours stand 0.35 units off: a 1.5px gap, then the line. */
+[data-game="ten-frame"] .tf-ring.is-around.is-close { --out: 4.5px; }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
 [data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }

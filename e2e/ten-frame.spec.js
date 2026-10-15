@@ -548,7 +548,7 @@ test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour
  */
 function ringProblems() {
   const out = [];
-  const things = [...document.querySelectorAll('[data-area="picture"] :is(.tf-ghost, .tf-place, .tf-disc, .tf-bundle, .tf-band, .tf-stick, .tf-circle, .tf-dot)')]
+  const things = [...document.querySelectorAll('[data-area="picture"] :is(.tf-ghost, .tf-place, .tf-disc, .tf-bundle, .tf-band, .tf-stick, .tf-circle, .tf-dot, .tf-lid.is-round > .cover)')]
     .filter((el) => [el, el.parentElement].every((e) => getComputedStyle(e).opacity !== '0'));
   for (const ring of document.querySelectorAll('[data-area="picture"] .tf-ring:not(.is-cell):not(.is-zero)')) {
     const r = ring.getBoundingClientRect();
@@ -570,7 +570,7 @@ function ringProblems() {
   return out;
 }
 
-test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks (design 7.1)', async ({ page }) => {
+test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks, a bond\'s circles and dots (design 7.1)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const value = (r, rule) => r.choices.find((c) => c.rule === rule)?.value;
   // [level, round, cards in order ('tour': every wrong card)]
@@ -585,6 +585,13 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     ['teen-symbols', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
     ['teen-symbols', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['teen-symbols', (r) => r.answer === 6, 'tour'],
+    ['split-bond', () => true, ['given.whole']],
+    ['split-bond', () => true, ['given.part']],
+    ['split-bond', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['split-bond', (r) => value(r, 'slip.near') === r.answer - 1 && r.answer > 1, ['slip.near']],
+    ['split-bond', (r) => r.answer > 2, 'tour'],
+    ['split-pairs', () => true, ['given.whole']],
+    ['split-pairs', (r) => r.answer.every((x) => x > 1), 'tour'],
   ];
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 568 });
@@ -600,10 +607,40 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
       await expect(page.locator('[data-area="picture"] .tf-ring').first()).toBeVisible();
       expect(await page.evaluate(ringProblems), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
     }
+    // On a bond the dots stand too close for a ring each: what does not fit is one group in one
+    // outline per part, its line halfway between dots, a pixel or more off each (also where the
+    // drawing shrinks to hold the ghosts).
+    for (const level of ['split-bond', 'split-pairs']) {
+      await page.goto('about:blank');
+      const { round } = await devAt(page, level, (r) => [value(r, 'op.other')].flat().some((x) => x > 6));
+      await card(page, round.choices.findIndex((c) => c.rule === 'op.other')).click();
+      await unlocked(page);
+      const shown = page.locator('[data-display="overflow"]');
+      await expect(shown.locator('.tf-ring')).toHaveCount(0);
+      expect(await shown.locator('.tf-svg.tf-line-added').count()).toBeGreaterThan(0);
+      const near = await shown.evaluate((root) => {
+        const out = [];
+        const dots = [...root.querySelectorAll('.tf-ghost')].map((g) => g.getBoundingClientRect());
+        for (const path of root.querySelectorAll('.tf-line-added .tf-line')) {
+          const line = /** @type {SVGPathElement} */ (path);
+          const m = line.getScreenCTM();
+          for (let t = 0, len = line.getTotalLength(); t <= len; t += 0.5) {
+            const p = line.getPointAtLength(t).matrixTransform(m);
+            for (const d of dots) {
+              const r = d.width / 2;
+              const off = Math.hypot(p.x - (d.left + r), p.y - (d.top + r)) - r - 1.5;
+              if (off < 1) out.push(`${Math.round(off * 10) / 10}px off a ghost at ${Math.round(d.left)},${Math.round(d.top)}`);
+            }
+          }
+        }
+        return [...new Set(out)];
+      });
+      expect(near, `${width}px ${level}`).toEqual([]);
+    }
   }
 });
 
-test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, and draws under the last digit (design 7.2)', async ({ page }) => {
+test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, draws under the last digit, and stays whole under the circle\'s ring (design 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });
   // Three dots in one row (the last digit 3 in it); 0 and 8: a row of five and a row of three.
@@ -628,6 +665,18 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
       const last = [...document.querySelectorAll('[data-tour]')].at(-1);
       for (const svg of document.querySelectorAll('.tf-svg')) {
         if (last.compareDocumentPosition(svg) & Node.DOCUMENT_POSITION_FOLLOWING) out.push(`${svg.getAttribute('class')} is drawn over the last digit`);
+      }
+      // The circle's hint ring above the dots: the outline's 3px line stays a pixel off the ring's
+      // line, and is drawn over the ring's halo, which would cut it.
+      for (const line of document.querySelectorAll('.tf-svg.tf-line-unknown .tf-line')) {
+        const b = line.getBoundingClientRect();
+        const x = b.left + b.width / 2;
+        const ring = [...document.querySelectorAll('[data-hint] .tf-ring')].map((r) => [r, r.getBoundingClientRect()])
+          .find(([, r]) => x > r.left && x < r.right && r.bottom <= b.top + 10);
+        if (!ring) continue;
+        const gap = b.top - 1.5 - ring[1].bottom;
+        if (gap < 1) out.push(`the outline's line ${Math.round(gap * 10) / 10}px off the hint ring's line`);
+        if (!(ring[0].compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING)) out.push('the hint ring\'s halo is drawn over the outline');
       }
       return out;
     });

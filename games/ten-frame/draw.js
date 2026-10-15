@@ -57,6 +57,13 @@ export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, 
 const DOT = 0.95;
 const R = 1.35;
 /**
+ * How far dots stand off their circle. A ring round a circle reaches 9px with its halo (a 3px gap,
+ * its line, its halo; design 7.1); under a part the tour's line round the dots, 0.16 units out,
+ * also stays clear of that ring's line. Both hold from a unit of about 17px (320px).
+ */
+const BESIDE = 0.6;
+const BELOW = 0.7;
+/**
  * The dot pitch of the bond: wide enough that two two-digit count-up digits side by side
  * ("10", "11" on pair cards) do not touch at 320px (design 4).
  */
@@ -80,15 +87,15 @@ const ROW = 4 * DOT_PITCH + DOT;
 export function layoutTree({ whole }) {
   const top = { x: 7.2 - R, y: 0.3, w: 2 * R, h: 2 * R };
   const rows = whole > 5 ? 2 : 1;
-  const wholeAt = grid(top.x + 2 * R + 0.35, top.y + R - ((rows - 1) * DOT_PITCH + DOT) / 2);
+  const wholeAt = grid(top.x + 2 * R + BESIDE, top.y + R - ((rows - 1) * DOT_PITCH + DOT) / 2);
   const left = { x: 3.6 - R, y: 4.55, w: 2 * R, h: 2 * R };
   const right = { x: 10.8 - R, y: 4.55, w: 2 * R, h: 2 * R };
-  const under = (c) => grid(c.x + R - ROW / 2, c.y + 2 * R + 0.35);
+  const under = (c) => grid(c.x + R - ROW / 2, c.y + 2 * R + BELOW);
   /** @param {number} n dots in rows of five under a part circle: the bottom of the drawing below them */
-  const below = (n) => left.y + 2 * R + 0.35 + (Math.ceil(Math.max(1, n) / 5) - 1) * DOT_PITCH + DOT + 0.3;
+  const below = (n) => left.y + 2 * R + BELOW + (Math.ceil(Math.max(1, n) / 5) - 1) * DOT_PITCH + DOT + 0.3;
   const dh = below(6);
   return {
-    dw: top.x + 2 * R + 0.35 + ROW + 0.3, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
+    dw: top.x + 2 * R + BESIDE + ROW + 0.3, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
     /** @param {number} n dots under a part circle: the height that holds them */
     height: (n) => Math.max(dh, below(n)),
   };
@@ -159,11 +166,12 @@ export function layoutBundles({ ones, tag = false }) {
 }
 
 /**
- * An SVG path around a run of cells of one frame in fill order (at most two rows), padded: one
+ * An SVG path around a run of cells (or dots) in fill order, rows of one frame, padded: one
  * rectangle, a stepped outline when the rows overlap, or two rectangles. With join, rows that
- * do not overlap are still one outline: the two boxes and a line along the gap between the rows,
- * from the lower row's end to the upper row's start (one group, one label).
- * @param {Cell[]} cells
+ * do not overlap are still one outline: the boxes and a line along the gap between the rows,
+ * from the lower row's end to the upper row's start (one group, one label). A run over more than
+ * two rows (dots in rows of five) is always one stepped outline.
+ * @param {(Box & { row: number, col: number })[]} cells
  * @param {number} pad
  * @param {boolean} [join]
  * @returns {string}
@@ -177,12 +185,17 @@ export function runPath(cells, pad, join = false) {
       t: own[0].y - pad, b: own[0].y + own[0].h + pad };
   };
   const rect = (s) => `M${n(s.l)} ${n(s.t)}H${n(s.r)}V${n(s.b)}H${n(s.l)}Z`;
-  if (rows.length === 1) return rect(span(rows[0]));
-  const [a, b] = [span(rows[0]), span(rows[1])];
+  const s = rows.map(span);
+  if (rows.length === 1) return rect(s[0]);
   const cols = (row) => cells.filter((c) => c.row === row).map((c) => c.col);
-  if (!join && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(a) + rect(b);
-  const mid = (a.b - pad + b.t + pad) / 2;
-  return `M${n(a.l)} ${n(a.t)}H${n(a.r)}V${n(mid)}H${n(b.r)}V${n(b.b)}H${n(b.l)}V${n(mid)}H${n(a.l)}Z`;
+  if (!join && rows.length === 2 && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(s[0]) + rect(s[1]);
+  // Down the right side, stepping in the gap between rows, then up the left side.
+  const mid = s.slice(1).map((x, i) => (s[i].b - pad + x.t + pad) / 2);
+  let d = `M${n(s[0].l)} ${n(s[0].t)}H${n(s[0].r)}`;
+  for (let i = 1; i < s.length; i++) d += `V${n(mid[i - 1])}H${n(s[i].r)}`;
+  d += `V${n(s.at(-1).b)}H${n(s.at(-1).l)}`;
+  for (let i = s.length - 1; i > 0; i--) d += `V${n(mid[i - 1])}H${n(s[i - 1].l)}`;
+  return `${d}Z`;
 }
 
 /**

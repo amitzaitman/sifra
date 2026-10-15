@@ -291,6 +291,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
   resize(pic, L.dw, L.height(Math.max(...sides.map((s) => s.n + (digits && total < fit ? 1 : 0)))));
   let k = 0;
   for (const side of sides) {
+    /** @type {(Box & { row: number, col: number })[]} */
+    const excess = [];
     for (let j = 0; j < side.n; j++, k++) {
       const box = side.place(j);
       const delay = stagger(k, total, digits ? 120 : 40);
@@ -300,19 +302,24 @@ function treeGhosts(pic, root, sides, fit, digits) {
       else ghost(root, box, delay, 'is-dot');
       // A digit is wider and taller than a dot's dashed edge inside: it sits on a white label (design 4).
       if (digits) digit(root, box, String(k + 1), delay, 'is-small is-label');
-      if (!digits && k >= fit) ring(root, grow(box, 0.12), delay);
+      if (!digits && k >= fit) excess.push({ ...box, row: Math.floor(j / 5), col: j % 5 });
     }
+    // What does not fit stays in one ring (design 7.1): dots stand too close for a ring each. Its
+    // line runs halfway between dots, 0.35 units apart, and crosses nothing, so it has no halo.
+    if (excess.length) under(root, outline(root, L, [runPath(excess, 0.175, true)], 'tf-line-added tf-blink-in', false));
   }
   if (!digits) return;
+  // One dot in a ring, drawn under the others: its line passes 1.5px off the dot and the halo
+  // goes under its neighbours, which stand only 0.35 units away.
+  const dotRing = (box, delay) => under(root, ring(root, box, delay, 'is-round is-around is-close on-ghost'));
   const lastSide = sides.at(-1);
   if (total < fit) {
     const box = lastSide.place(lastSide.n);
     mark(root, 'tf-place tf-enter', box, undefined, stagger(total, total + 1, 120));
-    ring(root, grow(box, 0.12), stagger(total, total + 1, 120));
+    dotRing(box, stagger(total, total + 1, 120));
   } else {
     const side = sides[sides.length - 1].n ? sides[sides.length - 1] : sides[0];
-    // Under the digits: a two-digit label is wider than its ghost.
-    under(root, ring(root, grow(side.place(side.n - 1), 0.12), stagger(total - 1, total, 120)));
+    dotRing(side.place(side.n - 1), stagger(total - 1, total, 120));
   }
 }
 
@@ -345,11 +352,9 @@ async function treeCount(pic, root, side, signal) {
     before: () => show(dot) })), signal);
   if (!signal.aborted) {
     const group = around(side.dots.map((_, j) => side.place(j)));
-    // Under the drawing: the dots sit 0.35 units below the part circle, too close for the outline's
-    // 9px halo to clear them, so the dots, their digits and the circle's ring are drawn over it.
-    const line = outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter');
-    pic.base.before(line);
-    await settle(line, signal);
+    // Under the digits, over the circle's hint ring and its halo, clear of its line (draw.js BELOW).
+    // The line crosses nothing, so it has no halo, which would cut the dots.
+    await settle(under(root, outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter', false)), signal);
   }
 }
 
@@ -359,9 +364,8 @@ export const TREE = {
     const { t, d } = pic;
     if (display === 'flash') {
       const circle = rule === 'given.whole' ? t.top : t.left.circle;
-      // A ring round the part's circle clears its 3px edge, and the ring's halo the dots below.
-      if (rule === 'given.whole') ring(root, grow(t.L.top, 0.12));
-      else ring(root, grow(t.L.left, 0.17), '', 'is-round on-part');
+      // Round the circle, clear of its edge: it keeps its size; the dots stand clear of the ring.
+      ring(root, rule === 'given.whole' ? t.L.top : t.L.left, '', 'is-round is-around');
       return blink(pic, [circle]);
     }
     treeGhosts(pic, root, [{ place: t.right.place, n: value }], d.unknown, display === 'count-up');
@@ -371,7 +375,7 @@ export const TREE = {
   /** The whole's outline, and the cover of the unknown ringed. @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
     treeWholeHint(pic, root);
-    at(root, 'tf-ring is-round is-hint', grow(pic.t.L.right, 0.14));
+    at(root, 'tf-ring is-round is-around is-hint', pic.t.L.right);
   },
   /** @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
   tour: (pic, root, signal) => treeCount(pic, root, pic.t.right, signal),
@@ -392,7 +396,7 @@ export const PAIRS = {
   display(pic, root, { value, display }) {
     const { t, d } = pic;
     if (display === 'flash') {
-      ring(root, grow(t.L.top, 0.12));
+      ring(root, t.L.top, '', 'is-round is-around');
       return blink(pic, [t.top]);
     }
     if (display === 'empty-plate') {
@@ -412,7 +416,7 @@ export const PAIRS = {
   /** @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
     treeWholeHint(pic, root);
-    for (const box of [pic.t.L.left, pic.t.L.right]) at(root, 'tf-ring is-round is-hint', grow(box, 0.14));
+    for (const box of [pic.t.L.left, pic.t.L.right]) at(root, 'tf-ring is-round is-around is-hint', box);
   },
   /**
    * Both parts, each from 1, each in its own row of digits (R7), so the last [data-tour] is the
