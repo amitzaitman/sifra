@@ -140,6 +140,12 @@
 /* Round a bond's dot or a frame's ghost, whose neighbours stand 0.35-0.38 units off: a 1.5px gap,
    then the line, at any unit. */
 [data-game="ten-frame"] .tf-ring.is-around.is-close { --out: 4.5px; }
+/* A ring in a frame's white cell (a flash round a counter, a ghost's ring) crosses nothing: the
+   cell's white is its gap off the tray, and a halo would bulge into the tray, so it has none
+   (design 7.1). Round a ghost it stays in the cell down to cells of about 37px, then stands
+   0.12 units off the ghost, but never closer than 1.25px to its dashes. */
+[data-game="ten-frame"] .tf-ring.in-cell { box-shadow: none; }
+[data-game="ten-frame"] .tf-ring.is-around.is-close.in-cell { --out: clamp(4.25px, calc(var(--u) * 0.12), 4.5px); }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
 [data-game="ten-frame"] .tf-ring.is-unknown { border-color: var(--role-unknown); }

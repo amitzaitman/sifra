@@ -168,6 +168,11 @@ const frameAt = (pic) => pic.t.L;
  * the drawing; its halo stays off the next counter, 0.38 units away (design 7.1).
  */
 const GHOST_RING = 'is-round is-around is-close on-ghost';
+/**
+ * The same ring round a ghost in a frame's white cell: it stays in the cell, whose white is its
+ * gap off the tray, so it has no halo to bulge into the tray (game.css .in-cell; design 7.1).
+ */
+const CELL_GHOST_RING = `${GHOST_RING} in-cell`;
 
 /**
  * How far the tour's line stands off the cells along a whole tray's border: past the tray's edge
@@ -206,7 +211,7 @@ export const FRAME = {
       return blink(pic, [t.tray]);
     }
     if (display === 'flash') {
-      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part'));
+      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part in-cell'));
       return blink(pic, t.parts);
     }
     const lids = liftForDisplay(pic);
@@ -227,7 +232,7 @@ export const FRAME = {
         const i = start + j;
         const box = disc(L.place(i));
         ghost(root, box, stagger(j, value));
-        if (t.chip && i >= whole && i < real) ring(root, box, stagger(j, value), GHOST_RING);
+        if (t.chip && i >= whole && i < real) ring(root, box, stagger(j, value), CELL_GHOST_RING);
       }
       return lids;
     }
@@ -240,7 +245,7 @@ export const FRAME = {
       digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
     }
     if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
-    else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), GHOST_RING);
+    else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), CELL_GHOST_RING);
     return lids;
   },
 

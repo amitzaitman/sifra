@@ -1010,6 +1010,30 @@ function ringProblems() {
   return out;
 }
 
+/**
+ * How far a round ring on a frame's cell (a flash round a counter, a ghost's ring) and its outer
+ * halo reach past the cell (design 7.1: the cell's white is its gap off the tray, so nothing of it
+ * bulges into the tray). Where hypothetical frames shrink a cell under about 37px, only its line
+ * may pass the cell, by what keeps it 1.25px off a ghost's dashes (game.css .in-cell).
+ * @returns {string[]}
+ */
+function ringInCell() {
+  const out = [];
+  const cells = [...document.querySelectorAll('[data-area="picture"] .tf-cell')].map((c) => c.getBoundingClientRect());
+  for (const ring of document.querySelectorAll('[data-area="picture"] [data-display] .tf-ring.is-round:not(.is-zero)')) {
+    const b = ring.getBoundingClientRect();
+    const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+    const c = cells.find((r) => x > r.left && x < r.right && y > r.top && y < r.bottom);
+    if (!c) continue;
+    const spread = Math.max(0, ...getComputedStyle(ring).boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset'))
+      .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
+    const past = spread - Math.min(b.left - c.left, c.right - b.right, b.top - c.top, c.bottom - b.bottom);
+    const may = Math.max(0, 4.25 - 0.12 * c.width) + 0.25;
+    if (past > may) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(past * 100) / 100}px past its ${Math.round(c.width * 10) / 10}px cell`);
+  }
+  return out;
+}
+
 test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks, a bond\'s circles and dots (design 7.1)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const value = (r, rule) => r.choices.find((c) => c.rule === rule)?.value;
@@ -1017,6 +1041,9 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
   const states = [
     ['split-10', (r) => value(r, 'op.other') + r.equation.left[0] <= 10, ['op.other']],
     ['split-10', (r) => value(r, 'slip.near') === r.answer + 1 && r.answer > 0, ['slip.near']],
+    // Flash rings round counters, on a --frame tray and on the navy one.
+    ['split-10', (r) => r.choices.some((c) => c.rule === 'given.part'), ['given.part']],
+    ['ten-empty', (r) => r.equation.left[0] === 3 && r.choices.some((c) => c.rule === 'given.part'), ['given.part']],
     // Rings round ghosts where hypothetical frames shrink the drawing: 4 + ? = 8 with 12 (two
     // frames), 9 + ? = 9 with 18 (three), a count-up past a full frame, make-ten's and bridging's.
     ['split-10', (r) => r.equation.left[0] === 4 && r.equation.right[0] === 8 && value(r, 'op.other') === 12, ['op.other']],
@@ -1053,6 +1080,8 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
       }
       await expect(page.locator('[data-area="picture"] .tf-ring').first()).toBeVisible();
       expect(await page.evaluate(ringProblems), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
+      // Bridging's two frames (levels 10-12) are not checked here.
+      if (/^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
     }
     // On a bond the dots stand too close for a ring each: what does not fit is one group in one
     // outline per part, its line halfway between dots, a pixel or more off each (also where the
