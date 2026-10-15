@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
-import { bridges, ghostSlots, layoutLine, layoutPan, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
+import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -61,6 +61,19 @@ test('the stretched cover: one piece per row, joined by bridges; rings merge row
   assert.deepEqual(bridges(rowPieces(4, 3)), [{ from: 2, to: 4, row: 1, across: true }]);
   assert.deepEqual(bridges(rowPieces(2, 8)), [{ from: 2, to: 5, row: 1, across: false }]);
   assert.deepEqual(ringPieces(0, 13), [{ col: 0, row: 0, w: 5, h: 2 }, { col: 0, row: 2, w: 3, h: 1 }]);
+});
+
+test('a ring is cut back 2px where another group\'s cube lies next to it, and only there (design 6.8)', () => {
+  // ? + 3 = 10: the unknown on places 0-6, the 3 on places 7-9.
+  const other = (col, row) => [7, 8, 9].includes(row * 5 + col);
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, () => false), '');
+  // The second row's piece (places 5-6): the 3 starts right of it.
+  assert.equal(ringClip({ col: 0, row: 1, w: 2, h: 1 }, other),
+    'polygon(0px 0px, calc(2 * var(--u) + 5px) 0px, calc(2 * var(--u) + 5px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // The first row's piece: the 3 lies above its last three places, a 2px notch over their cubes.
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, other),
+    'polygon(0px 0px, calc(2 * var(--u) + 5px) 0px, calc(2 * var(--u) + 5px) 2px, calc(5 * var(--u) + 2px) 2px, calc(5 * var(--u) + 2px) 0px, ' +
+    'calc(5 * var(--u) + 7px) 0px, calc(5 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
 });
 
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {

@@ -727,6 +727,69 @@ test('the tour\'s last number: 1.3 times the one before it, clear of it and of t
   }
 });
 
+/**
+ * Where a ring paints over a cube or a cover of another group (design 6.8, 7.1), read in the page:
+ * along each shown cube and cover, 0.75px inside its edge, every point where it is drawn (hit
+ * testing follows rounded corners and clip-path) must have no ring above it, unless it is one of
+ * the ring's own: inside one of the boxes that one call drew (same pan and classes).
+ * @returns {string[]}
+ */
+function ringOverlaps() {
+  const out = [];
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '[data-game] .bl-ring { pointer-events: auto !important; } [data-game] .bl-scene > .bl-pan .bl-cube, [data-game] .bl-scene > .bl-pan .cover { pointer-events: auto !important; }';
+  const rings = [...document.querySelectorAll('.bl-scene .bl-ring')];
+  const runOf = (ring) => rings.filter((r) => r.parentElement === ring.parentElement && r.className === ring.className).map((r) => r.getBoundingClientRect());
+  const inside = (b, x, y) => x > b.left && x < b.right && y > b.top && y < b.bottom;
+  const things = [...document.querySelectorAll('.bl-scene > .bl-pan > .bl-stack > .bl-cube, .bl-scene > .bl-pan > .bl-stack > .bl-lid:not(.bl-bridge) > .cover:not(.is-lifted)')]
+    .filter((n) => getComputedStyle(n).opacity !== '0');
+  for (const thing of things) {
+    const b = thing.getBoundingClientRect();
+    const [cx, cy] = [b.left + b.width / 2, b.top + b.height / 2];
+    const points = [];
+    for (let t = 0; t <= 1; t += 1 / 16) {
+      const [x, y] = [b.left + 0.75 + t * (b.width - 1.5), b.top + 0.75 + t * (b.height - 1.5)];
+      points.push([x, b.top + 0.75], [x, b.bottom - 0.75], [b.left + 0.75, y], [b.right - 0.75, y]);
+    }
+    for (const [x, y] of points) {
+      const hits = document.elementsFromPoint(x, y);
+      const at = hits.indexOf(thing);
+      if (at < 0) continue;
+      for (const ring of hits.slice(0, at).filter((h) => h.classList.contains('bl-ring'))) {
+        if (runOf(ring).some((r) => inside(r, cx, cy))) continue;
+        const pan = thing.closest('.bl-pan').getAttribute('data-pan');
+        out.push(`${pan} pan: a ${ring.className.replace('bl-ring ', '')} ring over ${thing.className} ${thing.getAttribute('data-role') ?? ''}`.trim());
+      }
+    }
+  }
+  style.remove();
+  return [...new Set(out)];
+}
+
+test('a ring never paints over a cube or cover of another group next to it: flash, jumps, the relational hint and the tour (design 6.8)', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // ? + 3 = 10: the 3 next to the cover (flash), the 7 counted next to the 3 (tour); ? = 6 + 4 with
+  // 9: the missed cube next to the counted ones (jumps); 10 + 3 = 11 + ?: the hint's rings next to
+  // the other group, then the tour.
+  const states = [['missing-left', 4, ['given.part']], ['missing-left', 4, ['given.part', 'given.whole', 'op.other']],
+    ['missing-reversed', 2, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
+    ['relational', 1, ['equal.copy', 'equal.compensate-wrong', 'equal.add-to-equal']]];
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed, rules] of states) {
+      const { round } = await devAt(page, level, seed);
+      for (const rule of rules) {
+        await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed} ${rules.join(', ')}`;
+      await expect(page.locator('.bl-scene .bl-ring'), where).not.toHaveCount(0);
+      expect(await page.evaluate(ringOverlaps), where).toEqual([]);
+    }
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);

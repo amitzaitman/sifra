@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringPieces, rowsFor, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringPieces, rowsFor, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -130,8 +130,24 @@ function balanceScene(host, round, solved, signal) {
     scene.dataset.tilt = to;
     scene.style.setProperty('--rows', String(rows));
   };
-  /** @type {(stack: Element, runs: Run[], className: string) => HTMLElement[]} rings over runs of places, a box per row */
-  const rings = (stack, runs, className) => runs.flatMap((r) => ringPieces(r.start, r.length)).map((box) => put(stack, `bl-ring ${className}`, box));
+  /**
+   * Rings over runs of places in a layer's pan, a box per row, each cut back where another group's
+   * cube or cover lies next to it (ringClip), so a ring never paints over one.
+   * @type {(layer: Layer, side: Side, runs: Run[], className: string) => HTMLElement[]}
+   */
+  const rings = (layer, side, runs, className) => {
+    const own = new Set(runs.flatMap((r) => Array.from({ length: r.length }, (_, i) => r.start + i)));
+    const { layout } = pans[side];
+    const covered = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
+    const taken = new Set([...layout.cubes.map((c) => c.slot), ...covered].filter((slot) => !own.has(slot)));
+    const other = (col, row) => col >= 0 && col < 5 && row >= 0 && taken.has(row * 5 + col);
+    return runs.flatMap((r) => ringPieces(r.start, r.length)).map((box) => {
+      const node = put(layer[side], `bl-ring ${className}`, box);
+      const clip = ringClip(box, other);
+      if (clip) node.style.clipPath = clip;
+      return node;
+    });
+  };
   /** @type {(stack: Element, slots: number[]) => HTMLElement[]} */
   const ghosts = (stack, slots) => stagger(slots.map((slot) => put(stack, 'bl-cube bl-ghost', at(slot))));
   /** @type {(tokens: (string | number)[], side: Side, layer: Element) => void} a chip under a pan (design 6.8) */
@@ -213,7 +229,7 @@ function balanceScene(host, round, solved, signal) {
         const target = [u, k].flatMap((side) => data[side].map((g, i) => ({ g, i, side })))
           .find(({ g }) => g.role === (rule === 'given.whole' ? 'whole' : 'part'));
         for (const cube of cubesOf(target.side, target.i)) cube.classList.add('is-flash');
-        rings(layer[target.side], pans[target.side].layout.spans[target.i].runs, 'is-wrong');
+        rings(layer, target.side, pans[target.side].layout.spans[target.i].runs, 'is-wrong');
       } else if (display === 'empty-plate') {
         lift();
         put(layer[u], 'bl-zero is-wrong', at(span.places[0]), 0);
@@ -230,7 +246,7 @@ function balanceScene(host, round, solved, signal) {
           if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
           return put(layer[k], 'bl-mark', at(slot), first + j);
         }));
-        rings(layer[k], runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
+        rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
       } else {
         // overflow, balance: ghosts in the unknown's pan.
         if (rule === 'equal.compensate-wrong' && moving) {
@@ -270,8 +286,8 @@ function balanceScene(host, round, solved, signal) {
         // cover. Rings in the colours of the roles they mark (design 7.2).
         shift(hinted = moving.d);
         tilt(restTilt);
-        rings(layer[k], pans[k].layout.spans[1].runs, 'is-hint is-part is-late');
-        rings(layer[u], span.runs, 'is-hint is-late');
+        rings(layer, k, pans[k].layout.spans[1].runs, 'is-hint is-part is-late');
+        rings(layer, u, span.runs, 'is-hint is-late');
       }
       // eq.sign.true-false: each card's small balance shows (game.css).
       return layer;
@@ -286,22 +302,22 @@ function balanceScene(host, round, solved, signal) {
         // The true card's sides counted together, pair by pair.
         layCard();
         const right = pans.right.cubes;
-        return { steps: pans.left.cubes.flatMap((c, j) => [[c, j + 1], [right[j], j + 1]]), pace: 2, ring: () => rings(layer.right, cubeRuns('right'), 'is-tour') };
+        return { steps: pans.left.cubes.flatMap((c, j) => [[c, j + 1], [right[j], j + 1]]), pace: 2, ring: () => rings(layer, 'right', cubeRuns('right'), 'is-tour') };
       }
       const first = data[k][0]?.count;
       if (round.unknown === 'result-left') {
         // The unknown is the whole: counting on over what was covered, a + 1 to a + b.
-        return { steps: cubesOf(u, ui).slice(first).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer[u], span.runs, 'is-tour') };
+        return { steps: cubesOf(u, ui).slice(first).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer, u, span.runs, 'is-tour') };
       }
       if (round.unknown === 'result-right') {
         // same-as: counting on from the left's first group over its second.
         tilt('level');
-        return { steps: cubesOf(k, 1).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer[k], cubeRuns(k), 'is-tour') };
+        return { steps: cubesOf(k, 1).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer, k, cubeRuns(k), 'is-tour') };
       }
       const steps = /** @type {Steps} */ (cubesOf(u, ui).map((c, j) => [c, j + 1]));
       // Nothing under the cover: a ring with 0.
       if (!steps.length) put(layer[u], 'bl-zero is-tour', at(span.places[0]), 0).dataset.tour = '0';
-      return { steps, pace: 1, ring: () => (steps.length ? rings(layer[u], span.runs, 'is-tour') : []) };
+      return { steps, pace: 1, ring: () => (steps.length ? rings(layer, u, span.runs, 'is-tour') : []) };
     },
     /** @param {Hand} hand */
     async demo(hand) {
