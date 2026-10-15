@@ -131,6 +131,12 @@
 [data-game="ten-frame"] .tf-tour.on-unknown, [data-game="ten-frame"] .is-solved .tf-tour.on-cell { color: var(--on-unknown); }
 [data-game="ten-frame"] .tf-tour.is-chip { border-radius: calc(var(--u) * 0.2); background: var(--surface); box-shadow: 0 0 0 3px var(--role-unknown); }
 [data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
+/* On a small dot (the bond) the grown digit passes the dot's edge: a thin outline in the dot's
+   colour keeps it whole there (design 7.2), as on the balance's cubes. */
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small {
+  text-shadow: 0 0 1px var(--role-unknown), 1.2px 0 var(--role-unknown), -1.2px 0 var(--role-unknown), 0 1.2px var(--role-unknown), 0 -1.2px var(--role-unknown),
+    .8px .8px var(--role-unknown), -.8px .8px var(--role-unknown), .8px -.8px var(--role-unknown), -.8px -.8px var(--role-unknown);
+}
 [data-game="ten-frame"] .tf-tour.is-last.is-chip { transform: none; }
 /* In a row of digits above sticks the last grows to the right and up, away from the digit
    before it and from the outline below. */

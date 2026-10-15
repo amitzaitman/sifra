@@ -446,6 +446,38 @@ test('bundles at 320px: the digits above the sticks stay apart, above the outlin
   expect(Math.max(...tour.map((d) => d.bottom))).toBeLessThanOrEqual(line.y);
 });
 
+test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, and draws under the last digit (design 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  // Three dots in one row (the last digit 3 in it); 0 and 8: a row of five and a row of three.
+  for (const [level, ok] of [['split-bond', (r) => r.answer === 3], ['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8]]) {
+    const { round, answerAt } = await devAt(page, level, ok);
+    await toTheTour(page, round, answerAt);
+    await expect(page.locator('[data-tour]').last(), level).toHaveText(lastTour(round));
+    await expect(page.locator('.tf-svg.tf-line-unknown'), level).toHaveCount(1);
+    const problems = await page.evaluate(() => {
+      const out = [];
+      // What is drawn takes a point: the dots, and each outline's line and halo.
+      const style = document.head.appendChild(document.createElement('style'));
+      style.textContent = '[data-game] .tf-dot { pointer-events: auto !important; } [data-game] .tf-svg path { pointer-events: visibleStroke !important; }';
+      for (const dot of document.querySelectorAll('.tf-dot[data-role="unknown"].is-shown')) {
+        const b = dot.getBoundingClientRect();
+        for (const [edge, y] of [['top', b.top + 0.5], ['bottom', b.bottom - 0.5]]) {
+          const hit = document.elementFromPoint(b.left + b.width / 2, y);
+          if (hit !== dot) out.push(`a dot at ${Math.round(b.left)},${Math.round(b.top)}: its ${edge} under ${hit?.getAttribute('class')}`);
+        }
+      }
+      style.remove();
+      const last = [...document.querySelectorAll('[data-tour]')].at(-1);
+      for (const svg of document.querySelectorAll('.tf-svg')) {
+        if (last.compareDocumentPosition(svg) & Node.DOCUMENT_POSITION_FOLLOWING) out.push(`${svg.getAttribute('class')} is drawn over the last digit`);
+      }
+      return out;
+    });
+    expect(problems, level).toEqual([]);
+  }
+});
+
 test('a cover over a run of cells covers each of them, and its two pieces meet by a 4px bar (design 6.6)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   for (const [level, ok] of [['ten-cover', (r) => r.equation.left[0] === 3], ['split-10', (r) => r.equation.left[0] === 3 && r.equation.right[0] === 9]]) {

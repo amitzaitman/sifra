@@ -334,7 +334,11 @@ async function treeCount(pic, root, side, signal) {
     before: () => show(dot) })), signal);
   if (!signal.aborted) {
     const group = around(side.dots.map((_, j) => side.place(j)));
-    await settle(outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter'), signal);
+    // Under the drawing: the dots sit 0.35 units below the part circle, too close for the outline's
+    // 9px halo to clear them, so the dots, their digits and the circle's ring are drawn over it.
+    const line = outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter');
+    pic.base.before(line);
+    await settle(line, signal);
   }
 }
 

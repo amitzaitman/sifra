@@ -631,8 +631,10 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
 /**
  * What is wrong with the tour's last number n, read in the page (design 7.2, 7.3): it is 1.3 times
  * the number before it and at least 2px clear of it, it covers none of it, nothing covers it (it
- * stays inside its cube, where no ring goes, or is drawn over the ring), and its cube is drawn no
- * wider than the one before it, +1px.
+ * stays inside its cube, where no ring goes, or is drawn over the ring), its cube is drawn no
+ * wider than the one before it, +1px, and a cube after it in its row shows whole: the number and
+ * its 1.5px outline end before that cube, which is on top at both its ends (only the ring may
+ * touch its edge).
  * @param {number} n
  * @returns {string[]}
  */
@@ -677,20 +679,32 @@ function lastNumberProblems(n) {
     const wide = painted ? Math.max(c.right, own.right) - Math.min(c.left, own.left) : c.width;
     const next = cubeAt(before).getBoundingClientRect().width;
     if (wide > next + 1) out.push(`${at}: ${n}'s cube is drawn ${r(wide)}px wide, ${n - 1}'s ${r(next)}px`);
+    // The next place in its row: in ? + 5, the 5's first cube, as wide as its twins (compare.size).
+    const place = (node, key) => Number(node.style.getPropertyValue(key));
+    const after = [...cube.parentElement.querySelectorAll('.bl-cube')].find((e) => place(e, '--r') === place(cube, '--r') && place(e, '--c') === place(cube, '--c') + 1);
+    if (after) {
+      const a = after.getBoundingClientRect();
+      if (t.right + 1.5 > a.left) out.push(`${at}: ${n} ends ${r(t.right + 1.5 - a.left)}px into the cube after it, outline included`);
+      if (atEnds(drawn, a, 0.5).some((e) => e !== after)) out.push(`${at}: the cube after ${n} is covered`);
+    }
   }
   return out;
 }
 
-test('the tour\'s last number: 1.3 times the one before it, clear of it, over the ring; its cube no bigger than the others (design 7.2, 7.3)', async ({ page }) => {
-  test.setTimeout(60000);
+test('the tour\'s last number: 1.3 times the one before it, clear of it and of the cube after it, over the ring; its cube no bigger than the others (design 7.2, 7.3)', async ({ page }) => {
+  test.setTimeout(90000);
   // The tour's end state, drawn at once.
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  // Two digits: ? + 5 = 6 + 11 and 1 + ? = 13 count the unknown to 12, 11 beside it in one row;
-  // ? = 12 + 4 counts on to 16 at the start of a row. Known cubes (judging, a white disc under
-  // each number): 6 + 4 = 10 and 1 + 8 = 9, on both pans.
+  // Two digits: 6 + 11 = ? + 5, 12 + 3 = ? + 2 and ? + 2 = 14 count the unknown to 12 or 13, the
+  // number before it beside it in one row and a cube of the known part after it; 16 + 3 = ? + 8
+  // ends on 11 at the start of a row, a cube of 8 after it; 1 + ? = 13 counts to 12 at the end
+  // of its pan; ? = 12 + 4 counts on to 16 at the start of a row. Known cubes (judging, a white
+  // disc under each number): 6 + 4 = 10 and 1 + 8 = 9, on both pans.
+  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 52],
+    ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 3]];
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
-    for (const [level, seed] of [['both-sides-symbols', 2], ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 3]]) {
+    for (const [level, seed] of rounds) {
       const where = `${width}px ${level} ${seed}`;
       const { round } = await devAt(page, level, seed);
       const last = round.model === 'cards' ? total(round.answer.right) : round.answer;
