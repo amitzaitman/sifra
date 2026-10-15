@@ -47,6 +47,19 @@
 [data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
+/* A ghost cube's dashed edge (design 7.1) is a solid 2px border masked to the same dashes on every
+   side, as fractions of the side: round each corner 28%, in the middle 16%, with gaps of 14%. A
+   dashed border fits about one dash a side on a small cube and left some ghosts an open cup
+   beside closed twins. */
+[data-game="balance"] .bl-cube.bl-ghost { border: 0; }
+[data-game="balance"] .bl-cube.bl-ghost::after {
+  content: ''; position: absolute; inset: 0; border: 2px solid var(--role-added-edge); border-radius: inherit;
+  --dash: linear-gradient(#000 0 0);
+  -webkit-mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
+    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+  mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
+    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+}
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
 /* A touch on a counted thing (design 6.3): an ink dot with a white edge, once; a tour digit covers it. */

@@ -1039,6 +1039,42 @@ test('the hint\'s dashed outline of the missing cubes stays inside the cover\'s 
   }
 });
 
+test('ghost cubes show their dashed edge on all four sides alike, also small (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 24 ghosts of 1 + 8 + 4 + 9 (cube about 11px at 320) and 27 of op.other (about 9.5px), and full size.
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed, rule] of [['both-sides-symbols', 1, 'equal.add-all'], ['missing-symbols-20', 1, 'op.other'], ['missing-right', 1, 'op.other']]) {
+      const { round } = await devAt(page, level, seed);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+      await unlocked(page);
+      const boxes = await page.locator('[data-display] .bl-ghost').evaluateAll((els) => els.map((g) => g.getBoundingClientRect().toJSON()));
+      expect(boxes.length).toBeGreaterThan(0);
+      const png = (await page.screenshot()).toString('base64');
+      // The middle of each side, on the 2px edge: the edge's colour, --role-added-edge (11, 111, 166).
+      const open = await page.evaluate(async ({ data, boxes }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${data}`;
+        await img.decode();
+        const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const k = img.width / innerWidth;
+        const edge = (x, y) => {
+          const p = ctx.getImageData(Math.floor(x * k), Math.floor(y * k), 1, 1).data;
+          return Math.abs(p[0] - 11) + Math.abs(p[1] - 111) + Math.abs(p[2] - 166) < 90;
+        };
+        return boxes.flatMap((b) => {
+          const [cx, cy] = [b.x + b.width / 2, b.y + b.height / 2];
+          const sides = { top: [cx, b.y + 1], bottom: [cx, b.y + b.height - 1], left: [b.x + 1, cy], right: [b.x + b.width - 1, cy] };
+          return Object.entries(sides).filter(([, [x, y]]) => !edge(x, y)).map(([side]) => `a ${b.width.toFixed(1)}px ghost at ${Math.round(b.x)},${Math.round(b.y)}: no dash on its ${side}`);
+        });
+      }, { data: png, boxes });
+      expect(open, `${width}px ${level} ${seed} ${rule}`).toEqual([]);
+    }
+  }
+});
+
 /**
  * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
  * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
