@@ -765,11 +765,38 @@ test('bundles at 320px: the digits above the sticks stay apart, above the outlin
   expect(tour.every((d) => d.size >= 14)).toBe(true);
   expectApart(tour);
   expect(tour.at(-1).bottom - tour.at(-1).top, 'the last digit grows').toBeGreaterThan(tour[1].bottom - tour[1].top);
-  // The group's outline is drawn under the digits, and its line passes below them.
+  // The group's ring is drawn under the digits, and its line passes below them.
   const layer = page.locator('.tf-layer').filter({ has: page.locator('[data-tour]') });
-  expect(await layer.evaluate((el) => el.firstElementChild?.tagName.toLowerCase())).toBe('svg');
-  const line = await layer.locator('svg .tf-line').boundingBox();
-  expect(Math.max(...tour.map((d) => d.bottom))).toBeLessThanOrEqual(line.y);
+  const top = await layer.evaluate((el) => {
+    const first = el.firstElementChild;
+    // A path's box is its centre line; a ring's box is its line's outer edge.
+    return first.tagName.toLowerCase() === 'svg' ? first.querySelector('.tf-line').getBoundingClientRect().top - 1.5 : first.getBoundingClientRect().top;
+  });
+  expect(Math.max(...tour.map((d) => d.bottom))).toBeLessThanOrEqual(top);
+  // Its line and inner halo stay off what it rings: the bundle with its band's tips and every
+  // stick keep their size (design 7.1), also with few sticks (10 + 0) and many (10 + 9).
+  for (const answer of [19, 10]) {
+    if (answer === 10) {
+      const ten = await devAt(page, 'teen-bundle', (r) => r.answer === 10);
+      await toTheTour(page, ten.round, ten.answerAt);
+    }
+    const over = await layer.evaluate((el) => {
+      const first = el.firstElementChild;
+      const svg = first.tagName.toLowerCase() === 'svg';
+      const b = (svg ? first.querySelector('.tf-line') : first).getBoundingClientRect();
+      const s = getComputedStyle(first);
+      // A path's box is its centre line, its halo 4.5px each side; a ring's hole is inside its line and inner halo.
+      const inset = svg ? 4.5 : parseFloat(s.borderTopWidth) + Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e.includes('inset'))
+        .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3])));
+      const hole = { left: b.left + inset, right: b.right - inset, top: b.top + inset, bottom: b.bottom - inset };
+      return [...document.querySelectorAll('[data-area="picture"] .tf-base :is(.tf-band, .tf-stick, .tf-bundle)')].flatMap((t) => {
+        const r = t.getBoundingClientRect();
+        const most = Math.max(hole.left - r.left, r.right - hole.right, hole.top - r.top, r.bottom - hole.bottom);
+        return most > 0.25 ? [`${t.className.replace('tf-at ', '')} ${Math.round(most * 10) / 10}px under the ring`] : [];
+      });
+    });
+    expect(over, `10 + ${answer - 10}`).toEqual([]);
+  }
 });
 
 /**

@@ -538,8 +538,10 @@ export const BUNDLES = {
       { box: L.above(L.bundle), n: 10, cls: 'is-above', before: () => show(veil(t.bundle)) },
       ...t.sticks.map((s, j) => ({ box: L.above(stickBox(pic, j)), n: 11 + j, cls: 'is-above', before: () => show(veil(s)) })),
     ], signal);
-    const boxes = [L.bundle, ...t.sticks.map((_, j) => stickBox(pic, j))];
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(boxes), 0.18, 0.4)], 'tf-line-unknown tf-enter')), signal);
+    // A ring round the bundle with its band and the sticks, in pixels (game.css .is-around): its
+    // inner halo is a 3px gap off them, so the band's tips and the last stick keep their size.
+    const boxes = [banded(L.bundle), ...t.sticks.map((_, j) => stickBox(pic, j))];
+    if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', around(boxes))), signal);
   },
   solve: () => [],
   /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
