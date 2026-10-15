@@ -120,11 +120,10 @@
 }
 [data-game="ten-frame"] .tf-digit.on-ghost { font-size: max(19px, calc(var(--u) * 0.45)); }
 [data-game="ten-frame"] .tf-digit.is-small { font-size: max(14px, calc(var(--u) * 0.62)); }
-/* On a ghost the contrast is 3.44, so a digit there is at least 19px (design 4); a two-digit
-   number does not fit a dot at 19px, so it sits on a white label over the ghost instead (5.47). */
-[data-game="ten-frame"] .tf-digit.is-small.on-ghost { font-size: max(19px, calc(var(--u) * 0.62)); }
+/* A count-up digit on a bond's dot is wider and taller than the dot inside its dashed edge, and
+   in the same colour: it sits on a white label (5.47, so 14px; design 4), clear of the dashes. */
 [data-game="ten-frame"] .tf-digit.is-label {
-  width: auto; height: auto; padding: 1px 0; border-radius: 4px; background: var(--surface);
+  width: auto; height: auto; padding: 1px; border-radius: 4px; background: var(--surface);
   left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
 }
 [data-game="ten-frame"] .tf-digit.is-above { font-size: max(14px, calc(var(--u) * 0.5)); }

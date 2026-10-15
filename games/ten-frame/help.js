@@ -296,8 +296,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
       const place = digits && pic.kind === 'tree' && k < fit;
       if (place) mark(root, 'tf-place tf-enter', box, undefined, delay);
       else ghost(root, box, delay, 'is-dot');
-      // On a ghost a digit is 19px, or a two-digit number sits on a white label (design 4).
-      if (digits) digit(root, box, String(k + 1), delay, place ? 'is-small' : k + 1 > 9 ? 'is-small is-label' : 'is-small on-ghost');
+      // A digit is wider and taller than a dot's dashed edge inside: it sits on a white label (design 4).
+      if (digits) digit(root, box, String(k + 1), delay, 'is-small is-label');
       if (!digits && k >= fit) ring(root, grow(box, 0.12), delay);
     }
   }

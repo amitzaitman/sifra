@@ -714,22 +714,52 @@ test('fixed frames (level 11): the split labelled once per part, the ten counted
   await expect(page.locator('[data-area="equation"] .eq')).toHaveText('6+9=15');
 });
 
-test('pair cards at 320px: count-up digits on ghosts are 19px, two-digit ones on a label, none touching (design 4)', async ({ page }) => {
+/**
+ * Puts inkOf(el) on the page: the box of an element's text ink, measured from its font at 200px
+ * (whole-pixel metrics are precise there) and scaled to the text box as drawn (transforms too).
+ */
+function defineInkOf() {
+  const ctx = document.createElement('canvas').getContext('2d');
+  /** @type {any} */ (window).inkOf = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText(el.textContent);
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    const base = t.top + k * m.fontBoundingBoxAscent;
+    const x = t.left + t.width / 2 - k * (m.width / 2);
+    return { left: x - k * m.actualBoundingBoxLeft, right: x + k * m.actualBoundingBoxRight,
+      top: base - k * m.actualBoundingBoxAscent, bottom: base + k * m.actualBoundingBoxDescent };
+  };
+}
+
+test('the bond\'s count-up at 320px: every digit on a white label that holds it, 14px or more, none touching (design 4)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });
   const slip = (r) => r.choices.find((c) => c.rule === 'slip.near');
-  const { round } = await devAt(page, 'split-pairs', (r) => slip(r) && slip(r).value[0] + slip(r).value[1] === 11 && slip(r).value[0] % 5 !== 0);
-  await card(page, round.choices.indexOf(slip(round))).click();
-  await unlocked(page);
-  const digits = await textBoxes(page.locator('[data-display="count-up"] .tf-digit'));
-  expect(digits.map((d) => d.text)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
-  for (const d of digits) {
-    if (d.text.length === 1) expect(d.size, d.text).toBeGreaterThanOrEqual(19);
-    else expect(d.cls, d.text).toContain('is-label');
+  // 10 = 5 + ?, card 6: five places and a ghost in a ring; pair cards up to 11: ghosts and two-digit numbers.
+  for (const [level, ok, n] of [['split-bond', (r) => r.answer === 5 && slip(r)?.value === 6, 6],
+    ['split-pairs', (r) => slip(r) && slip(r).value[0] + slip(r).value[1] === 11 && slip(r).value[0] % 5 !== 0, 11]]) {
+    const { round } = await devAt(page, level, ok);
+    await page.evaluate(defineInkOf);
+    await card(page, round.choices.indexOf(slip(round))).click();
+    await unlocked(page);
+    const digits = await textBoxes(page.locator('[data-display="count-up"] .tf-digit'));
+    expect(digits.map((d) => d.text), level).toEqual(Array.from({ length: n }, (_, j) => String(j + 1)));
+    // The dot's dashed edge is the digit's colour: on a label the dashes end before the digit's ink.
+    const problems = await page.locator('[data-display="count-up"] .tf-digit').evaluateAll((els) => els.flatMap((el) => {
+      const ink = inkOf(el);
+      const b = el.getBoundingClientRect();
+      const bg = getComputedStyle(el).backgroundColor;
+      const holds = ink.left >= b.left && ink.right <= b.right && ink.top >= b.top && ink.bottom <= b.bottom;
+      return bg === 'rgb(255, 255, 255)' && holds ? [] : [`"${el.textContent}" on ${bg}${holds ? '' : ', its ink out of its box'}`];
+    }));
+    expect(problems, level).toEqual([]);
+    for (const d of digits) expect(d.size, `${level} "${d.text}"`).toBeGreaterThanOrEqual(14);
+    expectApart(digits);
   }
-  expectApart(digits);
-  const label = page.locator('[data-display="count-up"] .tf-digit.is-label').first();
-  await expect(label).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 });
 
 test('the picture label says one in the singular (R1 templates)', async ({ page }) => {
