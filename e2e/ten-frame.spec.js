@@ -609,7 +609,7 @@ const quiet = (page) => page.evaluate(() => Promise.all(document.getAnimations()
 
 test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both; flash, flash, then the tour counts the ones from 1', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
-  const { round, answerAt } = await devAt(page, 'teen-symbols', (r) => r.answer === 4);
+  const { round, answerAt } = await devAt(page, 'teen-symbols', (r) => r.answer === 4 && r.eqform === 'reversed');
   const values = Object.fromEntries(round.choices.map((c) => [c.rule ?? 'answer', c.value]));
   expect(values).toEqual({ answer: 4, 'given.part': 10, 'given.whole': 14, 'slip.near': values['slip.near'] });
   expect([3, 5]).toContain(values['slip.near']);
@@ -731,4 +731,235 @@ test('R8: a result-left round of level 12 and a reversed bond: the hint and the 
   await card(page, bond.answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
   await expect(row(page)).toHaveText(`${whole}=${part}+${bond.round.answer}`);
+});
+
+// ---------- Owner decisions of 2026-10-15 ----------
+
+/** An equation as its shape, numbers as n (as tests/ten-frame.test.js reads forms). */
+const shapeOf = (r) => [...r.equation.left, '=', ...r.equation.right].map((t) => (typeof t === 'number' ? 'n' : t)).join(' ');
+
+// Level 9 mixes three forms ("לערבב את שלוש הצורות"): the same picture and cards in each, and the
+// help ends on the answer (R4, R5); the child's own exercise is the one solved.
+for (const [form, solved] of [['n = n + ?', (k) => `${10 + k}=10+${k}`], ['n + ? = n', (k) => `10+${k}=${10 + k}`], ['n − n = ?', (k) => `${10 + k}−10=${k}`]]) {
+  test(`level 9, ${form}: a first miss draws the bundle and the covered ones, the hint the 10, the tour counts the ones to the answer, then solved`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    const { round, answerAt } = await devAt(page, 'teen-symbols', (r) => shapeOf(r) === form && r.answer >= 3);
+    const k = round.answer;
+    const at = (rule) => round.choices.findIndex((c) => c.rule === rule);
+    const cards = Object.fromEntries(round.choices.map((c) => [c.rule ?? 'answer', c.value]));
+    expect(cards).toEqual({ answer: k, 'given.part': 10, 'given.whole': 10 + k, 'slip.near': cards['slip.near'] });
+    expect([k - 1, k + 1]).toContain(cards['slip.near']);
+    expect(await said(row(page))).toBe(spoken(round.equation, []));
+    await expect(page.locator('[data-area="picture"] [data-role]')).toHaveCount(0);
+    // 14 (given.whole): the help picture comes with the first miss, and the tag blinks.
+    await card(page, at('given.whole')).click();
+    await unlocked(page);
+    const picture = page.locator('[data-area="picture"]');
+    await expect(picture.locator('.tf-tag')).toHaveText(String(10 + k));
+    await expect(picture.locator('.tf-bundle[data-role="part"]')).toBeVisible();
+    await expect(picture.locator('.tf-stick[data-role="unknown"]')).toHaveCount(k);
+    await expect(page.locator('[data-display="flash"] .tf-ring.is-chip')).toBeVisible();
+    // 10 (given.part): the bundle blinks; the hint labels it 10 and rings the cover.
+    await card(page, at('given.part')).click();
+    await unlocked(page);
+    await expect(page.locator('[data-hint] .tf-chip')).toHaveText('10');
+    await expect(page.locator('[data-hint] .tf-ring.is-hint')).toBeVisible();
+    // The slip: the tour lifts the cover and counts the ones from 1 to the answer (R5).
+    await card(page, at('slip.near')).click();
+    await unlocked(page);
+    await expect(page.locator('[data-tour]')).toHaveText(Array.from({ length: k }, (_, j) => String(j + 1)));
+    await expect(card(page, answerAt)).toHaveClass(/is-shown/);
+    await expectMathLeftToRight(page);
+    await expectInPanel(page);
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+    await expect(row(page)).toHaveText(solved(k));
+    expect(await said(row(page))).toBe(spoken(round.equation, [String(k)]));
+  });
+}
+
+/** The counters of a bridging picture: light (the second addend's) or not, and which frame each is in. */
+const countersOf = (page) => page.locator('[data-area="picture"]').evaluate((p) => {
+  const first = p.querySelector('.tf-tray').getBoundingClientRect();
+  return [...p.querySelectorAll('.tf-disc[data-role="part"]')].map((d) => ({
+    light: d.hasAttribute('data-second'), first: d.getBoundingClientRect().bottom <= first.bottom,
+  }));
+});
+/** How many counters in a frame are light and how many are not. */
+const tally = (list, first) => ({ dark: list.filter((c) => c.first === first && !c.light).length, light: list.filter((c) => c.first === first && c.light).length });
+
+/** Every hint chip at least 1px clear of every counter's disc and of the dashed places (design 7.2). */
+async function expectChipsClear(page) {
+  const problems = await page.locator('[data-area="picture"]').evaluate((p) => {
+    const out = [];
+    const circles = [...p.querySelectorAll('.tf-disc, [data-hint] .tf-place')].map((n) => n.getBoundingClientRect());
+    for (const chip of p.querySelectorAll('[data-hint] .tf-chip')) {
+      const c = chip.getBoundingClientRect();
+      for (const d of circles) {
+        const [cx, cy, r] = [d.x + d.width / 2, d.y + d.height / 2, d.width / 2];
+        const gap = Math.hypot(Math.max(c.left, Math.min(cx, c.right)) - cx, Math.max(c.top, Math.min(cy, c.bottom)) - cy) - r;
+        if (gap < 1) out.push(`chip ${chip.textContent} is ${gap.toFixed(1)}px from a circle at ${Math.round(d.x)},${Math.round(d.y)}`);
+      }
+    }
+    return out;
+  });
+  expect(problems).toEqual([]);
+}
+
+test('level 10 at 320px: the second addend in the light shade before and after the move, so the full ten reads 7 + 3 and the rest + 3; the hint\'s numbers clear of every counter (owner decision 2026-10-15)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const { round } = await devAt(page, 'bridge-move', (r) => r.equation.left[0] === 7 && r.equation.left[2] === 6);
+  const [a, , b] = round.equation.left;
+  const counters = page.locator('[data-area="picture"] .tf-disc[data-role="part"]');
+  await expect(page.locator('[data-area="picture"] .tf-disc[data-second]')).toHaveCount(b);
+  let now = await countersOf(page);
+  expect([tally(now, true), tally(now, false)]).toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
+  await expectRoleColours(page);
+  await expect(counters.last()).toHaveCSS('background-color', 'rgb(255, 237, 184)');
+  // Two misses bring the hint: 3 go to the ten, 3 stay.
+  const wrong = round.choices.map((_, i) => i).filter((i) => round.choices[i].rule !== null);
+  for (const i of wrong.slice(0, 2)) {
+    await card(page, i).click();
+    await unlocked(page);
+  }
+  await expect(page.locator('[data-hint] .tf-chip')).toHaveText(['3', '3']);
+  await expectChipsClear(page);
+  // The child moves the light counters up; each keeps its shade, and the hint follows them.
+  for (let moved = 0; moved < 10 - a; moved++) await counters.nth(a + b - 1 - moved).click();
+  await quiet(page);
+  await expect(row(page)).toHaveText(/^10\+3=/);
+  now = await countersOf(page);
+  expect([tally(now, true), tally(now, false)]).toEqual([{ dark: a, light: 10 - a }, { dark: 0, light: a + b - 10 }]);
+  await expectRoleColours(page);
+  await expect(page.locator('[data-hint] .tf-chip')).toHaveText(['3', '3']);
+  await expectChipsClear(page);
+  await expectInPanel(page);
+});
+
+/**
+ * How a tour number on a disc sits in it, with the cells and trays painted black: its white pixels
+ * outside the disc, and the narrowest magenta between a white pixel and the disc's edge, in CSS
+ * pixels (design 7.2). The pixels are decoded in the page, in any engine.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} digit
+ * @returns {Promise<{ outside: number, margin: number }>}
+ */
+async function onItsDisc(page, digit) {
+  const style = await page.addStyleTag({ content: '[data-game] .tf-cell, [data-game] .tf-tray { background: #000 !important; } [data-game] [data-hint], [data-game] .tf-svg { visibility: hidden !important; }' });
+  const disc = await digit.evaluate((t) => {
+    const r = document.createRange();
+    r.selectNodeContents(t);
+    const b = r.getBoundingClientRect();
+    const [cx, cy] = [(b.left + b.right) / 2, (b.top + b.bottom) / 2];
+    const veils = [...document.querySelectorAll('[data-area="picture"] .tf-disc > .tf-veil')].map((v) => v.getBoundingClientRect());
+    const v = veils.find((x) => cx > x.left && cx < x.right && cy > x.top && cy < x.bottom);
+    return { x: v.x, y: v.y, w: v.width, dpr: window.devicePixelRatio };
+  });
+  const pad = 4;
+  const shot = await page.screenshot({ clip: { x: disc.x - pad, y: disc.y - pad, width: disc.w + 2 * pad, height: disc.w + 2 * pad } });
+  await style.evaluate((s) => s.remove());
+  return page.evaluate(async ({ png, r, dpr }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    [canvas.width, canvas.height] = [img.width, img.height];
+    const g = canvas.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const { data } = g.getImageData(0, 0, img.width, img.height);
+    let [outside, margin] = [0, Infinity];
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const i = (y * img.width + x) * 4;
+        if (data[i] <= 200 || data[i + 1] <= 200 || data[i + 2] <= 200) continue;
+        const dist = Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2);
+        if (dist > r + 0.75) outside += 1;
+        else margin = Math.min(margin, (r - dist) / dpr);
+      }
+    }
+    return { outside, margin };
+  }, { png: shot.toString('base64'), r: (disc.w / 2) * disc.dpr, dpr: disc.dpr });
+}
+
+// The grown last number used to come within a pixel of its disc's edge (1-2px at 390px), where white
+// on white it faded into the cell.
+for (const [level, [w, h, margin]] of [['bridge-frames', [320, 568, 1.5]], ['bridge-symbols', [320, 568, 1.5]], ['bridge-frames', [390, 844, 3]]]) {
+  test(`${level} at ${w}px: the second addend stays light at the tour's end and when solved, and the grown last number stays well inside its disc (owner decision 2026-10-15; design 7.2)`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: w, height: h });
+    const { round, answerAt } = await devAt(page, level, (r) => r.answer === 15 && (r.unknown === 'result-left' ? r.equation.right : r.equation.left)[0] === 7);
+    const [a, , b] = round.unknown === 'result-left' ? round.equation.right : round.equation.left;
+    await toTheTour(page, round, answerAt);
+    await expect(page.locator('[data-tour]').last()).toHaveText('15');
+    const light = page.locator('[data-area="picture"] .tf-disc[data-role="part"][data-second]');
+    await expect(light).toHaveCount(b);
+    const now = await countersOf(page);
+    expect([tally(now, true), tally(now, false)], 'fixed frames: nothing moved').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
+    await expectRoleColours(page);
+    const last = page.locator('[data-tour]').last();
+    let fit = await onItsDisc(page, last);
+    expect(fit.outside, 'the grown 15 inside its disc').toBe(0);
+    expect(fit.margin, 'magenta round the grown 15').toBeGreaterThanOrEqual(margin);
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+    await expect(light).toHaveCount(b);
+    await expectRoleColours(page);
+    fit = await onItsDisc(page, last);
+    expect(fit.outside, 'solved: the 15 inside its disc').toBe(0);
+    expect(fit.margin, 'solved: magenta round the 15').toBeGreaterThanOrEqual(margin);
+  });
+}
+
+test('a home thumb at a bridging level draws the second addend light (owner decision 2026-10-15)', async ({ page }) => {
+  await seedStore(page, storeWith({ games: { [ID]: ladderAt('bridge-frames') } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${INDEX}#/`);
+  const b = game.makeRound(game.levels[number('bridge-frames') - 1], rng(1)).equation.left[2];
+  const thumb = page.locator(`[data-card][href="#/play/${ID}"] [data-thumb]`);
+  await expect(thumb.locator('.tf-disc[data-role="part"][data-second]')).toHaveCount(b);
+  await expectRoleColours(page);
+});
+
+test('the closing of bridging ten: no hairline of a counter round its magenta veil, also where a disc sits off the pixel grid (design 6.9)', async ({ page }) => {
+  // 412x839 put discs off the grid: a veil whose entry animation still filled kept a layer of its own,
+  // and a one-device-pixel hairline of the part's fill and edge showed round the magenta.
+  await page.setViewportSize({ width: 412, height: 839 });
+  const { round, answerAt } = await devAt(page, 'bridge-frames', (r) => r.equation.left[0] === 9 && r.equation.left[2] === 9);
+  await toTheTour(page, round, answerAt);
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await quiet(page);
+  await page.addStyleTag({ content: '[data-game] .tf-layer { visibility: hidden !important; }' });
+  const discs = await page.locator('[data-area="picture"] .tf-disc').evaluateAll((els) => els.map((d) => {
+    const b = d.getBoundingClientRect();
+    return { x: b.x, y: b.y, w: b.width };
+  }));
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  let off = 0;
+  for (const d of discs) {
+    const pad = 3;
+    const shot = await page.screenshot({ clip: { x: d.x - pad, y: d.y - pad, width: d.w + 2 * pad, height: d.w + 2 * pad } });
+    // Within 2.5 device pixels of the counter's edge every pixel is magenta, white or a blend of the two.
+    off += await page.evaluate(async ({ png, r }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      [canvas.width, canvas.height] = [img.width, img.height];
+      const g = canvas.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const { data } = g.getImageData(0, 0, img.width, img.height);
+      let n = 0;
+      for (let y = 0; y < img.height; y++) {
+        for (let x = 0; x < img.width; x++) {
+          if (Math.abs(Math.hypot(x + 0.5 - img.width / 2, y + 0.5 - img.height / 2) - r) > 2.5) continue;
+          const i = (y * img.width + x) * 4;
+          const t = (data[i + 1] - 51) / (255 - 51);
+          if (Math.hypot(data[i] - (214 + 41 * t), data[i + 1] - (51 + 204 * t), data[i + 2] - (108 + 147 * t)) > 25) n += 1;
+        }
+      }
+      return n;
+    }, { png: shot.toString('base64'), r: (d.w / 2) * dpr });
+  }
+  expect(off, 'pixels round the counters that are neither magenta, white nor between them').toBe(0);
 });
