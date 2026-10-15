@@ -393,8 +393,9 @@ export const PAIRS = {
     if (display === 'empty-plate') {
       const sides = [t.left, t.right].filter((s) => s.n === 0);
       const lids = liftForDisplay(pic, sides.flatMap((s) => s.covers));
+      // The ring is the empty part's circle itself: a stem ends on its line, as on any circle.
       for (const s of sides) {
-        ring(root, grow(s.box, 0.1), '150ms', 'is-round is-zero');
+        ring(root, s.box, '150ms', 'is-round is-zero');
         digit(root, s.box, '0', '150ms', 'is-big');
       }
       return lids;

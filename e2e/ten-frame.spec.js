@@ -545,6 +545,50 @@ test('a ring with 0 holds its 0: the tour\'s grown 0 on a bond and on a frame, a
   }
 });
 
+test('the bond\'s stems end on the circles: none shows inside the empty part\'s ring, its 0 alone there (empty-plate, design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const ok of [(r) => r.answer[0] === 0, (r) => r.answer[1] === 0]) {
+      const { round } = await devAt(page, 'split-pairs', ok);
+      await card(page, round.choices.findIndex((c) => c.rule === 'zero.counted-as-one')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="empty-plate"] .tf-ring.is-zero')).toBeVisible();
+      // Every point of a stem, its round cap (1.5px) included, goes at most 2px into a circle (under
+      // its edge), and never into the hole of the ring with 0 (inside its line).
+      const problems = await page.evaluate(() => {
+        const out = [];
+        const round = (el) => {
+          const b = el.getBoundingClientRect();
+          const s = getComputedStyle(el);
+          return { x: b.left + b.width / 2, y: b.top + b.height / 2, r: b.width / 2, line: parseFloat(s.borderTopWidth), at: `${Math.round(b.left)},${Math.round(b.top)}` };
+        };
+        // How far a stem gets inside each circle and each ring (a negative depth stays outside).
+        const depth = (c) => {
+          let most = -Infinity;
+          for (const path of document.querySelectorAll('[data-area="picture"] .tf-stems .tf-line')) {
+            const line = /** @type {SVGPathElement} */ (path);
+            const m = line.getScreenCTM();
+            for (let s = 0, len = line.getTotalLength(); s <= len; s += len / 400) {
+              const p = line.getPointAtLength(s).matrixTransform(m);
+              most = Math.max(most, c.r - Math.hypot(p.x - c.x, p.y - c.y) + 1.5);
+            }
+          }
+          return Math.round(most * 10) / 10;
+        };
+        for (const c of [...document.querySelectorAll('[data-area="picture"] .tf-circle')].map(round)) {
+          if (depth(c) > 2) out.push(`a stem ${depth(c)}px into the circle at ${c.at}`);
+        }
+        for (const c of [...document.querySelectorAll('[data-area="picture"] .tf-ring.is-zero')].map(round)) {
+          if (depth(c) > c.line) out.push(`a stem ${depth(c)}px into the ring at ${c.at}, past its ${c.line}px line`);
+        }
+        return out;
+      });
+      expect(problems, `${width}px ${JSON.stringify(round.answer)}`).toEqual([]);
+    }
+  }
+});
+
 test('a cover over a run of cells covers each of them, and its two pieces meet by a 4px bar (design 6.6)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   for (const [level, ok] of [['ten-cover', (r) => r.equation.left[0] === 3], ['split-10', (r) => r.equation.left[0] === 3 && r.equation.right[0] === 9]]) {

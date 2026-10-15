@@ -74,7 +74,7 @@ const ROW = 4 * DOT_PITCH + DOT;
 
 /**
  * The number bond (model tree, Singapore 1A): the whole's circle on top with its dots beside it,
- * two part circles below with their dots under them. Circles are boxes; lines join their centres.
+ * two part circles below with their dots under them. Circles are boxes; stems join their edges.
  * @param {{ whole: number }} data the whole's count (its dots: one row up to 5, else two)
  */
 export function layoutTree({ whole }) {
@@ -437,9 +437,16 @@ export function drawFrame(host, d) {
  */
 export function drawTree(host, d) {
   const L = layoutTree({ whole: d.whole });
-  const centre = (b) => [b.x + b.w / 2, b.y + b.h / 2];
-  const [t, l, r] = [centre(L.top), centre(L.left), centre(L.right)];
-  outline(host, L, [`M${t[0]} ${t[1]}L${l[0]} ${l[1]}M${t[0]} ${t[1]}L${r[0]} ${r[1]}`], 'tf-line-frame tf-stems', false);
+  // A stem runs from circle edge to circle edge (its round cap hides under each circle), so none
+  // shows through an unknown circle whose cover lifts while it is still clear (empty-plate).
+  /** @type {(a: Box, b: Box) => string} */
+  const stem = (a, b) => {
+    const [ax, ay, bx, by] = [a.x + a.w / 2, a.y + a.h / 2, b.x + b.w / 2, b.y + b.h / 2];
+    const len = Math.hypot(bx - ax, by - ay);
+    const [ux, uy] = [(bx - ax) / len, (by - ay) / len];
+    return `M${n(ax + ux * a.w / 2)} ${n(ay + uy * a.h / 2)}L${n(bx - ux * b.w / 2)} ${n(by - uy * b.h / 2)}`;
+  };
+  outline(host, L, [stem(L.top, L.left) + stem(L.top, L.right)], 'tf-line-frame tf-stems', false);
   const top = at(host, 'tf-circle', L.top, String(d.whole));
   top.dataset.role = 'whole';
   const wholeDots = Array.from({ length: d.whole }, (_, i) => countable(at(host, 'tf-dot', L.wholeAt(i))));
