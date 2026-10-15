@@ -853,6 +853,61 @@ test('a ring never paints over a cube or cover next to it, of another group or o
   }
 });
 
+/**
+ * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
+ * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
+ * row above), and its top stays under the ink of the digits of the marks above it.
+ * @returns {string[]}
+ */
+function arcProblems() {
+  const out = [];
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '[data-game] .bl-scene * { pointer-events: auto !important; }';
+  const ctx = document.createElement('canvas').getContext('2d');
+  /** The bottom of a mark's digit ink, from its font measured at 200px. */
+  const inkBottom = (mark) => {
+    const range = document.createRange();
+    range.selectNodeContents(mark);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(mark);
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText(mark.textContent);
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    return { left: t.left, right: t.right, bottom: t.top + k * (m.fontBoundingBoxAscent + m.actualBoundingBoxDescent) };
+  };
+  const marks = [...document.querySelectorAll('[data-display="jumps"] .bl-mark')];
+  for (const arc of document.querySelectorAll('[data-display="jumps"] .bl-arc')) {
+    const b = arc.getBoundingClientRect();
+    for (const [what, x, y] of [['start', b.left + 2, b.bottom - 1], ['end', b.right - 2, b.bottom - 1], ['top', b.left + b.width / 2, b.top + 1]]) {
+      const hit = document.elementFromPoint(x, y);
+      if (hit !== arc) out.push(`an arc at ${Math.round(b.left)},${Math.round(b.top)}: its ${what} under ${hit?.className}`);
+    }
+    for (const mark of marks) {
+      const ink = inkBottom(mark);
+      if (ink.right > b.left && ink.left < b.right && ink.bottom < b.bottom - 1 && ink.bottom > b.top - 0.5) {
+        out.push(`an arc at ${Math.round(b.left)},${Math.round(b.top)} over the ${mark.textContent} above it`);
+      }
+    }
+  }
+  style.remove();
+  return out;
+}
+
+test('the jumps: each arc hops from one mark\'s top to the next, drawn over the marks, under the digits of a row above (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // ? = 6 + 4 (one row), ? = 4 + 6 (an arc under the missed cube's ring), ? = 2 + 15 (three rows).
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed] of [['missing-reversed', 2], ['missing-reversed', 19], ['missing-symbols-20', 31]]) {
+      const { round } = await devAt(page, level, seed);
+      await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="jumps"] .bl-arc').first()).toBeVisible();
+      expect(await page.evaluate(arcProblems), `${width}px ${level} ${seed}`).toEqual([]);
+    }
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);

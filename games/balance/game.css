@@ -72,7 +72,14 @@
 [data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
 [data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-mark { background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-added-edge); animation: balance-digit 150ms var(--ease) backwards; }
-[data-game="balance"] .bl-arc { left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube) * .7); width: var(--u); height: calc(var(--cube) * .5); border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; animation: balance-appear var(--t-move) var(--ease) backwards; }
+/* A jump (design 7.1): from the top of one mark to the top of the next, drawn over every mark, and
+   low enough to stay under the digits of a row above; a 1px --halo where it crosses a mark there. */
+[data-game="balance"] .bl-arc {
+  z-index: 1; left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube)); width: var(--u); height: calc(var(--cube) * .35);
+  border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  filter: drop-shadow(1px 0 0 var(--halo)) drop-shadow(-1px 0 0 var(--halo)) drop-shadow(0 1px 0 var(--halo)) drop-shadow(0 -1px 0 var(--halo));
+  animation: balance-appear var(--t-move) var(--ease) backwards;
+}
 [data-game="balance"] .bl-dash { width: var(--cube); height: var(--cube); border: 2px dashed var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78); animation: balance-ring var(--t-blink) var(--ease) backwards; }
 [data-game="balance"] .bl-scene.is-open .bl-dash { visibility: hidden; }
 [data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - var(--half)); transform: translateX(-50%); display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
