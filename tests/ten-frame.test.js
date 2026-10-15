@@ -113,7 +113,9 @@ test('level 5: the small ? dome sits on the bracket\'s top edge and hides no cou
     const dome = domeOver(top, run[0].row > 0);
     const mid = dome.x + dome.w / 2;
     assert.ok(mid >= top.x - 0.12 && mid <= top.x + top.w + 0.12, `${k} + ?: on the bracket's top edge`);
-    assert.equal(dome.y + dome.h / 2, top.y - 0.12, `${k} + ?: centred on the bracket's line`);
+    // Centred on the bracket's top line; on the outer corner (9 + ?), lowered but still across it.
+    if (k === 9) assert.ok(dome.y < top.y - 0.12 && dome.y + dome.h > top.y - 0.12 && dome.y > top.y - 0.12 - 0.3, `${k} + ?: across the bracket's line, lowered`);
+    else assert.equal(dome.y + dome.h / 2, top.y - 0.12, `${k} + ?: centred on the bracket's line`);
     for (const c of L.cells.slice(0, k)) {
       const d = disc(c);
       const [r, cx, cy] = [d.w / 2, d.x + d.w / 2, d.y + d.h / 2];

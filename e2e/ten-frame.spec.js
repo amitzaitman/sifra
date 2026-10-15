@@ -271,6 +271,48 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
 });
 
 /**
+ * How many of 72 points round each ring's line are not its colour (--role-added-edge), read from a
+ * screenshot: a ring that something lies over is broken there.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} selector the rings
+ * @returns {Promise<number[]>}
+ */
+async function ringGaps(page, selector) {
+  const rings = await page.locator(selector).evaluateAll((els) => els.map((r) => r.getBoundingClientRect().toJSON()));
+  const png = (await page.screenshot()).toString('base64');
+  return page.evaluate(async ({ data, rings }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const k = img.width / innerWidth;
+    return rings.map((r) => {
+      let n = 0;
+      for (let a = 0; a < 72; a++) {
+        const [t, R] = [(a * 5 * Math.PI) / 180, r.width / 2 - 1.5];
+        const p = ctx.getImageData(Math.round((r.x + r.width / 2 + R * Math.cos(t)) * k), Math.round((r.y + r.height / 2 + R * Math.sin(t)) * k), 1, 1).data;
+        if (Math.abs(p[0] - 11) + Math.abs(p[1] - 111) + Math.abs(p[2] - 166) > 90) n += 1;
+      }
+      return n;
+    });
+  }, { data: png, rings });
+}
+
+test('9 + ? = 10 bracketed (level 5): the small dome on the bracket\'s corner leaves the flash ring round the counter above it whole (design 6.6)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto('about:blank');
+    const { round } = await devAt(page, 'ten-empty', (r) => r.equation.left[0] === 9 && r.choices.some((c) => c.rule === 'given.part'));
+    await card(page, round.choices.findIndex((c) => c.rule === 'given.part')).click();
+    await unlocked(page);
+    await expect(page.locator('[data-display="flash"] .tf-ring.on-part')).toHaveCount(9);
+    expect(await ringGaps(page, '[data-display="flash"] .tf-ring.on-part'), `${width}px: points off each ring`).toEqual(Array(9).fill(0));
+  }
+});
+
+/**
  * How near a line comes to each cell of the drawn frame, read in the page: for each cell, the least
  * distance from the line's centre to the cell's box along the whole path (negative: inside it).
  * @param {string} selector the line's path
