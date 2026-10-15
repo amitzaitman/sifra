@@ -312,6 +312,33 @@ test('9 + ? = 10 bracketed (level 5): the small dome on the bracket\'s corner le
   }
 });
 
+test('making ten bracketed from mid-row (level 5): no sliver of the navy tray is left between the last counter\'s cell and the bracket\'s step (design 6.6)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[360, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const part of [1, 2, 3, 4]) {
+      await page.goto('about:blank');
+      await devAt(page, 'ten-empty', (r) => r.equation.left[0] === part);
+      const c = await page.locator('[data-area="picture"] .tf-cell').nth(part - 1).evaluate((e) => e.getBoundingClientRect().toJSON());
+      // Round the cell's bottom-right corner, where the bracket steps down to the next row.
+      const clip = { x: c.right - 12, y: c.bottom - 8, width: 16, height: 14 };
+      const png = (await page.screenshot({ clip })).toString('base64');
+      const navy = await page.evaluate(async ({ data, clip }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${data}`;
+        await img.decode();
+        const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, img.width, img.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 14) + Math.abs(d[i + 1] - 58) + Math.abs(d[i + 2] - 138) < 60) n += 1;
+        return n / (img.width / clip.width) ** 2;
+      }, { data: png, clip });
+      expect(navy, `${width}px ${part} + ? = 10: navy px² beside the step`).toBeLessThan(0.5);
+    }
+  }
+});
+
 /**
  * How near a line comes to each cell of the drawn frame, read in the page: for each cell, the least
  * distance from the line's centre to the cell's box along the whole path (negative: inside it).

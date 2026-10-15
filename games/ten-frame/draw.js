@@ -461,6 +461,16 @@ export function drawFrame(host, d) {
   if (!d.solved && bracket) {
     if (run.length) {
       wrap = outline(host, L, [runPath(run, 0.12)], 'tf-line-unknown tf-bracket');
+      // A run from mid-row steps round the last counter's cell: its halo leaves a sliver of the
+      // tray between that cell's round corner and the step, closed in the halo's white.
+      const before = run[0].col > 0 && run.at(-1).row > run[0].row ? L.cells[run[0].i - 1] : null;
+      if (before) {
+        const notch = document.createElementNS(SVG, 'rect');
+        const [x, y] = [before.x + before.w - 0.15, before.y + before.h - 0.15];
+        for (const [k, v] of Object.entries({ x, y, width: run[0].x - 0.12 - x, height: before.y + before.h + GAP / 2 - y })) notch.setAttribute(k, n(v));
+        notch.setAttribute('class', 'tf-notch');
+        wrap.prepend(notch);
+      }
       covers = [lid(host, domeOver(segments(run)[0], run[0].row > 0), d.cover, '?', 'is-small')];
     } else covers = [lid(host, { x: empty.x + 0.13, y: empty.y + 0.2, w: 0.74, h: 0.6 }, d.cover, '?', 'is-small')];
   }
