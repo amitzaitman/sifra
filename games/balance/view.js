@@ -279,7 +279,13 @@ function balanceScene(host, round, solved, signal) {
         // How many on each pan; the cover shows the missing cubes' outline.
         chip(groups('left'), 'left', layer.el);
         chip(groups('right'), 'right', layer.el);
-        for (const slot of span.places.slice(0, data[u][ui].count)) put(layer[u], 'bl-dash', at(slot));
+        // At each end of a cover's piece a dash rounds its top outer corner as the dome does, so
+        // it stays inside the dome's shoulder (design 6.6).
+        const { places } = span;
+        for (const slot of places.slice(0, data[u][ui].count)) {
+          const ends = `${slot === places[0] || slot % 5 === 0 ? ' is-start' : ''}${slot === places.at(-1) || slot % 5 === 4 ? ' is-end' : ''}`;
+          put(layer[u], `bl-dash${ends}`, at(slot));
+        }
       } else if (round.skill === 'eq.sign.both-sides') {
         // "7 | 7": how many on each side.
         chip([all('left')], 'left', layer.el);

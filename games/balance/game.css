@@ -89,6 +89,10 @@
   animation: balance-appear var(--t-move) var(--ease) backwards;
 }
 [data-game="balance"] .bl-dash { width: var(--cube); height: var(--cube); border: 2px dashed var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+/* At a piece's ends the dome's top corners are rounded (app.css .cover: half the cube across, 80%
+   down): there a dash takes the same corner, scaled with it, so it stays inside the dome. */
+[data-game="balance"] .bl-dash.is-start { border-top-left-radius: 50% 80%; }
+[data-game="balance"] .bl-dash.is-end { border-top-right-radius: 50% 80%; }
 [data-game="balance"] .bl-scene.is-open .bl-dash { visibility: hidden; }
 [data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - var(--half)); transform: translateX(-50%); display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + var(--half)); }

@@ -976,6 +976,70 @@ test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, 
 });
 
 /**
+ * Where the hint's dashed outline of a missing cube leaves the cover's dome (design 6.6, 7.3): the
+ * outer edge of each dash, as drawn (scaled, with its corner radii), stays half a pixel or more
+ * inside the dome as app.css draws it (top corners half the height across and 80% down, bottom
+ * corners a fifth), so no shoulder of the dome is bitten.
+ * @returns {string[]}
+ */
+function dashesOutOfDome() {
+  const out = [];
+  const domes = [...document.querySelectorAll('.bl-scene > .bl-pan .bl-lid:not(.bl-bridge) > .cover')].map((c) => c.getBoundingClientRect());
+  /** @type {(d: DOMRect, x: number, y: number, m: number) => boolean} inside the dome shrunk by m */
+  const inDome = (d, x, y, m) => {
+    const [l, t, r, b] = [d.left + m, d.top + m, d.right - m, d.bottom - m];
+    if (x < l || x > r || y < t || y > b) return false;
+    const top = y < (t + b) / 2;
+    const [rx, ry] = top ? [Math.min(d.width, d.height) / 2 - m, d.height * 0.8 - m] : [Math.min(d.width / 5, d.height / 5) - m, d.height / 5 - m];
+    const [cx, cy] = [x < (l + r) / 2 ? l + rx : r - rx, top ? t + ry : b - ry];
+    const corner = (x < (l + r) / 2 ? x < cx : x > cx) && (top ? y < cy : y > cy);
+    return !corner || ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  };
+  for (const dash of document.querySelectorAll('[data-hint] .bl-dash')) {
+    const b = dash.getBoundingClientRect();
+    const dome = domes.find((d) => b.left + b.width / 2 > d.left && b.left + b.width / 2 < d.right && b.top + b.height / 2 > d.top && b.top + b.height / 2 < d.bottom);
+    if (!dome) continue;
+    const s = getComputedStyle(dash);
+    const k = b.width / /** @type {HTMLElement} */ (dash).offsetWidth;
+    const radius = (v) => {
+      const [h, w = h] = v.split(' ');
+      const len = (x) => (x.endsWith('%') ? (parseFloat(x) / 100) * /** @type {HTMLElement} */ (dash).offsetWidth : parseFloat(x)) * k;
+      return [len(h), len(w)];
+    };
+    const corners = [[s.borderTopLeftRadius, -1, -1], [s.borderTopRightRadius, 1, -1], [s.borderBottomRightRadius, 1, 1], [s.borderBottomLeftRadius, -1, 1]];
+    let bad = 0;
+    for (const [v, sx, sy] of corners) {
+      const [rx, ry] = radius(v);
+      const [cx, cy] = [sx < 0 ? b.left + rx : b.right - rx, sy < 0 ? b.top + ry : b.bottom - ry];
+      for (let a = 0; a <= 90; a += 5) {
+        const t = (a * Math.PI) / 180;
+        if (!inDome(dome, cx + sx * rx * Math.cos(t), cy + sy * ry * Math.sin(t), 0.5)) bad += 1;
+      }
+    }
+    if (bad) out.push(`a dash at ${Math.round(b.left)},${Math.round(b.top)}: ${bad} points of its edge out of the dome`);
+  }
+  return out;
+}
+
+test('the hint\'s dashed outline of the missing cubes stays inside the cover\'s dome, its ends rounded as the dome\'s shoulders (design 6.6, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 6 + ? = 7 and 13 + ? = 14: a piece one place wide; 2 + ? = 6: a piece of one and a piece of three.
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed] of [['missing-symbols', 1], ['missing-symbols-20', 1], ['missing-right', 2]]) {
+      const { round } = await devAt(page, level, seed);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      for (const i of wrongOf(round).slice(0, 2)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-hint] .bl-dash').first()).toBeVisible();
+      expect(await page.evaluate(dashesOutOfDome), `${width}px ${level} ${seed}`).toEqual([]);
+    }
+  }
+});
+
+/**
  * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
  * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
  * row above), and its top stays under the ink of the digits of the marks above it.
