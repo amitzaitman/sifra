@@ -576,10 +576,10 @@ function zeroProblems() {
   return out;
 }
 
-test('a ring with 0 holds its 0: the tour\'s grown 0 on a bond and on a frame, and the empty-plate display (design 7.1, 7.2)', async ({ page }) => {
+test('a ring with 0 holds its 0, and no cover is left on it: the tour\'s grown 0 on a bond and on a frame, and the empty-plate display (design 7.1, 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const rounds = [['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8], ['split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0],
-    ['split-10', (r) => r.answer === 0]];
+    ['split-10', (r) => r.answer === 0], ['ten-empty', (r) => r.answer === 0]];
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const [level, ok] of rounds) {
@@ -596,6 +596,14 @@ test('a ring with 0 holds its 0: the tour\'s grown 0 on a bond and on a frame, a
         await unlocked(page);
       }
       await expect(page.locator('[data-tour="0"]'), where).toHaveCount(1);
+      // A full frame's empty place under the bracket's small '?': it lifts, so the 0 is not over it.
+      const under = await page.locator('[data-tour="0"]').evaluate((zero) => {
+        const b = zero.getBoundingClientRect();
+        const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+        return [...document.querySelectorAll('[data-area="picture"] .cover:not(.is-lifted)')].map((c) => c.getBoundingClientRect())
+          .filter((c) => x > c.left && x < c.right && y > c.top && y < c.bottom).length;
+      });
+      expect(under, `${where}: covers under the 0`).toBe(0);
       expect(await page.evaluate(zeroProblems), `${where}, the tour`).toEqual([]);
     }
   }

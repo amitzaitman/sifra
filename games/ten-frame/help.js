@@ -236,6 +236,9 @@ export const FRAME = {
     const { t } = pic;
     const L = frameAt(pic);
     if (!t.run.length) {
+      // The small '?' over the empty place lifts for good first, or the 0 is drawn over it (R5).
+      pic.lidsUp = true;
+      await settled(lift(pic, true), signal);
       await count(root, [{ box: disc(t.empty), n: 0 }], signal);
       return settle(ring(root, grow(disc(t.empty), 0.08), '', 'is-round is-zero is-unknown'), signal);
     }
