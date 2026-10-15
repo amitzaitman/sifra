@@ -169,6 +169,11 @@
 [data-game="ten-frame"] .tf-layer[data-display].is-leaving { opacity: 0; animation: ten-frame-leave 900ms linear; }
 [data-game="ten-frame"] [data-role="unknown"].is-shown { animation: ten-frame-in 150ms var(--ease) both; animation-delay: var(--d, 0ms); }
 [data-game="ten-frame"] .is-solved [data-role="unknown"]:not(.is-shown) { animation: ten-frame-in var(--t-move) var(--ease) both; animation-delay: var(--d, 0ms); }
+/* A transform animation that fills forwards keeps a veil on a layer of its own, snapped apart from
+   its stick, and a device pixel of the part's edge shows beside it. A veil's end state is its base
+   style, so it fills backwards only, and once in it paints with its stick or bundle. */
+[data-game="ten-frame"] .tf-bundle > .tf-veil.is-shown, [data-game="ten-frame"] .tf-stick > .tf-veil.is-shown,
+[data-game="ten-frame"] .is-solved .tf-bundle > .tf-veil, [data-game="ten-frame"] .is-solved .tf-stick > .tf-veil { animation-fill-mode: backwards; }
 
 /* Pair cards (level 4): two numbers and a bar, smaller when they are longer. */
 [data-game="ten-frame"] .tf-pair { display: flex; align-items: center; gap: 3px; font-size: 30px; font-weight: 800; line-height: 1.2; }

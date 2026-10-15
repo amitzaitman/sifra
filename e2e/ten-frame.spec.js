@@ -446,6 +446,61 @@ test('bundles at 320px: the digits above the sticks stay apart, above the outlin
   expect(Math.max(...tour.map((d) => d.bottom))).toBeLessThanOrEqual(line.y);
 });
 
+/**
+ * Pixels of the part's yellow or its edge left beside shown sticks and their bundle, at the
+ * screen's own device pixels: a veil that stays on a layer of its own after its motion is snapped
+ * apart from its stick, and a device pixel of the stick's edge shows along it.
+ * @param {import('@playwright/test').Page} page
+ */
+async function partPixels(page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))));
+  const boxes = await page.locator('[data-area="picture"] .tf-bundle, [data-area="picture"] .tf-stick').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  const [l, t] = [Math.min(...boxes.map((b) => b.left)) - 2, Math.min(...boxes.map((b) => b.top)) - 2];
+  const clip = { x: l, y: t, width: Math.max(...boxes.map((b) => b.right)) + 2 - l, height: Math.max(...boxes.map((b) => b.bottom)) + 2 - t };
+  const png = (await page.screenshot({ clip })).toString('base64');
+  return page.evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    // Shown sticks are magenta on the panel: every pixel lies on the line between the two. The part
+    // (255, 194, 51) and its edge (158, 108, 0) have far less blue than green, and the band's grey
+    // (122, 111, 92) has red close to green.
+    const [m, p] = [[214, 51, 108], [255, 253, 247]];
+    const off = (c) => {
+      const v = c.map((x, i) => x - m[i]);
+      const dir = p.map((x, i) => x - m[i]);
+      const k = Math.max(0, Math.min(1, v.reduce((s, x, i) => s + x * dir[i], 0) / dir.reduce((s, x) => s + x * x, 0)));
+      return Math.hypot(...v.map((x, i) => x - k * dir[i]));
+    };
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const c = [d[i], d[i + 1], d[i + 2]];
+      if (c[1] > c[2] + 25 && c[0] > c[1] + 15 && off(c) > 25) n += 1;
+    }
+    return n;
+  }, png);
+}
+
+test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour and after a first try (motion on)', async ({ page }) => {
+  // Where a veil's layer snapped apart from its stick at the Pixel 7's and the iPhone's pixel ratios.
+  for (const [width, answer] of [[320, 11], [360, 16]]) {
+    await page.setViewportSize({ width, height: 568 });
+    const { round, answerAt } = await devAt(page, 'teen-bundle', (r) => r.answer === answer);
+    await toTheTour(page, round, answerAt);
+    await expect(page.locator('[data-tour]').last()).toHaveText(String(answer));
+    expect(await partPixels(page), `${width}px, ${answer}: the tour`).toBe(0);
+    // Another seed of the same round, so the page loads afresh.
+    let seen = 0;
+    const again = await devAt(page, 'teen-bundle', (r) => r.answer === answer && ++seen === 2);
+    await card(page, again.answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    expect(await partPixels(page), `${width}px, ${answer}: solved`).toBe(0);
+  }
+});
+
 test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, and draws under the last digit (design 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });
