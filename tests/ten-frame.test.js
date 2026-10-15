@@ -343,7 +343,9 @@ const nearDisc = (box, d, gap) => {
   return Math.hypot(nx - cx, ny - cy) < r + gap;
 };
 
-test('bridging ten: the second addend\'s counters are light at rest, after the move, in the hint, the tour and the closing (owner decision 2026-10-15, "רק במעבר העשר")', () => {
+// The layout data only: what shows on screen is the browser test's (e2e/ten-frame.spec.js), and at the tour's end
+// and in the closing every counter is under its magenta veil, an open question for the owner (pedagogy 8.1).
+test('bridging ten: layoutBridge marks every counter of the second addend second (light) at rest, after each move, and in the tour\'s and the closing\'s order (owner decision 2026-10-15, "רק במעבר העשר")', () => {
   for (const id of ['bridge-move', 'bridge-frames', 'bridge-symbols']) {
     for (const r of rounds(id)) {
       // The addends from the round's exercise: a + b = ? or ? = a + b.

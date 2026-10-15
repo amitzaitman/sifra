@@ -783,15 +783,44 @@ for (const [form, solved] of [['n = n + ?', (k) => `${10 + k}=10+${k}`], ['n + ?
   });
 }
 
-/** The counters of a bridging picture: light (the second addend's) or not, and which frame each is in. */
-const countersOf = (page) => page.locator('[data-area="picture"]').evaluate((p) => {
-  const first = p.querySelector('.tf-tray').getBoundingClientRect();
-  return [...p.querySelectorAll('.tf-disc[data-role="part"]')].map((d) => ({
-    light: d.hasAttribute('data-second'), first: d.getBoundingClientRect().bottom <= first.bottom,
-  }));
-});
-/** How many counters in a frame are light and how many are not. */
-const tally = (list, first) => ({ dark: list.filter((c) => c.first === first && !c.light).length, light: list.filter((c) => c.first === first && c.light).length });
+/**
+ * The counters of a bridging picture as the child sees them: the colour painted at each one's centre (part
+ * yellow, the light shade, magenta or other), read from a screenshot of the picture decoded in the page, and
+ * which frame each is in. Not the data-second attribute or the counter's own background: a veil over the
+ * counter hides both.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} [root] the picture, or a thumb
+ * @returns {Promise<{ seen: string, first: boolean }[]>}
+ */
+async function countersSeen(page, root = page.locator('[data-area="picture"]')) {
+  const png = (await root.screenshot()).toString('base64');
+  const where = await root.evaluate((p) => {
+    const box = p.getBoundingClientRect();
+    const first = p.querySelector('.tf-tray').getBoundingClientRect();
+    return [...p.querySelectorAll('.tf-disc.is-counter')].map((d) => {
+      const b = d.getBoundingClientRect();
+      return { x: b.x + b.width / 2 - box.x, y: b.y + b.height / 2 - box.y, first: b.bottom <= first.bottom };
+    });
+  });
+  return page.evaluate(async ({ png, where }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    [canvas.width, canvas.height] = [img.width, img.height];
+    const g = canvas.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const scale = window.devicePixelRatio;
+    const colours = { part: [255, 194, 51], light: [255, 237, 184], magenta: [214, 51, 108] };
+    return where.map(({ x, y, first }) => {
+      const px = g.getImageData(Math.floor(x * scale), Math.floor(y * scale), 1, 1).data;
+      const near = Object.entries(colours).find(([, c]) => Math.hypot(px[0] - c[0], px[1] - c[1], px[2] - c[2]) < 30);
+      return { seen: near ? near[0] : `rgb(${px[0]}, ${px[1]}, ${px[2]})`, first };
+    });
+  }, { png, where });
+}
+/** How many counters in a frame show part yellow and how many the light shade. */
+const tally = (list, first) => ({ dark: list.filter((c) => c.first === first && c.seen === 'part').length, light: list.filter((c) => c.first === first && c.seen === 'light').length });
 
 /** Every hint chip at least 1px clear of every counter's disc and of the dashed places (design 7.2). */
 async function expectChipsClear(page) {
@@ -817,10 +846,9 @@ test('level 10 at 320px: the second addend in the light shade before and after t
   const [a, , b] = round.equation.left;
   const counters = page.locator('[data-area="picture"] .tf-disc[data-role="part"]');
   await expect(page.locator('[data-area="picture"] .tf-disc[data-second]')).toHaveCount(b);
-  let now = await countersOf(page);
-  expect([tally(now, true), tally(now, false)]).toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
+  let now = await countersSeen(page);
+  expect([tally(now, true), tally(now, false)], 'at rest').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
   await expectRoleColours(page);
-  await expect(counters.last()).toHaveCSS('background-color', 'rgb(255, 237, 184)');
   // Two misses bring the hint: 3 go to the ten, 3 stay.
   const wrong = round.choices.map((_, i) => i).filter((i) => round.choices[i].rule !== null);
   for (const i of wrong.slice(0, 2)) {
@@ -829,12 +857,15 @@ test('level 10 at 320px: the second addend in the light shade before and after t
   }
   await expect(page.locator('[data-hint] .tf-chip')).toHaveText(['3', '3']);
   await expectChipsClear(page);
+  await quiet(page);
+  now = await countersSeen(page);
+  expect([tally(now, true), tally(now, false)], 'in the hint').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
   // The child moves the light counters up; each keeps its shade, and the hint follows them.
   for (let moved = 0; moved < 10 - a; moved++) await counters.nth(a + b - 1 - moved).click();
   await quiet(page);
   await expect(row(page)).toHaveText(/^10\+3=/);
-  now = await countersOf(page);
-  expect([tally(now, true), tally(now, false)]).toEqual([{ dark: a, light: 10 - a }, { dark: 0, light: a + b - 10 }]);
+  now = await countersSeen(page);
+  expect([tally(now, true), tally(now, false)], 'after the move').toEqual([{ dark: a, light: 10 - a }, { dark: 0, light: a + b - 10 }]);
   await expectRoleColours(page);
   await expect(page.locator('[data-hint] .tf-chip')).toHaveText(['3', '3']);
   await expectChipsClear(page);
@@ -890,17 +921,29 @@ async function onItsDisc(page, digit) {
 }
 
 for (const [level, [w, h]] of [['bridge-frames', [320, 568]], ['bridge-symbols', [320, 568]], ['bridge-frames', [390, 844]]]) {
-  test(`${level} at ${w}px: the second addend stays light at the tour's end and when solved (owner decision 2026-10-15)`, async ({ page }) => {
+  test(`${level} at ${w}px: the second addend shows light at rest and in the hint, and keeps data-second at the tour's end and when solved (owner decision 2026-10-15)`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: w, height: h });
     const { round, answerAt } = await devAt(page, level, (r) => r.answer === 15 && (r.unknown === 'result-left' ? r.equation.right : r.equation.left)[0] === 7);
     const [a, , b] = round.unknown === 'result-left' ? round.equation.right : round.equation.left;
-    await toTheTour(page, round, answerAt);
+    // In symbols look the picture comes with the first miss.
+    let now = round.look === 'symbols' ? [] : await countersSeen(page);
+    if (round.look !== 'symbols') expect([tally(now, true), tally(now, false)], 'at rest').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
+    const wrong = round.choices.map((_, i) => i).filter((i) => i !== answerAt);
+    for (const i of wrong.slice(0, 2)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-hint]')).toHaveCount(1);
+    now = await countersSeen(page);
+    expect([tally(now, true), tally(now, false)], 'in the hint, fixed frames: nothing moved').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
+    await card(page, wrong[2]).click();
+    await unlocked(page);
     await expect(page.locator('[data-tour]').last()).toHaveText('15');
+    // At the tour's end and in the closing every counter is under its magenta veil, and what shows there is an
+    // open question for the owner (pedagogy 8.1): here only the counters' data and role colours.
     const light = page.locator('[data-area="picture"] .tf-disc[data-role="part"][data-second]');
     await expect(light).toHaveCount(b);
-    const now = await countersOf(page);
-    expect([tally(now, true), tally(now, false)], 'fixed frames: nothing moved').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
     await expectRoleColours(page);
     await card(page, answerAt).click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
@@ -1005,6 +1048,8 @@ test('a home thumb at a bridging level draws the second addend light (owner deci
   const b = game.makeRound(game.levels[number('bridge-frames') - 1], rng(1)).equation.left[2];
   const thumb = page.locator(`[data-card][href="#/play/${ID}"] [data-thumb]`);
   await expect(thumb.locator('.tf-disc[data-role="part"][data-second]')).toHaveCount(b);
+  const seen = await countersSeen(page, thumb);
+  expect([tally(seen, true), tally(seen, false)], 'as the thumb shows them').toEqual([{ dark: seen.length - b, light: 0 }, { dark: 0, light: b }]);
   await expectRoleColours(page);
 });
 
