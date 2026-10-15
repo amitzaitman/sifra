@@ -928,7 +928,35 @@ test('bundles at 320px: the build display\'s narrow ghost bundles keep their lig
   expect(dark, 'dark lines over the ghost bundle').toBeLessThan(0.5);
 });
 
-test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour and after a first try (motion on)', async ({ page }) => {
+/**
+ * What lies 1px off the band's long edges, inside the bundle and clear of the hint's 10 chip, read
+ * from a screenshot: on a bundle shown as the unknown, the band's --halo, never magenta (design 3:
+ * --frame and magenta are close under deuteranopia).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+async function bandHalo(page) {
+  const [band, bundle] = await Promise.all(['.tf-band', '.tf-bundle'].map((c) => page.locator(`[data-area="picture"] .tf-base ${c}`).first().evaluate((e) => e.getBoundingClientRect().toJSON())));
+  const png = (await page.screenshot()).toString('base64');
+  return page.evaluate(async ({ data, band, bundle }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const k = img.width / innerWidth;
+    const out = [];
+    for (const f of [0.08, 0.12, 0.88, 0.92]) {
+      for (const [edge, y] of [['top', band.top - 1], ['bottom', band.bottom + 1]]) {
+        const p = ctx.getImageData(Math.round((bundle.left + f * bundle.width) * k), Math.round(y * k), 1, 1).data;
+        if (Math.min(p[0], p[1], p[2]) < 225) out.push(`${edge} at ${f}: ${p[0]},${p[1]},${p[2]}`);
+      }
+    }
+    return out;
+  }, { data: png, band, bundle });
+}
+
+test('bundles: shown sticks keep no hairline of the part\'s edge, and the band keeps a --halo off the shown bundle, after the tour and after a first try (motion on)', async ({ page }) => {
   // Where a veil's layer snapped apart from its stick at the Pixel 7's and the iPhone's pixel ratios.
   for (const [width, answer] of [[320, 11], [360, 16]]) {
     await page.setViewportSize({ width, height: 568 });
@@ -936,12 +964,14 @@ test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour
     await toTheTour(page, round, answerAt);
     await expect(page.locator('[data-tour]').last()).toHaveText(String(answer));
     expect(await partPixels(page), `${width}px, ${answer}: the tour`).toBe(0);
+    expect(await bandHalo(page), `${width}px, ${answer}: the band on the tour's bundle`).toEqual([]);
     // Another seed of the same round, so the page loads afresh.
     let seen = 0;
     const again = await devAt(page, 'teen-bundle', (r) => r.answer === answer && ++seen === 2);
     await card(page, again.answerAt).click();
     await expect(page.locator('[data-next]')).toBeVisible();
     expect(await partPixels(page), `${width}px, ${answer}: solved`).toBe(0);
+    expect(await bandHalo(page), `${width}px, ${answer}: the band on the solved bundle`).toEqual([]);
   }
 });
 

@@ -65,6 +65,10 @@
    is a tenth of the unit, not 2px, so half of it stays yellow. */
 [data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 min(2px, calc(var(--u) * 0.1)) var(--role-part-edge); }
 [data-game="ten-frame"] .tf-band { position: absolute; left: -8%; right: -8%; top: 42%; height: 14%; border-radius: 4px; background: var(--frame); }
+/* On a bundle shown as the unknown the band gets a --halo off the magenta (design 3); 2px, so its
+   tips stay inside the tour ring's 3px inner gap. */
+[data-game="ten-frame"] .tf-bundle:has(> .tf-veil.is-shown) > .tf-band,
+[data-game="ten-frame"][data-solved] .tf-bundle:has(> .tf-veil) > .tf-band { box-shadow: 0 0 0 min(2px, calc(var(--u) * 0.08)) var(--halo); }
 /* A 0.5px rim in its own colour covers the counter's antialiased edge, so no hairline of the part's
    edge shows round the shown unknown. */
 [data-game="ten-frame"] .tf-veil { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 0.5px var(--role-unknown); }
