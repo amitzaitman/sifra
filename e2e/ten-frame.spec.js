@@ -988,6 +988,18 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
       return room >= 0.5 ? [] : [`the 10 ${Math.round(-room * 10) / 10}px over its group's line`];
     }));
     expect(ten, `${level} ${JSON.stringify(round.answer)}`).toEqual([]);
+    // A grown one-digit last number, with its 1.2px outline, keeps a pixel off its group's line
+    // above and below: it is grown from above its middle, where its ink sits, so it stays on its dot.
+    const grown = await page.evaluate(() => [...document.querySelectorAll('.tf-tour.is-last.is-small:not(.is-two)')].flatMap((el) => {
+      const ink = inkOf(el);
+      const [x, y] = [(ink.left + ink.right) / 2, (ink.top + ink.bottom) / 2];
+      const line = [...document.querySelectorAll('.tf-line-unknown .tf-line')].map((p) => p.getBoundingClientRect())
+        .find((l) => x > l.left && x < l.right && y > l.top && y < l.bottom);
+      if (!line) return [`a last ${el.textContent} outside every outline`];
+      const room = Math.min(ink.top - 1.2 - (line.top + 1.5), line.bottom - 1.5 - (ink.bottom + 1.2));
+      return room >= 1 ? [] : [`the last ${el.textContent} ${Math.round(room * 10) / 10}px off its group's line`];
+    }));
+    expect(grown, `${level} ${JSON.stringify(round.answer)}`).toEqual([]);
     const problems = await page.evaluate(() => {
       const out = [];
       // What is drawn takes a point: the dots, and each outline's line and halo.
