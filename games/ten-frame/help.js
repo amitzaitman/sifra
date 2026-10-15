@@ -201,7 +201,7 @@ export const FRAME = {
         const i = start + j;
         const box = disc(L.place(i));
         ghost(root, box, stagger(j, value));
-        if (t.chip && i >= whole && i < real) ring(root, grow(box, 0.1), stagger(j, value));
+        if (t.chip && i >= whole && i < real) ring(root, grow(box, 0.1), stagger(j, value), 'is-round on-ghost');
       }
       return lids;
     }
@@ -214,7 +214,7 @@ export const FRAME = {
       digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
     }
     if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
-    else ring(root, grow(disc(L.place(start + value - 1)), 0.1), stagger(value - 1, value, 120));
+    else ring(root, grow(disc(L.place(start + value - 1)), 0.1), stagger(value - 1, value, 120), 'is-round on-ghost');
     return lids;
   },
 
@@ -440,6 +440,8 @@ export const PAIRS = {
 const stickBox = (pic, j) => pic.t.L.stick(j);
 /** @type {(node: Element) => HTMLElement} a counter's veil: the unknown whole on it */
 const veil = (node) => node.querySelector('.tf-veil');
+/** @type {(b: Box) => Box} a bundle with its band, which passes 8% of its width on each side (game.css) */
+const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
 
 export const BUNDLES = {
   /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
@@ -447,7 +449,7 @@ export const BUNDLES = {
     const { t, d } = pic;
     const L = t.L;
     if (display === 'label-ten') {
-      ring(root, grow(L.bundle, 0.14), '', 'is-tray');
+      ring(root, banded(L.bundle), '', 'is-around');
       chipAt(root, L.bundle, '10', 'tf-blink-in');
       return blink(pic, [t.bundle]);
     }
@@ -457,7 +459,7 @@ export const BUNDLES = {
       resize(pic, row.right + 0.3, L.belowH);
       const all = [...row.bundles, ...row.sticks];
       all.forEach((box, j) => ghost(root, box, stagger(j, all.length), j < row.bundles.length ? 'is-bundle' : 'is-stick'));
-      if (row.bundles.length) ring(root, grow(around(row.bundles), 0.14), '300ms', 'is-tray');
+      if (row.bundles.length) ring(root, around(row.bundles), '300ms', 'is-around');
       return [];
     }
     // count-up, counting on from the bundle: 10, then the loose sticks.
@@ -470,8 +472,8 @@ export const BUNDLES = {
       digit(root, L.above(stickBox(pic, j)), String(11 + j), delay, 'is-above');
     }
     const k = value - 10;
-    if (k < d.ones) ring(root, grow(stickBox(pic, k), 0.14), stagger(k + 1, k + 2, 120), 'is-tray');
-    else ring(root, grow(stickBox(pic, k - 1), 0.14), stagger(k, k + 1, 120), 'is-tray');
+    if (k < d.ones) ring(root, stickBox(pic, k), stagger(k + 1, k + 2, 120), 'is-around');
+    else ring(root, stickBox(pic, k - 1), stagger(k, k + 1, 120), 'is-around');
     return [];
   },
   prep: () => [],
@@ -510,7 +512,7 @@ export const BUNDLES_PART = {
       return blink(pic, [t.chip]);
     }
     if (display === 'flash') {
-      ring(root, grow(L.bundle, 0.14), '', 'is-tray');
+      ring(root, banded(L.bundle), '', 'is-around');
       return blink(pic, [t.bundle]);
     }
     // count-up from 1 on the ones' places (the unknown is a part): one place left without a digit
@@ -524,15 +526,15 @@ export const BUNDLES_PART = {
       else mark(root, 'tf-place is-stick tf-enter', L.stick(j), undefined, delay);
       if (j < value) digit(root, L.above(L.stick(j)), String(j + 1), delay, 'is-above');
     }
-    if (value < d.ones) ring(root, grow(L.stick(value), 0.14), stagger(value, last, 120), 'is-tray');
-    else ring(root, grow(L.stick(value - 1), 0.14), stagger(value - 1, last, 120), 'is-tray');
+    if (value < d.ones) ring(root, L.stick(value), stagger(value, last, 120), 'is-around');
+    else ring(root, L.stick(value - 1), stagger(value - 1, last, 120), 'is-around');
     return lids;
   },
   prep: () => [],
   /** The bundle gets a 10 label, and the cover over the ones a ring (7.2). @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
     chipAt(root, pic.t.L.bundle, '10');
-    at(root, 'tf-ring is-tray is-hint', grow(pic.t.L.places, 0.14));
+    at(root, 'tf-ring is-around is-hint', pic.t.L.places);
   },
   /**
    * The cover lifts for good, and the ones are counted from 1 as they show (R5: the unknown is a
@@ -545,8 +547,8 @@ export const BUNDLES_PART = {
     pic.lidsUp = true;
     await settled(lift(pic, true), signal);
     await count(root, t.sticks.map((s, j) => ({ box: L.above(L.stick(j)), n: j + 1, cls: 'is-above', before: () => show(s) })), signal);
-    // The ring around the counted ones lies on the hint's ring around their places: one line.
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(L.places, 0.14, 0.5)], 'tf-line-unknown tf-enter')), signal);
+    // The ring around the counted ones is the hint's ring around their places: one line.
+    if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', L.places)), signal);
   },
   /** @param {Pic} pic */
   solve: (pic) => lift(pic, true),

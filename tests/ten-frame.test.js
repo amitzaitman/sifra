@@ -258,6 +258,9 @@ test('bundles with the ones unknown: the tag sits over the bundle and the cover,
     const sticks = Array.from({ length: ones }, (_, j) => B.stick(j));
     for (const s of sticks) assert.ok(s.x >= B.places.x && s.x + s.w <= B.places.x + B.places.w && s.y === B.places.y && s.h === B.places.h, `${ones}: under the cover`);
     assert.ok(B.places.x > B.bundle.x + B.bundle.w, 'the cover leaves the bundle seen');
+    // A ring round the bundle and its band (8% of its width each side) reaches 9px with its halo:
+    // at 320px (unit about 26px) it stays a pixel off the cover.
+    assert.ok((B.places.x - (B.bundle.x + B.bundle.w * 1.08)) * 26 >= 10, `${ones}: room for a ring round the bundle`);
     const centre = (B.tag.x + B.tag.w / 2);
     assert.ok(Math.abs(centre - (B.bracket.l + B.bracket.r) / 2) < 1e-9, 'the tag on the middle of its bracket');
     assert.ok(B.bracket.l <= B.bundle.x && B.bracket.r >= B.places.x + B.places.w, 'the bracket spans the bundle and the cover');

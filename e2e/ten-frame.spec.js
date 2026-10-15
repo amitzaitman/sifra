@@ -540,6 +540,69 @@ test('bundles: shown sticks keep no hairline of the part\'s edge, after the tour
   }
 });
 
+/**
+ * What a ring paints over, read in the page (design 7.1: a ring keeps what it marks whole, with its
+ * edge and size): every thing drawn whose centre lies in a ring lies wholly in its hole, inside its
+ * line and inner halo. A round ring's hole is a circle; a thing in it, the circle round its box.
+ * @returns {string[]}
+ */
+function ringProblems() {
+  const out = [];
+  const things = [...document.querySelectorAll('[data-area="picture"] :is(.tf-ghost, .tf-place, .tf-disc, .tf-bundle, .tf-band, .tf-stick, .tf-circle, .tf-dot)')]
+    .filter((el) => [el, el.parentElement].every((e) => getComputedStyle(e).opacity !== '0'));
+  for (const ring of document.querySelectorAll('[data-area="picture"] .tf-ring:not(.is-cell):not(.is-zero)')) {
+    const r = ring.getBoundingClientRect();
+    const s = getComputedStyle(ring);
+    const inset = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e.includes('inset')).map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3])));
+    const k = parseFloat(s.borderTopWidth) + inset;
+    const hole = { left: r.left + k, top: r.top + k, right: r.right - k, bottom: r.bottom - k };
+    const round = Math.abs(r.width - r.height) < 1 && (s.borderTopLeftRadius === '50%' || parseFloat(s.borderTopLeftRadius) >= r.width / 2 - 0.5);
+    for (const el of things) {
+      const b = el.getBoundingClientRect();
+      const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+      const over = round
+        ? Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) + Math.max(b.width, b.height) / 2 - (hole.right - hole.left) / 2
+        : Math.max(hole.left - b.left, b.right - hole.right, hole.top - b.top, b.bottom - hole.bottom);
+      if (over > 0.25) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(over * 10) / 10}px over ${el.className.replace('tf-at ', '')}`);
+    }
+  }
+  return out;
+}
+
+test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const value = (r, rule) => r.choices.find((c) => c.rule === rule)?.value;
+  // [level, round, cards in order ('tour': every wrong card)]
+  const states = [
+    ['split-10', (r) => value(r, 'op.other') + r.equation.left[0] <= 10, ['op.other']],
+    ['split-10', (r) => value(r, 'slip.near') === r.answer + 1 && r.answer > 0, ['slip.near']],
+    ['teen-bundle', () => true, ['pv.ones-only']],
+    ['teen-bundle', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
+    ['teen-bundle', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['teen-bundle', (r) => value(r, 'pv.teen-reversed') > 20, ['pv.teen-reversed']],
+    ['teen-symbols', (r) => r.answer === 6, ['given.part']],
+    ['teen-symbols', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
+    ['teen-symbols', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['teen-symbols', (r) => r.answer === 6, 'tour'],
+  ];
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, ok, cards] of states) {
+      await page.goto('about:blank');   // two states may share a round
+      const { round, answerAt } = await devAt(page, level, ok);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      if (cards === 'tour') await toTheTour(page, round, answerAt);
+      for (const rule of cards === 'tour' ? [] : cards) {
+        await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-area="picture"] .tf-ring').first()).toBeVisible();
+      expect(await page.evaluate(ringProblems), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
+    }
+  }
+});
+
 test('the bond\'s tour at 320px: the outline round the counted dots cuts none of them, and draws under the last digit (design 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });

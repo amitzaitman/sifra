@@ -107,6 +107,12 @@ const LIFT = 1.4;
 /** Room above the digits for the whole's tag on its bracket (14 = 10 + ?), clear of a grown last digit. */
 const TAG_BAND = 1.2;
 /**
+ * The bundle's band passes 8% of its width on each side (game.css). The space from the bundle to
+ * the first stick, wider beside the cover (14 = 10 + ?), so a ring round the bundle and its band
+ * (9px with its halo) stays off the cover at 320px (unit about 26px).
+ */
+const AFTER_BUNDLE = { open: 0.4, covered: 0.6 };
+/**
  * The whole's tag over bundles: wider and taller than on a frame, because nine sticks make the
  * unit small (about 22px at 320px), and two digits at 14px still need room inside a ring.
  */
@@ -124,7 +130,7 @@ export function layoutBundles({ ones, tag = false }) {
   /** @param {number} t bundles @param {number} o sticks @param {number} y top */
   const row = (t, o, y) => {
     const bundles = Array.from({ length: t }, (_, j) => ({ x: 0.3 + j * (BUNDLE + 0.3), y, w: BUNDLE, h: STICK.h }));
-    const x0 = 0.3 + t * (BUNDLE + 0.3) + 0.4;
+    const x0 = 0.3 + t * (BUNDLE + 0.3) + (tag ? AFTER_BUNDLE.covered : AFTER_BUNDLE.open);
     const sticks = Array.from({ length: o }, (_, i) => ({ x: x0 + i * PITCH, y, w: STICK.w, h: STICK.h }));
     return { bundles, sticks, right: (sticks.at(-1) ?? bundles.at(-1)).x + (o ? STICK.w : BUNDLE) };
   };
