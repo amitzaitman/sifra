@@ -163,6 +163,13 @@ const under = (root, node) => {
 const frameAt = (pic) => pic.t.L;
 
 /**
+ * A ring round a ghost on a frame, in pixels round its box (game.css .is-around.is-close): a
+ * 1.5px gap off its dashed edge, then the line, at any unit, also where hypothetical frames shrink
+ * the drawing; its halo stays off the next counter, 0.38 units away (design 7.1).
+ */
+const GHOST_RING = 'is-round is-around is-close on-ghost';
+
+/**
  * How far the tour's line stands off the cells along a whole tray's border: past the tray's edge
  * (GAP) by half its 9px halo at the smallest unit a round draws (about 43px at 320px), so the
  * halo meets the edge and the navy rim stays whole.
@@ -220,7 +227,7 @@ export const FRAME = {
         const i = start + j;
         const box = disc(L.place(i));
         ghost(root, box, stagger(j, value));
-        if (t.chip && i >= whole && i < real) ring(root, grow(box, 0.1), stagger(j, value), 'is-round on-ghost');
+        if (t.chip && i >= whole && i < real) ring(root, box, stagger(j, value), GHOST_RING);
       }
       return lids;
     }
@@ -233,7 +240,7 @@ export const FRAME = {
       digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
     }
     if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
-    else ring(root, grow(disc(L.place(start + value - 1)), 0.1), stagger(value - 1, value, 120), 'is-round on-ghost');
+    else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), GHOST_RING);
     return lids;
   },
 
@@ -655,7 +662,7 @@ export const BRIDGE = {
       if (places.at(-1) >= 20) hypothetical(pic, root, places.at(-1), 20);
       places.forEach((i, j) => {
         ghost(root, slot(pic, i), stagger(j, extra));
-        ring(root, grow(slot(pic, i), 0.1), stagger(j, extra));
+        ring(root, slot(pic, i), stagger(j, extra), GHOST_RING);
       });
       return [];
     }

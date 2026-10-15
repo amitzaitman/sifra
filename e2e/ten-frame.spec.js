@@ -837,6 +837,11 @@ function ringProblems() {
         ? Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) + Math.max(b.width, b.height) / 2 - (hole.right - hole.left) / 2
         : Math.max(hole.left - b.left, b.right - hole.right, hole.top - b.top, b.bottom - hole.bottom);
       if (over > 0.25) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(over * 10) / 10}px over ${el.className.replace('tf-at ', '')}`);
+      // A ghost's dashed edge is the ring's colour: a pixel or more of white stays between them.
+      const line = parseFloat(s.borderTopWidth);
+      const gap = round ? (r.width - 2 * line - Math.max(b.width, b.height)) / 2 - Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2)
+        : Math.min(b.left - r.left, r.right - b.right, b.top - r.top, r.bottom - b.bottom) - line;
+      if (el.matches('.tf-ghost') && gap < 1) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(gap * 10) / 10}px off ${el.className.replace('tf-at ', '')}`);
     }
   }
   return out;
@@ -849,6 +854,13 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
   const states = [
     ['split-10', (r) => value(r, 'op.other') + r.equation.left[0] <= 10, ['op.other']],
     ['split-10', (r) => value(r, 'slip.near') === r.answer + 1 && r.answer > 0, ['slip.near']],
+    // Rings round ghosts where hypothetical frames shrink the drawing: 4 + ? = 8 with 12 (two
+    // frames), 9 + ? = 9 with 18 (three), a count-up past a full frame, make-ten's and bridging's.
+    ['split-10', (r) => r.equation.left[0] === 4 && r.equation.right[0] === 8 && value(r, 'op.other') === 12, ['op.other']],
+    ['split-10', (r) => r.equation.left[0] === 9 && r.answer === 0 && value(r, 'op.other') === 18, ['op.other']],
+    ['split-10', (r) => r.equation.right[0] === 10 && value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['ten-cover', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['bridge-frames', (r) => value(r, 'bridge.whole-second') > 12, ['bridge.whole-second']],
     ['teen-bundle', () => true, ['pv.ones-only']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],

@@ -127,7 +127,8 @@
   border-radius: calc(var(--u) * 0.2 + var(--out));
 }
 [data-game="ten-frame"] .tf-ring.is-around.is-round { border-radius: 50%; }
-/* Round a bond's dot, whose neighbours stand 0.35 units off: a 1.5px gap, then the line. */
+/* Round a bond's dot or a frame's ghost, whose neighbours stand 0.35-0.38 units off: a 1.5px gap,
+   then the line, at any unit. */
 [data-game="ten-frame"] .tf-ring.is-around.is-close { --out: 4.5px; }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
