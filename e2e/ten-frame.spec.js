@@ -842,15 +842,18 @@ test('level 10 at 320px: the second addend in the light shade before and after t
 });
 
 /**
- * How a tour number on a disc sits in it, with the cells and trays painted black: its white pixels
- * outside the disc, and the narrowest magenta between a white pixel and the disc's edge, in CSS
- * pixels (design 7.2). The pixels are decoded in the page, in any engine.
+ * How a tour number on a disc sits in it, with the panel, cells and trays painted black and the hint,
+ * lines and rings hidden (the rings' white halo is not the number): its white pixels outside the
+ * disc, and the narrowest magenta between a white pixel and the disc's edge, in CSS pixels (design
+ * 7.2). The pixels are decoded in the page, in any engine.
  * @param {import('@playwright/test').Page} page
  * @param {import('@playwright/test').Locator} digit
  * @returns {Promise<{ outside: number, margin: number }>}
  */
 async function onItsDisc(page, digit) {
-  const style = await page.addStyleTag({ content: '[data-game] .tf-cell, [data-game] .tf-tray { background: #000 !important; } [data-game] [data-hint], [data-game] .tf-svg { visibility: hidden !important; }' });
+  // A tap on a card may have scrolled the page (a phone on its side): the picture is at the top.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const style = await page.addStyleTag({ content: '[data-area="picture"], [data-game] .tf-cell, [data-game] .tf-tray { background: #000 !important; } [data-game] [data-hint], [data-game] .tf-svg, [data-game] .tf-ring { visibility: hidden !important; }' });
   const disc = await digit.evaluate((t) => {
     const r = document.createRange();
     r.selectNodeContents(t);
@@ -886,10 +889,8 @@ async function onItsDisc(page, digit) {
   }, { png: shot.toString('base64'), r: (disc.w / 2) * disc.dpr, dpr: disc.dpr });
 }
 
-// The grown last number used to come within a pixel of its disc's edge (1-2px at 390px), where white
-// on white it faded into the cell.
-for (const [level, [w, h, margin]] of [['bridge-frames', [320, 568, 1.5]], ['bridge-symbols', [320, 568, 1.5]], ['bridge-frames', [390, 844, 3]]]) {
-  test(`${level} at ${w}px: the second addend stays light at the tour's end and when solved, and the grown last number stays well inside its disc (owner decision 2026-10-15; design 7.2)`, async ({ page }) => {
+for (const [level, [w, h]] of [['bridge-frames', [320, 568]], ['bridge-symbols', [320, 568]], ['bridge-frames', [390, 844]]]) {
+  test(`${level} at ${w}px: the second addend stays light at the tour's end and when solved (owner decision 2026-10-15)`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: w, height: h });
     const { round, answerAt } = await devAt(page, level, (r) => r.answer === 15 && (r.unknown === 'result-left' ? r.equation.right : r.equation.left)[0] === 7);
@@ -901,17 +902,47 @@ for (const [level, [w, h, margin]] of [['bridge-frames', [320, 568, 1.5]], ['bri
     const now = await countersOf(page);
     expect([tally(now, true), tally(now, false)], 'fixed frames: nothing moved').toEqual([{ dark: a, light: 0 }, { dark: 0, light: b }]);
     await expectRoleColours(page);
-    const last = page.locator('[data-tour]').last();
-    let fit = await onItsDisc(page, last);
-    expect(fit.outside, 'the grown 15 inside its disc').toBe(0);
-    expect(fit.margin, 'magenta round the grown 15').toBeGreaterThanOrEqual(margin);
     await card(page, answerAt).click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
     await expect(light).toHaveCount(b);
     await expectRoleColours(page);
-    fit = await onItsDisc(page, last);
-    expect(fit.outside, 'solved: the 15 inside its disc').toBe(0);
-    expect(fit.margin, 'solved: magenta round the 15').toBeGreaterThanOrEqual(margin);
+  });
+}
+
+// Design 7.2: every tour number on a disc stays inside it, the grown last one included, with at least 2px of
+// magenta round its digits at 320px and 5px at 390px; on a phone held sideways the picture is 200px high and the
+// disc about 20px, and it still stays inside. The rounds are the worst measured over every bridging sum: the
+// widest numbers (13, 15, 17) where their discs sit worst on the pixel grid. 390px runs with motion: a digit's
+// entry that still filled once it had run drew it nearer the edge (1.52px at 320, 4.30 at 390).
+const MARGINS = [
+  ['bridge-frames', 320, 568, 2, true, [[8, 9], [6, 7]]],
+  ['bridge-symbols', 320, 568, 2, true, [[7, 8]]],
+  ['bridge-move', 320, 568, 2, true, [[8, 9]]],
+  ['bridge-frames', 390, 844, 5, false, [[9, 4], [8, 9]]],
+  ['bridge-frames', 844, 390, 0, true, [[8, 9], [6, 7]]],
+];
+for (const [level, w, h, margin, reduce, pairs] of MARGINS) {
+  test(`${level} at ${w}x${h}${reduce ? '' : ' with motion'}: the grown last number stays inside its disc${margin ? `, ${margin}px of magenta round it` : ''} (design 7.2)`, async ({ page }) => {
+    if (reduce) await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: w, height: h });
+    for (const [k, [a, b]] of pairs.entries()) {
+      if (k) await page.goto('about:blank');
+      const { round, answerAt } = await devAt(page, level, (r) => (r.unknown === 'result-left' ? r.equation.right : r.equation.left).join() === `${a},+,${b}`);
+      await toTheTour(page, round, answerAt);
+      const last = page.locator('[data-tour]').last();
+      await expect(last).toHaveText(String(a + b));
+      await quiet(page);
+      let fit = await onItsDisc(page, last);
+      expect(fit.outside, `${a} + ${b}: the grown ${a + b} inside its disc`).toBe(0);
+      expect(fit.margin, `${a} + ${b}: magenta round the grown ${a + b}`).toBeGreaterThanOrEqual(margin);
+      if (k) continue;
+      await card(page, answerAt).click();
+      await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+      await quiet(page);
+      fit = await onItsDisc(page, last);
+      expect(fit.outside, `solved: the ${a + b} inside its disc`).toBe(0);
+      expect(fit.margin, `solved: magenta round the ${a + b}`).toBeGreaterThanOrEqual(margin);
+    }
   });
 }
 
