@@ -542,8 +542,10 @@ export function drawBundles(host, d) {
 /**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
  * second in the second, in the part's light shade (data-second, design 3); trays without a role
- * (R6). Each counter carries a veil for the closing. Room above the first frame holds its 10 label
- * (L.tag), clear of the counters and of the hint.
+ * (R6). The unknown is the whole, and no veil covers a counter, so both shades stay to the end
+ * (owner decision 2026-10-15, design 2, principle 3's exception): the revealed whole is a magenta
+ * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css).
+ * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d
  */
@@ -551,12 +553,12 @@ export function drawBridge(host, d) {
   const L = layoutBridge(d);
   const trays = L.trays.map((t) => at(host, 'tf-tray is-frame', t));
   const cells = L.cells.map((c) => at(host, 'tf-cell', c));
-  const all = L.counters().map(({ cell, second }, k) => {
+  const all = L.counters().map(({ cell, second }) => {
     const node = countable(at(host, 'tf-disc is-counter', disc(L.cells[cell])));
     node.dataset.role = 'part';
     node.toggleAttribute('data-second', second);
-    node.append(unknown(el('span', 'tf-veil'), k, d.a + d.b));
     return node;
   });
-  return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a) };
+  const whole = outline(host, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-whole');
+  return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a), whole };
 }

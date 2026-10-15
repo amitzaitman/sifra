@@ -123,7 +123,7 @@ async function count(root, steps, signal) {
   }
 }
 
-/** The tour shows an unknown thing now, not in the closing's fill order. @param {HTMLElement} node */
+/** The tour shows an unknown thing now, not in the closing's fill order. @param {HTMLElement | SVGElement} node */
 const show = (node) => {
   node.style.setProperty('--d', '0ms');
   node.classList.add('is-shown');
@@ -654,6 +654,8 @@ export const BRIDGE = {
    * the exercise reads 10 + the rest; in fixed frames (levels 11-12) nothing moves and the
    * child's exercise stays: the ten is the first frame's counters and the ones that would fill
    * it, shown where they are. Its 10 sits above the first frame, clear of the hint's numbers.
+   * No veil: the counters keep both shades (8 + 2, then + 3), each number on a white circle, and
+   * the whole's outline closes the count (design 2, principle 3's exception).
    * @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal
    */
   async tour(pic, root, signal) {
@@ -663,18 +665,17 @@ export const BRIDGE = {
     if (signal.aborted) return;
     // The counters in layoutBridge's order: the first ten are the ten (the first frame and the
     // ones that would fill it), the rest are counted on, every one of them the second addend's.
-    const nodes = [...pic.top, ...pic.bottom];
+    const rest = [...pic.top, ...pic.bottom].slice(10);
     const spots = L.counters(pic.top.length - d.a);
-    nodes.slice(0, 10).forEach((c, j) => {
-      veil(c).style.setProperty('--d', stagger(j, 10));
-      veil(c).classList.add('is-shown');
-    });
     await count(root, [
       { box: L.tag, n: 10, cls: 'is-chip' },
-      ...nodes.slice(10).map((c, j) => ({ box: slot(pic, spots[10 + j].cell), n: 11 + j, cls: 'on-unknown is-two', before: () => show(veil(c)) })),
+      ...rest.map((_, j) => ({ box: slot(pic, spots[10 + j].cell), n: 11 + j, cls: 'on-disc is-two' })),
     ], signal);
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-enter')), signal);
+    if (signal.aborted) return;
+    show(t.whole);
+    await settle(t.whole, signal);
   },
+  /** The closing: the whole's outline shows (game.css, .is-solved); the counters stay as they are. */
   solve: () => [],
   /**
    * Level 10: the hand moves counters into the first frame until it is full. Fixed frames: the

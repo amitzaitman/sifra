@@ -148,10 +148,12 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
 - **R6 [browser]:** x of the first dot < x of the second; elements with `data-role` have the
   role token's computed colour (a part marked `data-second`: `--role-part-2`, the second of two known
   parts); only one cover component (`.cover`) exists. In bridging ten (levels 10-12) the counters that
-  show the light shade, read as the colour painted at each counter's centre in a screenshot (not
-  `data-second` or the counter's own background, which a veil hides), number `b`: at rest, in the hint,
-  before and after level 10's move, and on a home thumb. At the tour's end and when solved the count of
-  `.tf-disc[data-second]` is `b`; what shows there is an open owner question (pedagogy §8.1).
+  show the light shade, read as the colour painted on each counter in a screenshot (at its centre, or on
+  the rim round a tour number's white circle; not `data-second` or the counter's own background, which
+  anything drawn over the counter would hide), number `b`: at rest, in the hint, before and after level
+  10's move, at the tour's end, when solved, and on home and end-screen thumbs. No `[data-role="unknown"]`
+  is drawn there: the revealed whole is the `--role-unknown` outline round both frames (design §2,
+  principle 3's exception).
 - **R7 [browser, Chromium and WebKit]:** every `[data-math]` element has the attribute
   `dir="ltr"` (or is a `<bdi dir="ltr">`), computed `direction` is `ltr`, and the x of each
   character (via `Range.getBoundingClientRect` per character) increases in source order.

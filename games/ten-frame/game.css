@@ -26,16 +26,15 @@
 /* Bridging ten: the second addend's counters are the second known part, in the part's light shade with
    the same edge, also in the first frame (design 3, 6.7). */
 [data-game="ten-frame"] .tf-disc[data-role="part"][data-second] { background-color: var(--role-part-2); }
-/* A counter's veil reaches 1px past it, so no antialiased hairline of the part's fill or edge shows round
-   the magenta (design 6.9; its motion is under "Motion"). */
-[data-game="ten-frame"] .tf-disc > .tf-veil { inset: -1px; box-shadow: none; }
 /* A thumb's counters are about 13px, where a 3px edge would leave little of either shade: there the edge
-   is 8% of a cell and the veil reaches half a pixel past (thumbs never move; rounds keep the 3px edge). */
+   is 8% of a cell (rounds keep the 3px edge). */
 [data-game="ten-frame"][data-thumb] .tf-disc.is-counter[data-role="part"] { box-shadow: inset 0 0 0 max(1px, calc(var(--u) * 0.08)) var(--role-part-edge); }
-[data-game="ten-frame"][data-thumb] .tf-disc > .tf-veil { inset: -0.5px; }
-/* In a solved thumb every counter is under its veil: its fill keeps its colour (R6) but is painted 1px
-   inside, without the edge, so no antialiased hairline of either shows round the magenta (design 6.9). */
-[data-game="ten-frame"][data-thumb][data-solved] .tf-disc.is-counter { padding: 1px; background-clip: content-box; box-shadow: none; }
+/* Bridging ten's revealed whole: no veil on a counter, so both shades stay; a magenta outline round both
+   frames, drawn from the start and shown by the tour, the closing and a solved thumb (design 2, 6.7). */
+[data-game="ten-frame"] .tf-whole { opacity: 0; }
+[data-game="ten-frame"] .tf-whole.is-shown, [data-game="ten-frame"] .is-solved .tf-whole, [data-game="ten-frame"][data-solved] .tf-whole {
+  opacity: 1; animation: ten-frame-in var(--t-move) var(--ease) backwards;
+}
 [data-game="ten-frame"] [data-role="unknown"] { pointer-events: none; }
 
 /* The whole's tag (num.parts.split): a white chip on the top edge, the digit in --role-whole. */
@@ -143,11 +142,12 @@
 }
 [data-game="ten-frame"] .tf-digit.is-above { font-size: max(14px, calc(var(--u) * 0.5)); }
 [data-game="ten-frame"] .tf-digit.is-big { font-size: calc(var(--u) * 1.3); }
-/* A number on a counter (count-up) sits on a white circle that leaves a rim of the counter's colour; where
-   its digits pass the circle (two digits, or at the 14px floor on a counter of 20px, a phone held sideways),
-   a thin white outline round them keeps them on white (design 7.1). */
+/* A number on a counter (count-up, bridging's tour) sits on a white circle that leaves a rim of the
+   counter's colour inside its 3px edge; where its digits pass the circle (two digits, or at the 14px floor
+   on a counter of 20px, a phone held sideways), a thin white outline round them keeps them on white
+   (design 7.1, 7.2). */
 [data-game="ten-frame"] .tf-digit.on-disc::before {
-  content: ''; position: absolute; inset: 14%; z-index: -1; border-radius: 50%; background: var(--surface);
+  content: ''; position: absolute; inset: calc(3px + 8%); z-index: -1; border-radius: 50%; background: var(--surface);
 }
 [data-game="ten-frame"] .tf-digit.on-disc {
   z-index: 0;
@@ -159,17 +159,13 @@
 [data-game="ten-frame"] .tf-tour.on-unknown, [data-game="ten-frame"] .is-solved .tf-tour.on-cell { color: var(--on-unknown); }
 [data-game="ten-frame"] .tf-tour.is-chip { border-radius: calc(var(--u) * 0.2); background: var(--surface); box-shadow: 0 0 0 3px var(--role-unknown); }
 [data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
-/* Two-digit numbers on a disc (bridging: the tour's 11-18, count-up's 10) are smaller, with the font's own
-   spacing, so a gap stays between the digits (design 7.1, 7.2). On the tour's magenta veil they are set a
-   little tighter (the right padding centres them again), so the last one, grown in height only and as wide
-   as the numbers before it, stays inside its disc, also where the picture is 200px high (landscape); a
-   thin outline in the disc's colour keeps its edges off the white cell (design 7.2). */
-[data-game="ten-frame"] .tf-digit.is-two { font-size: max(14px, calc(var(--u) * 0.38)); }
-[data-game="ten-frame"] .tf-tour.on-unknown.is-two { letter-spacing: -0.1em; padding-right: 0.1em; }
-[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-two {
-  transform: scaleY(1.3);
-  text-shadow: 0 0 1px var(--role-unknown), 1px 0 var(--role-unknown), -1px 0 var(--role-unknown), 0 1px var(--role-unknown), 0 -1px var(--role-unknown);
-}
+/* Two-digit numbers on a counter (bridging: the tour's 11-18, count-up's 10) are smaller and set 0.06em
+   apart (the left padding centres them again), so the 1's foot never meets the next digit; they sit on the
+   white circle (design 7.1, 7.2). The tour's last one grows in height only, as wide as the numbers before
+   it, and its white circle does not grow, so the counter's shade still shows round it. */
+[data-game="ten-frame"] .tf-digit.is-two { font-size: max(14px, calc(var(--u) * 0.38)); letter-spacing: 0.06em; padding-left: 0.06em; }
+[data-game="ten-frame"] .tf-tour.is-last.on-disc { transform: scaleY(1.3); }
+[data-game="ten-frame"] .tf-tour.is-last.on-disc::before { transform: scaleY(0.7692); }
 /* On a small dot (the bond) the grown digit passes the dot's edge: a thin outline in the dot's
    colour keeps it whole there (design 7.2). */
 [data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small {
@@ -198,9 +194,6 @@
 [data-game="ten-frame"] .tf-layer[data-display].is-leaving { opacity: 0; animation: ten-frame-leave 900ms linear; }
 [data-game="ten-frame"] [data-role="unknown"].is-shown { animation: ten-frame-in 150ms var(--ease) both; animation-delay: var(--d, 0ms); }
 [data-game="ten-frame"] .is-solved [data-role="unknown"]:not(.is-shown) { animation: ten-frame-in var(--t-move) var(--ease) both; animation-delay: var(--d, 0ms); }
-/* A counter's veil keeps nothing of its entry once it has run: an animation that still fills keeps the veil
-   in a layer of its own, whose clipped edge let a hairline of the counter show (bridging ten). */
-[data-game="ten-frame"] .tf-disc > [data-role="unknown"].tf-veil { animation-fill-mode: backwards; }
 
 /* Pair cards (level 4): two numbers and a bar, smaller when they are longer. */
 [data-game="ten-frame"] .tf-pair { display: flex; align-items: center; gap: 3px; font-size: 30px; font-weight: 800; line-height: 1.2; }

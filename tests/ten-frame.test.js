@@ -343,8 +343,8 @@ const nearDisc = (box, d, gap) => {
   return Math.hypot(nx - cx, ny - cy) < r + gap;
 };
 
-// The layout data only: what shows on screen is the browser test's (e2e/ten-frame.spec.js), and at the tour's end
-// and in the closing every counter is under its magenta veil, an open question for the owner (pedagogy 8.1).
+// The layout data only: what shows on screen at every step, the tour's end and the closing included (no veil
+// covers a counter there, design 2), is the browser test's (e2e/ten-frame.spec.js).
 test('bridging ten: layoutBridge marks every counter of the second addend second (light) at rest, after each move, and in the tour\'s and the closing\'s order (owner decision 2026-10-15, "רק במעבר העשר")', () => {
   for (const id of ['bridge-move', 'bridge-frames', 'bridge-symbols']) {
     for (const r of rounds(id)) {
