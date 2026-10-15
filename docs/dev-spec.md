@@ -138,10 +138,20 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   left to right, top row first; tick 0 leftmost; rows of five above 4 items except
   `arrangement: 'scattered' | 'spread'` and the unit strip (`model: 'units'`); a numeral on every tick in small ranges except
   `marks: 'landmarks' | 'ends'`; a ten-frame tray has role `whole` only in `num.parts.make-ten`
-  levels, otherwise no role (`--frame`).
+  levels, otherwise no role (`--frame`); in bridging ten (`layoutBridge`), for every moved count from 0
+  to `10 - a`, `counters(moved).filter((c) => c.second).length === b`, and at rest every counter after
+  the first addend's `a` is `second`; a bundle and its loose sticks (`pv.teens.ten-and`) are never marked
+  (no game.css rule gives them `data-second`, and draw.js marks only the bridging counters).
+- **R6 [unit, tokens]:** `--role-part-2` is at least 15 (CIEDE2000) from `--role-part` and 18 from
+  every other role, in normal vision and in the three colour-blind simulations (Machado et al. 2009,
+  full severity), and the part edge keeps 3:1 on it and on the paper (`tests/tokens.test.js`).
 - **R6 [browser]:** x of the first dot < x of the second; elements with `data-role` have the
   role token's computed colour (a part marked `data-second`: `--role-part-2`, the second of two known
-  parts); only one cover component (`.cover`) exists.
+  parts); only one cover component (`.cover`) exists. In bridging ten (levels 10-12) the counters that
+  show the light shade, read as the colour painted at each counter's centre in a screenshot (not
+  `data-second` or the counter's own background, which a veil hides), number `b`: at rest, in the hint,
+  before and after level 10's move, and on a home thumb. At the tour's end and when solved the count of
+  `.tf-disc[data-second]` is `b`; what shows there is an open owner question (pedagogy §8.1).
 - **R7 [browser, Chromium and WebKit]:** every `[data-math]` element has the attribute
   `dir="ltr"` (or is a `<bdi dir="ltr">`), computed `direction` is `ltr`, and the x of each
   character (via `Range.getBoundingClientRect` per character) increases in source order.
