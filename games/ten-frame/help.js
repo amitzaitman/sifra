@@ -329,9 +329,12 @@ function treeWholeHint(pic, root) {
 async function treeCount(pic, root, side, signal) {
   const { L } = pic.t;
   if (!side.n) {
-    const box = side.place(0);
-    await count(root, [{ box, n: 0 }], signal);
-    return settle(ring(root, grow(box, 0.12), '', 'is-round is-zero is-unknown'), signal);
+    // A dot's place is too small for the grown 0 inside a ring: the ring grows down and out from
+    // the place's top (clear of the circle's hint ring above), and the 0 sits in its middle.
+    const p = side.place(0);
+    const box = { x: p.x - 0.25, y: p.y - 0.12, w: p.w + 0.5, h: p.h + 0.5 };
+    await count(root, [{ box: { ...p, y: p.y + 0.13 }, n: 0 }], signal);
+    return settle(under(root, ring(root, box, '', 'is-round is-zero is-unknown')), signal);
   }
   await count(root, side.dots.map((dot, j) => ({ box: side.place(j), n: j + 1, cls: 'on-unknown is-small',
     before: () => show(dot) })), signal);

@@ -104,8 +104,9 @@
 [data-game="ten-frame"] .tf-ring { border: 3px solid var(--role-added-edge); border-radius: calc(var(--u) * 0.3); box-shadow: 0 0 0 3px var(--halo), inset 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-round { border-radius: 50%; }
 /* Round a part (a yellow disc or circle) a ring has no inner halo, so the part keeps its 3px edge
-   (design 3) and its size; the ring is drawn clear of that edge. */
-[data-game="ten-frame"] .tf-ring.on-part { box-shadow: 0 0 0 3px var(--halo); }
+   (design 3) and its size; the ring is drawn clear of that edge. A ring with 0 crosses nothing
+   either, and its hole is the 0's: no inner halo eats into the grown digit (design 7.1, 7.2). */
+[data-game="ten-frame"] .tf-ring.on-part, [data-game="ten-frame"] .tf-ring.is-zero { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
 [data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }

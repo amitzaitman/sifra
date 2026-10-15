@@ -478,6 +478,73 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
   }
 });
 
+/**
+ * What is wrong with each 0 in a ring (design 7.1: an empty group is a ring with 0), read in the
+ * page: the 0's ink, measured from its font and scaled as drawn, stays at least 1px inside the
+ * ring's hole (inside its border and any inner halo), so nothing of the ring paints over it.
+ * @returns {string[]}
+ */
+function zeroProblems() {
+  const out = [];
+  const ctx = document.createElement('canvas').getContext('2d');
+  const rings = [...document.querySelectorAll('[data-area="picture"] .tf-ring.is-zero')];
+  for (const digit of document.querySelectorAll('[data-area="picture"] .tf-digit')) {
+    if (digit.textContent !== '0') continue;
+    const range = document.createRange();
+    range.selectNodeContents(digit);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(digit);
+    ctx.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    const m = ctx.measureText('0');
+    // The text box is the font's ascent and descent, scaled with the digit (the last grows 1.3).
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    const base = t.top + k * m.fontBoundingBoxAscent;
+    const [w, top, bottom] = [k * (m.actualBoundingBoxLeft + m.actualBoundingBoxRight), base - k * m.actualBoundingBoxAscent, base + k * m.actualBoundingBoxDescent];
+    const [x, y] = [t.left + t.width / 2, (top + bottom) / 2];
+    const ring = rings.find((r) => {
+      const b = r.getBoundingClientRect();
+      return x > b.left && x < b.right && y > b.top && y < b.bottom;
+    });
+    if (!ring) {
+      out.push(`a 0 at ${Math.round(x)},${Math.round(y)} has no ring`);
+      continue;
+    }
+    const b = ring.getBoundingClientRect();
+    const rs = getComputedStyle(ring);
+    const inset = Math.max(0, ...rs.boxShadow.split(/,(?![^(]*\))/).filter((e) => e.includes('inset')).map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3])));
+    const hole = b.width / 2 - parseFloat(rs.borderTopWidth) - inset;
+    const [cx, cy] = [b.left + b.width / 2, b.top + b.height / 2];
+    const far = Math.max(...[[x - w / 2, y], [x + w / 2, y], [x, top], [x, bottom]].map(([px, py]) => Math.hypot(px - cx, py - cy)));
+    if (far > hole - 1) out.push(`a 0 ${Math.round(w)}x${Math.round(bottom - top)}px reaches ${Math.round(far * 10) / 10}px from its ring's centre; the hole is ${Math.round(hole * 10) / 10}px`);
+  }
+  return out;
+}
+
+test('a ring with 0 holds its 0: the tour\'s grown 0 on a bond and on a frame, and the empty-plate display (design 7.1, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const rounds = [['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8], ['split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0],
+    ['split-10', (r) => r.answer === 0]];
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, ok] of rounds) {
+      const { round, answerAt } = await devAt(page, level, ok);
+      const where = `${width}px ${level} ${JSON.stringify(round.answer)}`;
+      const plate = round.choices.findIndex((c) => c.rule === 'zero.counted-as-one');
+      await card(page, plate).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="empty-plate"] .tf-ring.is-zero'), where).toBeVisible();
+      expect(await page.evaluate(zeroProblems), `${where}, empty-plate`).toEqual([]);
+      for (const i of round.choices.keys()) {
+        if (i === answerAt || i === plate) continue;
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-tour="0"]'), where).toHaveCount(1);
+      expect(await page.evaluate(zeroProblems), `${where}, the tour`).toEqual([]);
+    }
+  }
+});
+
 test('a cover over a run of cells covers each of them, and its two pieces meet by a 4px bar (design 6.6)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   for (const [level, ok] of [['ten-cover', (r) => r.equation.left[0] === 3], ['split-10', (r) => r.equation.left[0] === 3 && r.equation.right[0] === 9]]) {
