@@ -1283,7 +1283,7 @@ function defineInkOf() {
   };
 }
 
-test('the bond\'s count-up at 320px: every digit on a white label that holds it, 14px or more, none touching (design 4)', async ({ page }) => {
+test('the bond\'s count-up at 320px: every digit outlined in white, 14px or more, none touching, and its dot still a dashed circle round it (design 4)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 568 });
   const slip = (r) => r.choices.find((c) => c.rule === 'slip.near');
@@ -1296,13 +1296,25 @@ test('the bond\'s count-up at 320px: every digit on a white label that holds it,
     await unlocked(page);
     const digits = await textBoxes(page.locator('[data-display="count-up"] .tf-digit'));
     expect(digits.map((d) => d.text), level).toEqual(Array.from({ length: n }, (_, j) => String(j + 1)));
-    // The dot's dashed edge is the digit's colour: on a label the dashes end before the digit's ink.
+    // The dot's dashed edge is the digit's colour: a 1px white outline in the digit's shape keeps
+    // the dashes off its ink, and what the digit covers (its ink and outline, or a label behind
+    // it) leaves half the dashed edge or more above and below it, so the dot reads as a dot.
     const problems = await page.locator('[data-display="count-up"] .tf-digit').evaluateAll((els) => els.flatMap((el) => {
       const ink = inkOf(el);
+      const s = getComputedStyle(el);
+      const outlined = (s.textShadow.match(/rgb\(255, 255, 255\)/g) ?? []).length >= 8;
       const b = el.getBoundingClientRect();
-      const bg = getComputedStyle(el).backgroundColor;
-      const holds = ink.left >= b.left && ink.right <= b.right && ink.top >= b.top && ink.bottom <= b.bottom;
-      return bg === 'rgb(255, 255, 255)' && holds ? [] : [`"${el.textContent}" on ${bg}${holds ? '' : ', its ink out of its box'}`];
+      const label = s.backgroundColor !== 'rgba(0, 0, 0, 0)';
+      const covers = label ? { top: b.top, bottom: b.bottom } : { top: ink.top - 1, bottom: ink.bottom + 1 };
+      const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+      const dot = [...document.querySelectorAll('[data-display="count-up"] :is(.tf-place, .tf-ghost)')]
+        .find((d) => { const r = d.getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - x) < 1 && Math.abs(r.top + r.height / 2 - y) < 1; });
+      if (!dot) return [`"${el.textContent}" on no dot`];
+      const r = dot.getBoundingClientRect();
+      const edge = parseFloat(getComputedStyle(dot).borderTopWidth);
+      const shown = Math.min(covers.top - r.top, r.bottom - covers.bottom);
+      return [...(outlined ? [] : [`"${el.textContent}" without a white outline`]),
+        ...(shown >= edge / 2 ? [] : [`"${el.textContent}" leaves ${Math.round(shown * 10) / 10}px of its dot's ${edge}px dashed edge`])];
     }));
     expect(problems, level).toEqual([]);
     for (const d of digits) expect(d.size, `${level} "${d.text}"`).toBeGreaterThanOrEqual(14);

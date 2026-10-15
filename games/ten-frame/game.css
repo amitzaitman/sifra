@@ -142,11 +142,15 @@
 }
 [data-game="ten-frame"] .tf-digit.on-ghost { font-size: max(19px, calc(var(--u) * 0.45)); }
 [data-game="ten-frame"] .tf-digit.is-small { font-size: max(14px, calc(var(--u) * 0.62)); }
-/* A count-up digit on a bond's dot is wider and taller than the dot inside its dashed edge, and
-   in the same colour: it sits on a white label (5.47, so 14px; design 4), clear of the dashes. */
-[data-game="ten-frame"] .tf-digit.is-label {
-  width: auto; height: auto; padding: 1px; border-radius: 4px; background: var(--surface);
-  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+/* A count-up digit on a bond's dot is about as big as the dot inside its dashed edge, and in the
+   same colour: a 1px white outline in the digit's own shape (5.47, so 14px; design 4) keeps it
+   off the dashes, which show round it, so the dot stays a dashed circle. Its ink, which sits high
+   in its line box, is centred on the dot. */
+[data-game="ten-frame"] .tf-digit.is-outlined {
+  width: auto; height: auto; left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u));
+  translate: -50% calc(-50% + 0.04em);
+  text-shadow: 1px 0 var(--surface), -1px 0 var(--surface), 0 1px var(--surface), 0 -1px var(--surface),
+    1px 1px var(--surface), -1px 1px var(--surface), 1px -1px var(--surface), -1px -1px var(--surface);
 }
 [data-game="ten-frame"] .tf-digit.is-above { font-size: max(14px, calc(var(--u) * 0.5)); }
 [data-game="ten-frame"] .tf-digit.is-big { font-size: calc(var(--u) * 1.3); }

@@ -342,8 +342,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
       const place = digits && pic.kind === 'tree' && k < fit;
       if (place) mark(root, 'tf-place tf-enter', box, undefined, delay);
       else ghost(root, box, delay, 'is-dot');
-      // A digit is wider and taller than a dot's dashed edge inside: it sits on a white label (design 4).
-      if (digits) digit(root, box, String(k + 1), delay, 'is-small is-label');
+      // A digit fills a dot inside its dashed edge: a white outline in its shape keeps it off the dashes (design 4).
+      if (digits) digit(root, box, String(k + 1), delay, 'is-small is-outlined');
       if (!digits && k >= fit) excess.push({ ...box, row: Math.floor(j / 5), col: j % 5 });
     }
     // What does not fit stays in one ring (design 7.1): dots stand too close for a ring each. Its
