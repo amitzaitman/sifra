@@ -160,6 +160,16 @@ export function bridges(pieces) {
 }
 
 /**
+ * Links between a ring's pieces that share no column (a run from mid-row into the next row): one
+ * per pair, from the upper piece's end column to the lower piece's first, along the lower piece's
+ * top line (game.css .bl-ring-link), so the pieces read as one outline (design 6.8).
+ * @param {number} start
+ * @param {number} length
+ * @returns {Bridge[]}
+ */
+export const ringLinks = (start, length) => bridges(ringPieces(start, length)).filter((b) => b.across);
+
+/**
  * Where ghosts for a value lie (design 7.1): the unknown's places, then on after the pan's last.
  * @param {PanLayout} layout
  * @param {number} group the unknown's group, or -1

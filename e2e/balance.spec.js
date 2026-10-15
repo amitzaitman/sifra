@@ -799,7 +799,7 @@ test('two-digit tour numbers stay inside their cube, condensed, at 14px at least
 function ringOverlaps() {
   const out = [];
   const style = document.head.appendChild(document.createElement('style'));
-  style.textContent = '[data-game] .bl-ring { pointer-events: auto !important; } [data-game] .bl-scene > .bl-pan .bl-cube, [data-game] .bl-scene > .bl-pan .cover { pointer-events: auto !important; }';
+  style.textContent = '[data-game] :is(.bl-ring, .bl-ring-link) { pointer-events: auto !important; } [data-game] .bl-scene > .bl-pan .bl-cube, [data-game] .bl-scene > .bl-pan .cover { pointer-events: auto !important; }';
   const inside = (b, x, y) => x > b.left && x < b.right && y > b.top && y < b.bottom;
   const things = [...document.querySelectorAll('.bl-scene > .bl-pan > .bl-stack > .bl-cube, .bl-scene > .bl-pan > .bl-stack > .bl-lid:not(.bl-bridge) > .cover:not(.is-lifted)')]
     .filter((n) => getComputedStyle(n).opacity !== '0');
@@ -815,7 +815,7 @@ function ringOverlaps() {
       const hits = document.elementsFromPoint(x, y);
       const at = hits.indexOf(thing);
       if (at < 0) continue;
-      for (const ring of hits.slice(0, at).filter((h) => h.classList.contains('bl-ring'))) {
+      for (const ring of hits.slice(0, at).filter((h) => h.matches('.bl-ring, .bl-ring-link'))) {
         if (inside(ring.getBoundingClientRect(), cx, cy)) continue;
         const pan = thing.closest('.bl-pan').getAttribute('data-pan');
         out.push(`${pan} pan: a ${ring.className.replace('bl-ring ', '')} ring over ${thing.className} ${thing.getAttribute('data-role') ?? ''}`.trim());
@@ -850,6 +850,77 @@ test('a ring never paints over a cube or cover next to it, of another group or o
       await expect(page.locator('.bl-scene .bl-ring'), where).not.toHaveCount(0);
       expect(await page.evaluate(ringOverlaps), where).toEqual([]);
     }
+  }
+});
+
+/**
+ * Whether a layer's ring pieces in a pan read as one outline, read from a screenshot: from a point
+ * on the first piece's line, the ring's colour reaches a point on every other piece's line.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} layer '[data-display]' or '[data-hint]'
+ * @param {'left' | 'right'} side
+ * @param {number[]} rgb the ring's colour
+ * @returns {Promise<string>} '' when joined
+ */
+async function ringJoined(page, layer, side, rgb) {
+  const sel = `${layer} .bl-pan[data-pan="${side}"] :is(.bl-ring, .bl-ring-link)`;
+  const boxes = await page.locator(sel).evaluateAll((els) => els.map((e) => ({ link: e.classList.contains('bl-ring-link'), ...e.getBoundingClientRect().toJSON() })));
+  const pieces = boxes.filter((b) => !b.link);
+  if (pieces.length < 2) return `${pieces.length} piece`;
+  const clip = { x: Math.min(...boxes.map((b) => b.left)) - 2, y: Math.min(...boxes.map((b) => b.top)) - 2 };
+  Object.assign(clip, { width: Math.max(...boxes.map((b) => b.right)) + 2 - clip.x, height: Math.max(...boxes.map((b) => b.bottom)) + 2 - clip.y });
+  const png = (await page.screenshot({ clip })).toString('base64');
+  return page.evaluate(async ({ data, clip, pieces, rgb }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const [w, h] = [img.width, img.height];
+    const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+    const k = w / clip.width;
+    const ring = (x, y) => x >= 0 && y >= 0 && x < w && y < h && Math.abs(d[(y * w + x) * 4] - rgb[0]) + Math.abs(d[(y * w + x) * 4 + 1] - rgb[1]) + Math.abs(d[(y * w + x) * 4 + 2] - rgb[2]) < 90;
+    // A point on each piece's line: the middle of a side, 2.5px in from its outer edge.
+    const seed = (b) => [[b.left + b.width / 2, b.top + 2.5], [b.left + 2.5, b.top + b.height / 2], [b.right - 2.5, b.top + b.height / 2], [b.left + b.width / 2, b.bottom - 2.5]]
+      .map(([x, y]) => [Math.round((x - clip.x) * k), Math.round((y - clip.y) * k)]).find(([x, y]) => ring(x, y));
+    const seeds = pieces.map(seed);
+    if (seeds.some((s) => !s)) return 'a piece without its line';
+    const seen = new Uint8Array(w * h);
+    const queue = [seeds[0]];
+    seen[seeds[0][1] * w + seeds[0][0]] = 1;
+    while (queue.length) {
+      const [x, y] = queue.pop();
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (ring(nx, ny) && !seen[ny * w + nx]) {
+          seen[ny * w + nx] = 1;
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    const apart = seeds.filter(([x, y]) => !seen[y * w + x]).length;
+    return apart ? `${apart} of ${pieces.length} pieces apart` : '';
+  }, { data: png, clip, pieces, rgb });
+}
+
+test('a ring round a group whose rows share no column is one outline: the flash of 4 in ? + 4 = 7, the tour of 2 + ? = 6 (design 6.8, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    let { round } = await devAt(page, 'missing-left', 11);
+    expect(round.equation).toEqual({ left: ['?', '+', 4], right: [7] });
+    await card(page, round.choices.findIndex((c) => c.rule === 'given.part')).click();
+    await unlocked(page);
+    expect(await ringJoined(page, '[data-display]', 'left', [11, 111, 166]), `${width}px ? + 4 = 7, the flash of 4`).toBe('');
+    expect(await page.evaluate(ringOverlaps), `${width}px ? + 4 = 7, the flash of 4`).toEqual([]);
+    ({ round } = await devAt(page, 'missing-right', 2));
+    expect(round.equation).toEqual({ left: [2, '+', '?'], right: [6] });
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]').last()).toHaveText('4');
+    expect(await ringJoined(page, '[data-hint]', 'left', [214, 51, 108]), `${width}px 2 + ? = 6, the tour`).toBe('');
+    expect(await page.evaluate(ringOverlaps), `${width}px 2 + ? = 6, the tour`).toEqual([]);
   }
 });
 

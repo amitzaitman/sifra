@@ -80,10 +80,17 @@
 [data-game="balance"] .bl-bridge > .cover { border-radius: 0; box-shadow: none; }
 
 [data-game="balance"] .bl-ring { left: calc(var(--u) * var(--c) - 5px); bottom: calc(var(--u) * var(--r) - 5px); width: calc(var(--u) * var(--w) + 7px); height: calc(var(--u) * var(--h, 1) + 7px); border: 3px solid var(--role-added-edge); border-radius: calc(var(--cube) * .25 + 5px); box-shadow: inset 0 0 0 2px var(--halo); animation: balance-ring var(--t-blink) var(--ease) backwards; }
-[data-game="balance"] .bl-ring.is-late { animation-delay: .25s; }
+/* Ring pieces that share no column (a run from mid-row into the next row) are joined by a link of
+   the ring's line: the lower piece's top line goes on, past its round corner, to the upper piece's
+   side (design 6.8). It lies 2px above the gap under the empty places after the run, so it keeps
+   2px of white off the cubes or the cover below it. */
+[data-game="balance"] .bl-ring-link { left: calc(var(--u) * var(--c) - 2px); bottom: calc(var(--u) * var(--r) - 1px); width: calc(var(--u) * var(--w) + var(--cube) * .25 + 2px); height: 3px; background: var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+[data-game="balance"] .bl-ring.is-late, [data-game="balance"] .bl-ring-link.is-late { animation-delay: .25s; }
 [data-game="balance"] .bl-ring.is-hint, [data-game="balance"] .bl-ring.is-tour { border-color: var(--role-unknown); }
+[data-game="balance"] .bl-ring-link.is-hint, [data-game="balance"] .bl-ring-link.is-tour { background: var(--role-unknown); }
 /* A hint ring in the colour of the role it marks (design 7.2). */
 [data-game="balance"] .bl-ring.is-hint.is-part { border-color: var(--role-part-edge); }
+[data-game="balance"] .bl-ring-link.is-hint.is-part { background: var(--role-part-edge); }
 [data-game="balance"] .bl-zero, [data-game="balance"] .bl-mark, [data-game="balance"] .bl-digit { display: grid; place-items: center; width: var(--cube); height: var(--cube); border-radius: 50%; color: var(--role-added-edge); font-size: max(14px, calc(var(--cube) * .6)); font-weight: 800; line-height: 1; }
 [data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
 /* A ring with 0 on an empty place (design 7.1) is 5px wider than the place, so its hole is clearly

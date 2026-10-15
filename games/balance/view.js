@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringPieces, rowsFor, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -133,7 +133,9 @@ function balanceScene(host, round, solved, signal) {
   /**
    * Rings over runs of places in a layer's pan, a box per row, each cut back where another group's
    * cube or cover lies next to it, and where its own group goes on in the next row (ringClip), so
-   * a ring never paints over a cube.
+   * a ring never paints over a cube. Two pieces that share no column (a run from mid-row into the
+   * next row) are joined by a link of the ring's line in the rows' gap, where the cover's bridge
+   * runs, so the group reads as one outline (design 6.8, 7.2).
    * @type {(layer: Layer, side: Side, runs: Run[], className: string) => HTMLElement[]}
    */
   const rings = (layer, side, runs, className) => {
@@ -143,12 +145,16 @@ function balanceScene(host, round, solved, signal) {
     const taken = new Set([...layout.cubes.map((c) => c.slot), ...covered].filter((slot) => !own.has(slot)));
     const on = (col, row) => col >= 0 && col < 5 && row >= 0;
     const other = (col, row) => on(col, row) && taken.has(row * 5 + col);
-    return runs.flatMap((r) => ringPieces(r.start, r.length)).map((box) => {
-      const node = put(layer[side], `bl-ring ${className}`, box);
-      const outside = (col, row) => col < box.col || col >= box.col + box.w || row < box.row || row >= box.row + box.h;
-      const clip = ringClip(box, other, (col, row) => on(col, row) && own.has(row * 5 + col) && outside(col, row));
-      if (clip) node.style.clipPath = clip;
-      return node;
+    return runs.flatMap((r) => {
+      const nodes = ringPieces(r.start, r.length).map((box) => {
+        const node = put(layer[side], `bl-ring ${className}`, box);
+        const outside = (col, row) => col < box.col || col >= box.col + box.w || row < box.row || row >= box.row + box.h;
+        const clip = ringClip(box, other, (col, row) => on(col, row) && own.has(row * 5 + col) && outside(col, row));
+        if (clip) node.style.clipPath = clip;
+        return node;
+      });
+      const links = ringLinks(r.start, r.length).map((b) => put(layer[side], `bl-ring-link ${className}`, { col: b.from, row: b.row, w: b.to - b.from }));
+      return [...nodes, ...links];
     });
   };
   /** @type {(stack: Element, slots: number[]) => HTMLElement[]} */

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
-import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
+import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -61,6 +61,26 @@ test('the stretched cover: one piece per row, joined by bridges; rings merge row
   assert.deepEqual(bridges(rowPieces(4, 3)), [{ from: 2, to: 4, row: 1, across: true }]);
   assert.deepEqual(bridges(rowPieces(2, 8)), [{ from: 2, to: 5, row: 1, across: false }]);
   assert.deepEqual(ringPieces(0, 13), [{ col: 0, row: 0, w: 5, h: 2 }, { col: 0, row: 2, w: 3, h: 1 }]);
+});
+
+test('a ring\'s pieces that share no column are joined by one link; pieces that share one need none (design 6.8)', () => {
+  // ? + 4 = 7: the 4 on places 3-6 (columns 3-4, then 0-1); 2 + ? = 6: the unknown on places 2-5.
+  assert.deepEqual(ringPieces(3, 4), [{ col: 3, row: 0, w: 2, h: 1 }, { col: 0, row: 1, w: 2, h: 1 }]);
+  assert.deepEqual(ringLinks(3, 4), [{ from: 2, to: 3, row: 1, across: true }]);
+  assert.deepEqual(ringLinks(2, 4), [{ from: 1, to: 2, row: 1, across: true }]);
+  // Five from place 3: columns 3-4, then 0-2; the link spans no column, only the pieces' corners.
+  assert.deepEqual(ringLinks(3, 5), [{ from: 3, to: 3, row: 1, across: true }]);
+  // Each link runs from the upper piece's end to the lower piece's start, in the row between them.
+  for (const [start, length] of [[3, 4], [2, 4], [4, 3], [1, 5], [9, 4]]) {
+    const pieces = ringPieces(start, length);
+    for (const [i, link] of ringLinks(start, length).entries()) {
+      const [lower, upper] = [pieces[i], pieces[i + 1]];
+      assert.deepEqual([link.from, link.to, link.row], [upper.col + upper.w, lower.col, upper.row], `${start}, ${length}`);
+    }
+  }
+  assert.deepEqual(ringLinks(0, 13), []);
+  assert.deepEqual(ringLinks(2, 8), []);
+  assert.deepEqual(ringLinks(4, 1), []);
 });
 
 test('a ring is cut back 2px where another group\'s cube lies next to it, and only there (design 6.8)', () => {
