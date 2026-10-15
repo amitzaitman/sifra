@@ -116,6 +116,8 @@ test('level 5: the small ? dome sits on the bracket\'s top edge and hides no cou
         if (inDome(dome, x, y)) hid += 1;
       }
       assert.ok(hid / all <= 0.01, `${k} + ?: counter ${c.i + 1} ${Math.round((100 * hid) / all)}% hidden`);
+      // Beside the run in its own row (9 + ?: counter 9 beside the last cell), the dome and its halo touch nothing.
+      if (c.row === run[0].row) assert.equal(hid, 0, `${k} + ?: counter ${c.i + 1}, in the dome's row, ${hid} points under it`);
     }
   }
 });

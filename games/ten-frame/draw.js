@@ -399,14 +399,16 @@ function lids(parent, cells, cover) {
 /**
  * The small '?' dome on the top edge of the bracket around a run (design 6.6), on the run's centre.
  * Under a row of counters, a centre over a cell moves to the column line on its left, so the dome
- * sits between two counters and hides neither (5 + ? = 10: between the second and third).
+ * sits between two counters and hides neither (5 + ? = 10: between the second and third). One
+ * empty cell (9 + ? = 10) has a counter on its left in its own row: the dome moves to its right,
+ * onto the bracket's outer corner.
  * @param {Box} top the run's first row
  * @param {boolean} under the run starts in a lower row, under counters
  * @returns {Box}
  */
 export function domeOver(top, under) {
   const cells = Math.round((top.w + GAP) / (1 + GAP));
-  const x = top.x + top.w / 2 - (under && cells % 2 ? (1 + GAP) / 2 : 0);
+  const x = top.x + top.w / 2 - (under && cells % 2 ? (cells === 1 ? -1 : 1) * (1 + GAP) / 2 : 0);
   return { x: x - 0.37, y: top.y - 0.12 - 0.3, w: 0.74, h: 0.6 };
 }
 

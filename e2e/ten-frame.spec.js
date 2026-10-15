@@ -228,7 +228,7 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
   for (const [width, height] of [[320, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
     // The run starts in the top row (the dome on the tray's top edge), and in the lower row.
-    for (const part of [1, 4, 8]) {
+    for (const part of [1, 4, 8, 9]) {
       const { round } = await devAt(page, 'ten-empty', (r) => r.equation.left[0] === part);
       await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
       await unlocked(page);
@@ -255,6 +255,14 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
         const hit = y > d.top && y < d.bottom ? document.elementFromPoint(d.left + d.width / 2, y) : dome;
         if (hit !== dome) out.push(`the dome under ${hit?.getAttribute('class')}`);
         style.remove();
+        // Nothing of the dome or its 3px halo on a counter in the row it stands in (9 + ?: the ninth).
+        for (const disc of document.querySelectorAll('[data-area="picture"] .tf-disc[data-role="part"]')) {
+          const c = disc.getBoundingClientRect();
+          const [x, y, r] = [c.left + c.width / 2, c.top + c.height / 2, c.width / 2];
+          if (y < d.top + d.height / 2) continue;
+          const near = Math.hypot(Math.max(d.left - 3 - x, 0, x - d.right - 3), Math.max(d.top - 3 - y, 0, y - d.bottom - 3));
+          if (near < r) out.push(`the dome ${Math.round((r - near) * 10) / 10}px over the counter at ${Math.round(c.left)},${Math.round(c.top)}`);
+        }
         return out;
       });
       expect(problems, `${width}px, ${part} + ? = 10`).toEqual([]);
