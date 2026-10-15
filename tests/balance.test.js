@@ -74,6 +74,15 @@ test('a ring is cut back 2px where another group\'s cube lies next to it, and on
   assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, other),
     'polygon(0px 0px, calc(2 * var(--u) + 5px) 0px, calc(2 * var(--u) + 5px) 2px, calc(5 * var(--u) + 2px) 2px, calc(5 * var(--u) + 2px) 0px, ' +
     'calc(5 * var(--u) + 7px) 0px, calc(5 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // Eight cubes of one group in rows of five and three: each row's piece is cut back 3px, past its
+  // line, where the other row's cubes lie, so no line of the ring is left in the gap between them.
+  const mine = (row) => (c, r) => r === row && c < 3;
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, () => false, mine(1)),
+    'polygon(0px 0px, 5px 0px, 5px 3px, calc(3 * var(--u) + 2px) 3px, calc(3 * var(--u) + 2px) 0px, ' +
+    'calc(5 * var(--u) + 7px) 0px, calc(5 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  assert.equal(ringClip({ col: 0, row: 1, w: 3, h: 1 }, () => false, mine(0)),
+    'polygon(0px 0px, calc(3 * var(--u) + 7px) 0px, calc(3 * var(--u) + 7px) calc(1 * var(--u) + 7px), calc(3 * var(--u) + 2px) calc(1 * var(--u) + 7px), ' +
+    'calc(3 * var(--u) + 2px) calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
 });
 
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {

@@ -132,7 +132,8 @@ function balanceScene(host, round, solved, signal) {
   };
   /**
    * Rings over runs of places in a layer's pan, a box per row, each cut back where another group's
-   * cube or cover lies next to it (ringClip), so a ring never paints over one.
+   * cube or cover lies next to it, and where its own group goes on in the next row (ringClip), so
+   * a ring never paints over a cube.
    * @type {(layer: Layer, side: Side, runs: Run[], className: string) => HTMLElement[]}
    */
   const rings = (layer, side, runs, className) => {
@@ -140,10 +141,12 @@ function balanceScene(host, round, solved, signal) {
     const { layout } = pans[side];
     const covered = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
     const taken = new Set([...layout.cubes.map((c) => c.slot), ...covered].filter((slot) => !own.has(slot)));
-    const other = (col, row) => col >= 0 && col < 5 && row >= 0 && taken.has(row * 5 + col);
+    const on = (col, row) => col >= 0 && col < 5 && row >= 0;
+    const other = (col, row) => on(col, row) && taken.has(row * 5 + col);
     return runs.flatMap((r) => ringPieces(r.start, r.length)).map((box) => {
       const node = put(layer[side], `bl-ring ${className}`, box);
-      const clip = ringClip(box, other);
+      const outside = (col, row) => col < box.col || col >= box.col + box.w || row < box.row || row >= box.row + box.h;
+      const clip = ringClip(box, other, (col, row) => on(col, row) && own.has(row * 5 + col) && outside(col, row));
       if (clip) node.style.clipPath = clip;
       return node;
     });

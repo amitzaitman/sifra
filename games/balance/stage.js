@@ -93,43 +93,53 @@ export const ringPieces = (start, length) => rowPieces(start, length).reduce((ou
 const RING_OUT = 5;
 const PILE_GAP = 3;
 
+/** A ring's line (game.css): cut back this far at its own group's next row, none of it is left in the gap. */
+const RING_LINE = 3;
+
 /**
  * A ring's clip-path, from its top left, in the pile's pitch (--u): a ring reaches 5px past its
  * cubes and the gap is 3px, so where a cube or cover of another group lies next to the ring, the
  * ring is cut back to that thing's edge and never paints over it (on a balance, size reads as
- * weight). '' when nothing lies next to it.
+ * weight). A ring over two rows of one group is a piece per row: each is cut back where the other
+ * row's cubes lie, past its line, so the rows' gap stays white and the pieces read as one outline.
+ * '' when nothing lies next to it.
  * @param {Box} box the ring's places
  * @param {(col: number, row: number) => boolean} other another group's cube or cover is there
+ * @param {(col: number, row: number) => boolean} [own] a place of the ring's own group outside this box
  * @returns {string}
  */
-export function ringClip({ col, row, w, h }, other) {
+export function ringClip({ col, row, w, h }, other, own = () => false) {
   const cut = RING_OUT - PILE_GAP;
   const rows = Array.from({ length: h }, (_, k) => row + k);
   const cols = Array.from({ length: w }, (_, j) => col + j);
   const left = rows.some((r) => other(col - 1, r));
   const right = rows.some((r) => other(col + w, r));
-  const above = cols.map((c) => other(c, row + h));
-  const below = cols.map((c) => other(c, row - 1));
-  if (!left && !right && !above.includes(true) && !below.includes(true)) return '';
+  /** @type {(c: number, r: number) => number} how far to cut at a place: 0 when nothing is there */
+  const depth = (c, r) => (other(c, r) ? cut : own(c, r) ? RING_LINE : 0);
+  const above = cols.map((c) => depth(c, row + h));
+  const below = cols.map((c) => depth(c, row - 1));
+  if (!left && !right && !above.some(Boolean) && !below.some(Boolean)) return '';
   /** @type {(px: number, k?: number) => string} */
   const at = (px, k = 0) => (k ? `calc(${k} * var(--u) + ${px}px)` : `${px}px`);
-  // Each neighbour's extent across the ring: columns j0..j1 of the ring's places.
-  const spans = (flags) => flags.reduce((out, on, j) => {
-    if (on && out.at(-1)?.[1] === j - 1) out.at(-1)[1] = j;
-    else if (on) out.push([j, j]);
+  // Each neighbour's extent across the ring: columns j0..j1 of the ring's places, cut alike.
+  const spans = (cuts) => cuts.reduce((out, d, j) => {
+    if (d && out.at(-1)?.[1] === j - 1 && out.at(-1)[2] === d) out.at(-1)[1] = j;
+    else if (d) out.push([j, j, d]);
     return out;
   }, /** @type {number[][]} */ ([]));
   const [l, r] = [at(left ? cut : 0), at(2 * RING_OUT - PILE_GAP - (right ? cut : 0), w)];
   const [top, bottom] = [at(0), at(2 * RING_OUT - PILE_GAP, h)];
-  const [topIn, bottomIn] = [at(cut), at(2 * RING_OUT - PILE_GAP - cut, h)];
   /** @type {(j: number) => string} where column j's cube starts */
   const from = (j) => at(RING_OUT, j);
   /** @type {(j: number) => string} where column j's cube ends */
   const to = (j) => at(RING_OUT - PILE_GAP, j + 1);
   const points = [[l, top]];
-  for (const [j0, j1] of spans(above)) points.push([from(j0), top], [from(j0), topIn], [to(j1), topIn], [to(j1), top]);
+  for (const [j0, j1, d] of spans(above)) points.push([from(j0), top], [from(j0), at(d)], [to(j1), at(d)], [to(j1), top]);
   points.push([r, top], [r, bottom]);
-  for (const [j0, j1] of spans(below).reverse()) points.push([to(j1), bottom], [to(j1), bottomIn], [from(j0), bottomIn], [from(j0), bottom]);
+  for (const [j0, j1, d] of spans(below).reverse()) {
+    const inside = at(2 * RING_OUT - PILE_GAP - d, h);
+    points.push([to(j1), bottom], [to(j1), inside], [from(j0), inside], [from(j0), bottom]);
+  }
   points.push([l, bottom]);
   return `polygon(${points.map((p) => p.join(' ')).join(', ')})`;
 }
