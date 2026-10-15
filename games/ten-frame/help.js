@@ -206,8 +206,11 @@ export const FRAME = {
     if (display === 'flash' && rule === 'given.whole') {
       if (t.chip) return chipFlash(pic, t.chip);
       // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
-      // whole; the small dome on that line stays over the ring (game.css).
-      ring(root, grow(L.trays[0], t.wrap ? 0.2 : 0.1), '', 'is-tray');
+      // whole; the small dome on that line stays over the ring (game.css). Round the tray alone it
+      // stands off in pixels (.is-around), its inner halo ending on the tray's edge, so the navy
+      // rim stays whole at any unit (design 7.1).
+      if (t.wrap) ring(root, grow(L.trays[0], 0.2), '', 'is-tray');
+      else ring(root, L.trays[0], '', 'is-tray is-around');
       return blink(pic, [t.tray]);
     }
     if (display === 'flash') {

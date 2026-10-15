@@ -500,6 +500,34 @@ test('making ten under a cover (levels 6-7): the tour\'s line runs outside the n
   }
 });
 
+test('making ten under a cover, card 10 (levels 6-7): the ring round the tray stands 6px off it, its inner halo ending on the tray\'s edge, so the navy rim stays whole (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const level of ['ten-cover', 'ten-symbols']) {
+      await page.goto('about:blank');
+      const { round } = await devAt(page, level, (r) => r.choices.some((c) => c.rule === 'given.whole'));
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="flash"] .tf-ring.is-tray')).toBeVisible();
+      const where = `${width}px ${level}`;
+      const gaps = await page.evaluate(() => {
+        const ring = document.querySelector('[data-display] .tf-ring.is-tray');
+        const r = ring.getBoundingClientRect();
+        const t = document.querySelector('[data-area="picture"] .tf-tray[data-role="whole"]').getBoundingClientRect();
+        const s = getComputedStyle(ring);
+        const inset = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e.includes('inset')).map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3])));
+        const k = parseFloat(s.borderTopWidth) + inset;
+        return [t.left - (r.left + k), t.top - (r.top + k), r.right - k - t.right, r.bottom - k - t.bottom].map((v) => Math.round(v * 100) / 100);
+      });
+      for (const gap of gaps) expect(gap, `${where}: the ring's inner halo and the tray's edge`).toBeGreaterThanOrEqual(-0.25);
+      // Beside the covered cells the cover's 3px --halo lies on the edge (design 6.6).
+      for (const [side, i, px] of await trayEdge(page)) expect(px, `${where}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= 10 - round.answer ? 2 : 4.8);
+    }
+  }
+});
+
 /**
  * Each ring with 0 on a frame's empty place stays inside the hint's 4px ring round that cell, its
  * line and any halo half a pixel or more off it (design 7.1, 7.2: the hint's ring stays whole).
