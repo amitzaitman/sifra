@@ -549,9 +549,10 @@ function zeroProblems() {
     range.selectNodeContents(digit);
     const t = range.getBoundingClientRect();
     const s = getComputedStyle(digit);
-    ctx.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    // Measured at 200px, where whole-pixel metrics are precise. The text box is the font's ascent
+    // and descent, scaled with the digit (the last grows 1.3): k turns 200px metrics into pixels drawn.
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
     const m = ctx.measureText('0');
-    // The text box is the font's ascent and descent, scaled with the digit (the last grows 1.3).
     const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
     const base = t.top + k * m.fontBoundingBoxAscent;
     const [w, top, bottom] = [k * (m.actualBoundingBoxLeft + m.actualBoundingBoxRight), base - k * m.actualBoundingBoxAscent, base + k * m.actualBoundingBoxDescent];
