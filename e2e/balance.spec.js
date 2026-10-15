@@ -854,6 +854,62 @@ test('a ring never paints over a cube or cover next to it, of another group or o
 });
 
 /**
+ * How close each ring in a pan comes to the inside of its bowl's 3px rim, where the bowl is beside
+ * it (design 3, 7.1: magenta, or a ring, and --frame keep a 3px --halo between them).
+ * @returns {string[]}
+ */
+function ringsOffBowl() {
+  const out = [];
+  for (const ring of document.querySelectorAll('.bl-scene .bl-ring')) {
+    const side = ring.closest('.bl-pan').getAttribute('data-pan');
+    const b = document.querySelector(`.bl-scene > .bl-pan[data-pan="${side}"] .bl-bowl`).getBoundingClientRect();
+    const r = ring.getBoundingClientRect();
+    if (r.bottom <= b.top) continue;
+    const gaps = { bottom: b.bottom - 3 - r.bottom, left: r.left - (b.left + 3), right: b.right - 3 - r.right };
+    for (const [edge, gap] of Object.entries(gaps)) {
+      if (gap < 2.5) out.push(`${side} pan: a ${ring.className.replace('bl-ring ', '')} ring ${Math.round(gap * 10) / 10}px off the bowl's ${edge} rim`);
+    }
+  }
+  return out;
+}
+
+test('a ring round the bottom row keeps a 3px --halo off the bowl\'s rim, and a tilted pan stays clear of the pole (design 3, 6.8, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 3 + 5 = ?: the tour's ring over the first row, kept when solved; flashes of a bottom row; a tilted
+  // display (1 + 8 = ? + 4 with 1).
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed, rules] of [['same', 1, 'tour'], ['same', 4, 1], ['missing-right', 1, 1]]) {
+      const { round } = await devAt(page, level, seed);
+      const wrong = wrongOf(round);
+      for (const i of rules === 'tour' ? wrong : wrong.slice(0, rules)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed}`;
+      await expect(page.locator('.bl-scene .bl-ring').first(), where).toBeVisible();
+      expect(await page.evaluate(ringsOffBowl), where).toEqual([]);
+      if (rules === 'tour') {
+        await card(page, round.choices.findIndex((c) => c.rule === null)).click();
+        await expect(page.locator('[data-next]')).toBeVisible();
+        expect(await page.evaluate(ringsOffBowl), `${where}, solved`).toEqual([]);
+      }
+    }
+    const { round } = await devAt(page, 'both-sides-symbols', 3);
+    await page.locator('[data-show-picture]').click();
+    await card(page, round.choices.findIndex((c) => c.rule === 'equal.copy')).click();
+    await unlocked(page);
+    await expect(page.locator('.bl-scene')).not.toHaveAttribute('data-tilt', 'level');
+    const gaps = await page.evaluate(() => {
+      const pole = document.querySelector('.bl-pole').getBoundingClientRect();
+      const [l, r] = [...document.querySelectorAll('.bl-scene > .bl-pan .bl-bowl')].map((b) => b.getBoundingClientRect());
+      return [pole.left - l.right, r.left - pole.right];
+    });
+    for (const gap of gaps) expect(gap, `${width}px: a tilted bowl and the pole`).toBeGreaterThanOrEqual(2);
+  }
+});
+
+/**
  * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
  * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
  * row above), and its top stays under the ink of the digits of the marks above it.
