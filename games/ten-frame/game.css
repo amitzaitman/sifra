@@ -30,7 +30,10 @@
   display: grid; place-items: center; border-radius: calc(var(--u) * 0.2); background: var(--surface); color: var(--ink);
   font-size: max(14px, calc(var(--u) * 0.48)); font-weight: 800; line-height: 1;
 }
-[data-game="ten-frame"] .tf-tag { color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
+/* The tag is a label on the whole: the hint's outline and the tour's pass under it (z-index in the
+   drawing, which isolates it). Flashed, it keeps its ring inside its edge (design 7.1). */
+[data-game="ten-frame"] .tf-tag { z-index: 1; color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
+[data-game="ten-frame"] .tf-tag.is-flashed { box-shadow: inset 0 0 0 3px var(--role-added-edge), 0 0 0 2px var(--frame); }
 /* Over nine sticks a thumb's unit is about 10px: there the tag grows around its 14px digits,
    centred on its place on the bracket. */
 [data-game="ten-frame"][data-thumb] .tf-tag.on-bracket {
@@ -125,7 +128,6 @@
 /* Round a bond's dot, whose neighbours stand 0.35 units off: a 1.5px gap, then the line. */
 [data-game="ten-frame"] .tf-ring.is-around.is-close { --out: 4.5px; }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
-[data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
 [data-game="ten-frame"] .tf-ring.is-unknown { border-color: var(--role-unknown); }
 /* The hint (7.2): a 4px ring in the colour of what it marks, kept to the end of the round. */

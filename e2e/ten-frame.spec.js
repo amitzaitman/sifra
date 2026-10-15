@@ -172,7 +172,7 @@ for (const reduced of [false, true]) {
     await expect(first).toBeVisible();
     await expect(first).not.toHaveClass(/is-leaving/);
     await expect(first).toHaveCSS('opacity', '1');
-    expect(await first.locator('*').count(), 'the display draws something').toBeGreaterThan(0);
+    expect(await first.locator('*').count() + await page.locator('.is-flashed').count(), 'the display draws or marks something').toBeGreaterThan(0);
     await expect(page.locator('[data-hint]')).toBeVisible();
     await expectCalm(page);
     const shown = await first.elementHandle();
@@ -211,7 +211,7 @@ for (const [level, rule] of DISPLAYS) {
     const shown = page.locator(`[data-display="${RULES[rule].display}"]`);
     await expect(shown).toBeVisible();
     await unlocked(page);
-    expect(await shown.locator('*').count(), 'the display draws something').toBeGreaterThan(0);
+    expect(await shown.locator('*').count() + await page.locator('.is-flashed').count(), 'the display draws or marks something').toBeGreaterThan(0);
     await expectInPanel(page);
     await expectCalm(page);
     const handle = await shown.elementHandle();
@@ -258,6 +258,64 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
         return out;
       });
       expect(problems, `${width}px, ${part} + ? = 10`).toEqual([]);
+    }
+  }
+});
+
+test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest, both whole; the tag sits over both; a flashed tag keeps its ring inside (design 7.1, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  /** Nothing over the tag's bottom edge: what is drawn there (lines and rings take a point) is the tag. */
+  const tagOnTop = () => {
+    const style = document.head.appendChild(document.createElement('style'));
+    style.textContent = '[data-game] .tf-layer * { pointer-events: auto !important; } [data-game] .tf-svg path { pointer-events: visibleStroke !important; }';
+    const tag = document.querySelector('[data-area="picture"] .tf-tag');
+    const b = tag.getBoundingClientRect();
+    const out = [];
+    for (const f of [0.15, 0.5, 0.85]) {
+      const hit = document.elementFromPoint(b.left + f * b.width, b.bottom - 1);
+      if (hit !== tag && !tag.contains(hit)) out.push(`the tag's bottom at ${f} under ${hit?.getAttribute('class')}`);
+    }
+    style.remove();
+    return out;
+  };
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    // 1 + ? = 5, 1 + ? = 10, 4 + ? = 8 (the unknown wraps a row without sharing a column).
+    for (const [level, ok] of [['split-5', (r) => r.equation.left[0] === 1], ['split-10', (r) => r.equation.left[0] === 1 && r.equation.right[0] === 10],
+      ['split-10', (r) => r.equation.left[0] === 4 && r.equation.right[0] === 8]]) {
+      const { round, answerAt } = await devAt(page, level, ok);
+      const where = `${width}px ${JSON.stringify(round.equation)}`;
+      await toTheTour(page, round, answerAt);
+      await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+      const [whole, tour] = await Promise.all(['.tf-line-whole', '.tf-line-unknown'].map((c) => page.locator(`[data-area="picture"] ${c} .tf-line`).evaluate((p) => ({ box: p.getBoundingClientRect().toJSON(), d: p.getAttribute('d') }))));
+      // The run is one group: one outline, also where it wraps a row.
+      expect(tour.d.split('M').length - 1, `${where}: one outline round the unknown`).toBe(1);
+      // The tour's line (3px) and its halo (9px) stay inside the whole's line on every side.
+      const [w, t] = [whole.box, tour.box];
+      for (const [side, gap] of [['left', t.left - 4.5 - (w.left + 1.5)], ['top', t.top - 4.5 - (w.top + 1.5)],
+        ['right', w.right - 1.5 - (t.right + 4.5)], ['bottom', w.bottom - 1.5 - (t.bottom + 4.5)]]) {
+        expect(gap, `${where}: the tour's halo and the whole's line, ${side}`).toBeGreaterThanOrEqual(0.5);
+      }
+      expect(await page.evaluate(tagOnTop), where).toEqual([]);
+    }
+    // 10 first: the tag blinks with its ring inside its edge, with and without the hint (3 cards).
+    for (const [level, ok] of [['split-10', (r) => r.equation.left[0] === 2 && r.answer > 0], ['split-5', (r) => r.choices.some((c) => c.rule === 'given.whole')]]) {
+      const { round } = await devAt(page, level, ok);
+      await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-area="picture"] .tf-tag')).toHaveClass(/is-flashed/);
+      const reach = await page.evaluate(() => {
+        const out = [];
+        const tag = document.querySelector('[data-area="picture"] .tf-tag').getBoundingClientRect();
+        for (const el of document.querySelectorAll('[data-display] *')) {
+          const b = el.getBoundingClientRect();
+          const halo = Math.max(0, ...getComputedStyle(el).boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset')).map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
+          if (b.bottom + halo > tag.bottom && b.top < tag.bottom && b.left < tag.right && b.right > tag.left) out.push(`${el.getAttribute('class')} reaches ${Math.round((b.bottom + halo - tag.bottom) * 10) / 10}px below the tag`);
+        }
+        return out;
+      });
+      expect(reach, `${width}px ${level}`).toEqual([]);
+      expect(await page.evaluate(tagOnTop), `${width}px ${level}`).toEqual([]);
     }
   }
 });
@@ -996,7 +1054,7 @@ test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both;
   // 14: the tag blinks and stays ringed.
   await card(page, at('given.whole')).click();
   await unlocked(page);
-  await expect(page.locator('[data-display="flash"] .tf-ring.is-chip')).toBeVisible();
+  await expect(picture.locator('.tf-tag')).toHaveClass(/is-flashed/);
   await expect(picture.locator('.tf-tag')).toHaveClass(/tf-blink/);
   // 10: the bundle; then the hint: a 10 on the bundle, a ring on the cover, which stays down.
   await card(page, at('given.part')).click();

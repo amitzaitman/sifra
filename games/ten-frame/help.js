@@ -84,6 +84,18 @@ function blink(pic, nodes) {
 }
 
 /**
+ * Flashes the whole's tag: it blinks and keeps its ring inside its own edge, so nothing of it
+ * reaches the cover or the cells just under the tag (design 7.1). Undone with the display.
+ * @param {Pic} pic
+ * @param {HTMLElement} chip
+ */
+function chipFlash(pic, chip) {
+  chip.classList.add('is-flashed');
+  pic.undo.push(() => chip.classList.remove('is-flashed'));
+  return blink(pic, [chip]);
+}
+
+/**
  * @param {Element} parent
  * @param {string} cls
  * @param {Box} box
@@ -173,11 +185,11 @@ export const FRAME = {
     const L = frameAt(pic);
     const real = L.cells.length;
     if (display === 'flash' && rule === 'given.whole') {
-      const target = t.chip ?? t.tray;
+      if (t.chip) return chipFlash(pic, t.chip);
       // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
       // whole; the small dome on that line stays over the ring (game.css).
-      ring(root, grow(t.chip ? L.tag : L.trays[0], t.wrap ? 0.2 : 0.1), '', t.chip ? 'is-chip' : 'is-tray');
-      return blink(pic, [target]);
+      ring(root, grow(L.trays[0], t.wrap ? 0.2 : 0.1), '', 'is-tray');
+      return blink(pic, [t.tray]);
     }
     if (display === 'flash') {
       t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part'));
@@ -225,11 +237,16 @@ export const FRAME = {
     return lift(pic, true);
   },
 
-  /** The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). @param {Pic} pic @param {HTMLElement} root */
+  /**
+   * The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). The
+   * outline runs outside the tray, its halo clear of it, so the tour's outline round the unknown
+   * (inside the tray, with its halo) nests in it and neither cuts the other; the tag sits on it.
+   * @param {Pic} pic @param {HTMLElement} root
+   */
   hint(pic, root) {
     const { t, d } = pic;
     const L = frameAt(pic);
-    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), 0.1)], 'tf-line-whole');
+    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), 0.27)], 'tf-line-whole');
     for (const c of t.run.length ? t.run : [t.empty]) at(root, 'tf-ring is-cell is-hint', c);
   },
 
@@ -246,8 +263,8 @@ export const FRAME = {
     }
     await count(root, t.run.map((c, j) => ({ box: c, n: j + 1, cls: 'on-cell' })), signal);
     // A bracket around the empty cells is already the ring, and a second outline's halo would
-    // cut its '?' dome (design 6.6, 7.3).
-    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, 0.1)], 'tf-line-unknown tf-enter'), signal);
+    // cut its '?' dome (design 6.6, 7.3). A run that wraps a row is one group: one outline.
+    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, 0.1, true)], 'tf-line-unknown tf-enter'), signal);
   },
 
   /** The cover lifts and the unknown fills in, in fill order (design 6.9). @param {Pic} pic */
@@ -511,10 +528,7 @@ export const BUNDLES_PART = {
   display(pic, root, { value, rule, display }) {
     const { t, d } = pic;
     const L = t.L;
-    if (display === 'flash' && rule === 'given.whole') {
-      ring(root, grow(L.tag, 0.18), '', 'is-chip');
-      return blink(pic, [t.chip]);
-    }
+    if (display === 'flash' && rule === 'given.whole') return chipFlash(pic, t.chip);
     if (display === 'flash') {
       ring(root, banded(L.bundle), '', 'is-around');
       return blink(pic, [t.bundle]);
