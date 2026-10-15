@@ -628,44 +628,80 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
   }
 });
 
-test('320px: the tour\'s last number grows 1.3 over the one before it; two digits widen their cube, above the ring (design 7.2)', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
-  // 6 + 4 = 10 on known cubes (the ring on the right pan), and ? = 9 + 7 counting on to 16 on the unknown's.
-  for (const [level, seed, last] of [['true-false', 2, 10], ['missing-symbols-20', 10, 16]]) {
-    const { round } = await devAt(page, level, seed);
-    for (const i of wrongOf(round)) {
-      await card(page, i).click();
-      await unlocked(page);
+/**
+ * What is wrong with the tour's last number n, read in the page (design 7.2, 7.3): it is 1.3 times
+ * the number before it and at least 2px clear of it, it covers none of it, nothing covers it (it
+ * stays inside its cube, where no ring goes, or is drawn over the ring), and its cube is drawn no
+ * wider than the one before it, +1px.
+ * @param {number} n
+ * @returns {string[]}
+ */
+function lastNumberProblems(n) {
+  const out = [];
+  const r = (x) => Math.round(x * 10) / 10;
+  const text = (node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return range.getBoundingClientRect();
+  };
+  const cubeAt = (node) => {
+    const box = node.getBoundingClientRect();
+    return document.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube'));
+  };
+  // The element on top at each end of a text, with `css` deciding what takes a point.
+  const atEnds = (css, box, inset) => {
+    const style = document.head.appendChild(document.createElement('style'));
+    style.textContent = css;
+    const found = [box.left + inset, box.right - inset].map((x) => document.elementFromPoint(x, box.top + box.height / 2));
+    style.remove();
+    return found;
+  };
+  // What is drawn takes a point; a hollow ring and a lifted cover's box do not.
+  const drawn = '[data-game] .bl-lid { pointer-events: none !important; } [data-game] .bl-layer .bl-stack > :not(.bl-ring) { pointer-events: auto !important; }';
+  for (const digit of document.querySelectorAll(`[data-tour="${n}"]`)) {
+    const cube = cubeAt(digit);
+    const pan = cube.closest('.bl-pan');
+    const before = [...document.querySelectorAll(`[data-tour="${n - 1}"]`)].find((d) => cubeAt(d).closest('.bl-pan') === pan);
+    const at = `${pan.getAttribute('data-pan')} pan`;
+    const [t, p, c] = [text(digit), text(before), cube.getBoundingClientRect()];
+    if (t.height / p.height < 1.25) out.push(`${at}: ${n} is ${r(t.height / p.height)} times ${n - 1}`);
+    const apart = Math.max(t.left - p.right, p.left - t.right, t.top - p.bottom, p.top - t.bottom);
+    if (apart < 2) out.push(`${at}: ${n} is ${r(apart)}px from ${n - 1}`);
+    if (atEnds(drawn, p, 0.5).some((e) => e !== before)) out.push(`${at}: ${n - 1} is covered`);
+    const inCube = t.left >= c.left - 0.5 && t.right <= c.right + 0.5;
+    if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => e !== digit)) out.push(`${at}: ${n} is covered`);
+    // A box drawn under the number (the white disc on a known cube) counts as its cube.
+    const own = digit.getBoundingClientRect();
+    const style = getComputedStyle(digit);
+    const painted = style.backgroundColor !== 'rgba(0, 0, 0, 0)' || style.boxShadow !== 'none';
+    const wide = painted ? Math.max(c.right, own.right) - Math.min(c.left, own.left) : c.width;
+    const next = cubeAt(before).getBoundingClientRect().width;
+    if (wide > next + 1) out.push(`${at}: ${n}'s cube is drawn ${r(wide)}px wide, ${n - 1}'s ${r(next)}px`);
+  }
+  return out;
+}
+
+test('the tour\'s last number: 1.3 times the one before it, clear of it, over the ring; its cube no bigger than the others (design 7.2, 7.3)', async ({ page }) => {
+  test.setTimeout(60000);
+  // The tour's end state, drawn at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Two digits: ? + 5 = 6 + 11 and 1 + ? = 13 count the unknown to 12, 11 beside it in one row;
+  // ? = 12 + 4 counts on to 16 at the start of a row. Known cubes (judging, a white disc under
+  // each number): 6 + 4 = 10 and 1 + 8 = 9, on both pans.
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed] of [['both-sides-symbols', 2], ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 3]]) {
+      const where = `${width}px ${level} ${seed}`;
+      const { round } = await devAt(page, level, seed);
+      const last = round.model === 'cards' ? total(round.answer.right) : round.answer;
+      for (const i of wrongOf(round)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-tour]').last(), where).toHaveText(String(last));
+      await expect(page.locator('[data-hint] .bl-ring.is-tour'), where).not.toHaveCount(0);
+      await expect.poll(() => page.evaluate(lastNumberProblems, last), where).toEqual([]);
     }
-    await expect(page.locator('[data-tour]').last(), `${level} ${seed}`).toHaveText(String(last));
-    await expect(page.locator('[data-hint] .bl-ring.is-tour')).not.toHaveCount(0);
-    const measured = () => page.evaluate((n) => {
-      const text = (node) => {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        return range.getBoundingClientRect();
-      };
-      // The layers take no taps; for this read they do, so the point finds what is drawn on top.
-      const style = document.head.appendChild(document.createElement('style'));
-      style.textContent = '[data-game] * { pointer-events: auto !important; }';
-      const before = text(document.querySelector(`[data-tour="${n - 1}"]`)).height;
-      const out = [...document.querySelectorAll(`[data-tour="${n}"]`)].map((digit) => {
-        const t = text(digit);
-        const own = digit.getBoundingClientRect();
-        const [x, y] = [own.left + own.width / 2, own.top + own.height / 2];
-        const cube = document.elementsFromPoint(x, y).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube')).getBoundingClientRect();
-        return {
-          grows: Math.round((t.height / before) * 100) / 100,
-          inside: t.left >= own.left - 0.5 && t.right <= own.right + 0.5,
-          onTop: [t.left + 1, t.right - 1].every((at) => document.elementFromPoint(at, t.top + t.height / 2) === digit),
-          onCube: Math.abs(cube.left + cube.width / 2 - x) < 1 && Math.abs(cube.top + cube.height / 2 - y) < 1,
-        };
-      });
-      style.remove();
-      return out;
-    }, last);
-    const one = { grows: expect.closeTo(1.3, 1), inside: true, onTop: true, onCube: true };
-    await expect.poll(measured, `${level} ${seed}`).toEqual(level === 'true-false' ? [one, one] : [one]);
   }
 });
 
