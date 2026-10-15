@@ -83,6 +83,15 @@ test('runPath: one rectangle in a row, a stepped outline over two rows, two rect
   assert.equal(joined(4, 2), 1, 'joined: one outline for one group, also across the row end');
   assert.equal(joined(4, 5), 1);
   assert.equal(runPath(L.cells.slice(3, 10), 0.1, true), runPath(L.cells.slice(3, 10), 0.1), 'rows that overlap: the same step');
+  // A pad per side: out on the frame's border, in inside the tray (cells 0-2 of a ten-frame: the
+  // top and left on the border, the right and bottom beside other cells).
+  const box = runPath(L.cells.slice(0, 3), { out: 0.27, in: 0.1, rows: 2 }).match(/-?[\d.]+/g).map(Number);
+  const [c0, c2] = [L.cells[0], L.cells[2]];
+  assert.deepEqual(box, [c0.x - 0.27, c0.y - 0.27, c2.x + 1 + 0.1, c0.y + 1 + 0.1, c0.x - 0.27].map((v) => Math.round(v * 1000) / 1000));
+  // A stepped run's step is the edge of the row that reaches further, padded in.
+  const steps = runPath(L.cells.slice(0, 8), { out: 0.27, in: 0.1, rows: 2 });
+  assert.ok(steps.includes(`V${Math.round((L.cells[4].y + 1 + 0.1) * 1000) / 1000}`), steps);
+  assert.ok(steps.includes(`V${Math.round((L.cells[9].y + 1 + 0.27) * 1000) / 1000}`), 'the last row\'s bottom on the border');
 });
 
 test('level 5: the small ? dome sits on the bracket\'s top edge and hides no counter (design 6.6)', () => {

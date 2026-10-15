@@ -270,7 +270,29 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
   }
 });
 
-test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest, both whole; the tag sits over both; a flashed tag keeps its ring inside (design 7.1, 7.2)', async ({ page }) => {
+/**
+ * How near a line comes to each cell of the drawn frame, read in the page: for each cell, the least
+ * distance from the line's centre to the cell's box along the whole path (negative: inside it).
+ * @param {string} selector the line's path
+ * @returns {number[]}
+ */
+function lineToCells(selector) {
+  const path = /** @type {SVGPathElement} */ (document.querySelector(selector));
+  const m = path.getScreenCTM();
+  const cells = [...document.querySelectorAll('[data-area="picture"] .tf-base .tf-cell')].map((c) => c.getBoundingClientRect());
+  const near = cells.map(() => Infinity);
+  for (let s = 0, len = path.getTotalLength(); s <= len; s += 0.01) {
+    const p = path.getPointAtLength(s).matrixTransform(m);
+    cells.forEach((c, i) => {
+      const [dx, dy] = [Math.max(c.left - p.x, 0, p.x - c.right), Math.max(c.top - p.y, 0, p.y - c.bottom)];
+      const d = dx || dy ? Math.hypot(dx, dy) : -Math.min(p.x - c.left, c.right - p.x, p.y - c.top, c.bottom - p.y);
+      near[i] = Math.min(near[i], d);
+    });
+  }
+  return near.map((d) => Math.round(d * 100) / 100);
+}
+
+test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest on the tray\'s border, and inside it stay in the gaps, off the cells outside them and the hint\'s rings; the tag sits over both; a flashed tag keeps its ring inside (design 7.1, 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   /** Nothing over the tag's bottom edge: what is drawn there (lines and rings take a point) is the tag. */
   const tagOnTop = () => {
@@ -288,22 +310,61 @@ test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest, bot
   };
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 568 });
-    // 1 + ? = 5, 1 + ? = 10, 4 + ? = 8 (the unknown wraps a row without sharing a column).
-    for (const [level, ok] of [['split-5', (r) => r.equation.left[0] === 1], ['split-10', (r) => r.equation.left[0] === 1 && r.equation.right[0] === 10],
-      ['split-10', (r) => r.equation.left[0] === 4 && r.equation.right[0] === 8]]) {
+    // 1 + ? = 5, 1 + ? = 3 and 1 + ? = 10 (the whole ends inside the tray, or at its border),
+    // 1 + ? = 5 and 4 + ? = 8 in a ten-frame (a whole over one row, or stepped; the unknown wraps a
+    // row without sharing a column), and with nothing to find, 3 + ? = 3 and 9 + ? = 9.
+    for (const [level, ok] of [['split-5', (r) => r.equation.left[0] === 1], ['split-10', (r) => r.equation.left[0] === 1 && r.equation.right[0] === 3],
+      ['split-10', (r) => r.equation.left[0] === 1 && r.equation.right[0] === 10], ['split-10', (r) => r.equation.left[0] === 1 && r.equation.right[0] === 5],
+      ['split-10', (r) => r.equation.left[0] === 4 && r.equation.right[0] === 8],
+      ['split-10', (r) => r.equation.left[0] === 3 && r.answer === 0], ['split-10', (r) => r.equation.left[0] === 9 && r.answer === 0]]) {
       const { round, answerAt } = await devAt(page, level, ok);
       const where = `${width}px ${JSON.stringify(round.equation)}`;
+      const [part, whole] = [round.equation.left[0], round.equation.right[0]];
+      // The hint's rings: the unknown's cells, or the empty place after the whole.
+      const ringed = round.answer ? Array.from({ length: round.answer }, (_, j) => part + j) : [whole];
+      /** The whole's line enters no cell outside the whole, and keeps 3px off a hint's ring. */
+      const expectWholeOff = async (when) => {
+        const near = await page.evaluate(lineToCells, '[data-area="picture"] [data-hint] .tf-line-whole .tf-line');
+        near.forEach((d, i) => {
+          if (ringed.includes(i)) expect(d, `${where}, ${when}: the whole's line and the hint's ring in cell ${i}`).toBeGreaterThanOrEqual(1.5 + 2.5);
+          else if (i >= whole) expect(d, `${where}, ${when}: the whole's line in cell ${i}, outside the whole`).toBeGreaterThanOrEqual(1.2);
+        });
+      };
+      if (round.answer === 0) {
+        const plate = round.choices.findIndex((c) => c.rule === 'zero.counted-as-one');
+        const second = round.choices.findIndex((c, i) => i !== plate && i !== answerAt);
+        for (const i of [plate, second]) {
+          await card(page, i).click();
+          await unlocked(page);
+        }
+        await expectWholeOff('the hint');
+        await card(page, answerAt).click();
+        await expect(page.locator('[data-next]')).toBeVisible();
+        await expectWholeOff('solved');
+        continue;
+      }
       await toTheTour(page, round, answerAt);
       await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
-      const [whole, tour] = await Promise.all(['.tf-line-whole', '.tf-line-unknown'].map((c) => page.locator(`[data-area="picture"] ${c} .tf-line`).evaluate((p) => ({ box: p.getBoundingClientRect().toJSON(), d: p.getAttribute('d') }))));
+      await expectWholeOff('the tour');
+      const [lines, tray] = await Promise.all([
+        Promise.all(['.tf-line-whole', '.tf-line-unknown'].map((c) => page.locator(`[data-area="picture"] ${c} .tf-line`).evaluate((p) => ({ box: p.getBoundingClientRect().toJSON(), d: p.getAttribute('d') })))),
+        page.locator('[data-area="picture"] .tf-tray').boundingBox()]);
+      const [whole_, tour] = lines;
       // The run is one group: one outline, also where it wraps a row.
       expect(tour.d.split('M').length - 1, `${where}: one outline round the unknown`).toBe(1);
-      // The tour's line (3px) and its halo (9px) stay inside the whole's line on every side.
-      const [w, t] = [whole.box, tour.box];
-      for (const [side, gap] of [['left', t.left - 4.5 - (w.left + 1.5)], ['top', t.top - 4.5 - (w.top + 1.5)],
-        ['right', w.right - 1.5 - (t.right + 4.5)], ['bottom', w.bottom - 1.5 - (t.bottom + 4.5)]]) {
-        expect(gap, `${where}: the tour's halo and the whole's line, ${side}`).toBeGreaterThanOrEqual(0.5);
+      // On the tray's border the tour's line (3px) and its halo (9px) stay inside the whole's
+      // line. Where the whole ends inside the tray, both lines run in the same gap, the tour's on top.
+      const [w, t] = [whole_.box, tour.box];
+      for (const [side, gap, inside] of [['left', t.left - 4.5 - (w.left + 1.5), false], ['top', t.top - 4.5 - (w.top + 1.5), false],
+        ['right', w.right - 1.5 - (t.right + 4.5), w.right < tray.x + tray.width], ['bottom', w.bottom - 1.5 - (t.bottom + 4.5), w.bottom < tray.y + tray.height]]) {
+        if (inside) expect(Math.abs(gap + 6), `${where}: the tour's line on the whole's, ${side}`).toBeLessThanOrEqual(1.5);
+        else expect(gap, `${where}: the tour's halo and the whole's line, ${side}`).toBeGreaterThanOrEqual(0.5);
       }
+      // The tour's line enters no cell outside the unknown.
+      const near = await page.evaluate(lineToCells, '[data-area="picture"] .tf-line-unknown .tf-line');
+      near.forEach((d, i) => {
+        if (!ringed.includes(i)) expect(d, `${where}: the tour's line in cell ${i}`).toBeGreaterThanOrEqual(1.2);
+      });
       expect(await page.evaluate(tagOnTop), where).toEqual([]);
     }
     // 10 first: the tag blinks with its ring inside its edge, with and without the hint (3 cards).
@@ -324,6 +385,124 @@ test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest, bot
       });
       expect(reach, `${width}px ${level}`).toEqual([]);
       expect(await page.evaluate(tagOnTop), `${width}px ${level}`).toEqual([]);
+    }
+  }
+});
+
+/**
+ * The navy edge of a whole tray beside each cell on its border, in CSS px, read from a screenshot
+ * through each cell's middle: above the top row, under the bottom row, left of column 0, right of
+ * column 4 (design 6.7: 0.14 units, about 6px at 320px).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<[string, number, number][]>} side, cell, navy px
+ */
+async function trayEdge(page) {
+  const { tray, cells } = await page.evaluate(() => ({
+    tray: document.querySelector('[data-area="picture"] .tf-tray[data-role="whole"]').getBoundingClientRect().toJSON(),
+    cells: [...document.querySelectorAll('[data-area="picture"] .tf-base .tf-cell')].map((c) => c.getBoundingClientRect().toJSON()) }));
+  const clip = { x: tray.x - 4, y: tray.y - 4, width: tray.width + 8, height: tray.height + 8 };
+  const png = (await page.screenshot({ clip })).toString('base64');
+  return page.evaluate(async ({ data, clip, cells, tray }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    const k = img.width / clip.width;
+    // --role-whole (14, 58, 138)
+    const navy = (x, y) => {
+      const i = (Math.round((y - clip.y) * k) * img.width + Math.round((x - clip.x) * k)) * 4;
+      return Math.abs(d[i] - 14) + Math.abs(d[i + 1] - 58) + Math.abs(d[i + 2] - 138) < 60;
+    };
+    const along = (x0, y0, x1, y1) => {
+      const n = Math.round(Math.hypot(x1 - x0, y1 - y0) * k);
+      let c = 0;
+      for (let j = 0; j <= n; j++) if (navy(x0 + ((x1 - x0) * j) / n, y0 + ((y1 - y0) * j) / n)) c += 1;
+      return Math.round((c / k) * 10) / 10;
+    };
+    const out = [];
+    cells.forEach((c, i) => {
+      const [row, col, cx, cy] = [Math.floor(i / 5), i % 5, c.x + c.width / 2, c.y + c.height / 2];
+      if (row === 0) out.push(['top', i, along(cx, tray.y - 2, cx, c.y)]);
+      if (row === 1) out.push(['bottom', i, along(cx, c.y + c.height, cx, tray.y + tray.height + 2)]);
+      if (col === 0) out.push(['left', i, along(tray.x - 2, cy, c.x, cy)]);
+      if (col === 4) out.push(['right', i, along(c.x + c.width, cy, tray.x + tray.width + 2, cy)]);
+    });
+    return out;
+  }, { data: png, clip, cells, tray });
+}
+
+test('making ten under a cover (levels 6-7): the tour\'s line runs outside the navy tray along its border, so the whole keeps its edge round the unknown (design 3, 6.7, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    // The unknown: the bottom row, a stepped run from the top row, the last cell alone.
+    for (const [level, part] of [['ten-cover', 5], ['ten-cover', 3], ['ten-cover', 9], ['ten-symbols', 2]]) {
+      const { round, answerAt } = await devAt(page, level, (r) => r.equation.left.includes(part) && r.answer === 10 - part);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      await toTheTour(page, round, answerAt);
+      await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+      await expect(page.locator('[data-area="picture"] .tf-line-unknown')).toHaveCount(1);
+      const expectEdge = async (when) => {
+        for (const [side, i, px] of await trayEdge(page)) expect(px, `${width}px ${part} + ? = 10, ${when}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(4);
+      };
+      await expectEdge('the tour');
+      await card(page, answerAt).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      await expectEdge('solved');
+      await expectInPanel(page);
+    }
+  }
+});
+
+/**
+ * Each ring with 0 on a frame's empty place stays inside the hint's 4px ring round that cell, its
+ * line and any halo half a pixel or more off it (design 7.1, 7.2: the hint's ring stays whole).
+ * @returns {string[]}
+ */
+function zeroInHint() {
+  const out = [];
+  const hints = [...document.querySelectorAll('[data-area="picture"] [data-hint] .tf-ring.is-hint')].map((h) => h.getBoundingClientRect());
+  for (const z of document.querySelectorAll('[data-area="picture"] .tf-ring.is-zero')) {
+    const b = z.getBoundingClientRect();
+    const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+    const h = hints.find((r) => x > r.left && x < r.right && y > r.top && y < r.bottom);
+    if (!h) continue;
+    const spread = Math.max(0, ...getComputedStyle(z).boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset'))
+      .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
+    const room = Math.min(b.left - h.left, h.right - b.right, b.top - h.top, h.bottom - b.bottom) - spread - 4;
+    if (room < 0.5) out.push(`the ring with 0 ${Math.round(-room * 10) / 10}px over the hint's ring`);
+  }
+  return out;
+}
+
+test('nothing to find (answer 0): the ring with 0 stands inside the hint\'s ring round the empty place, in the tour and the closing (design 7.1, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, ok] of [['split-10', (r) => r.answer === 0 && r.equation.left[0] === 3], ['split-10', (r) => r.answer === 0 && r.equation.left[0] === 9],
+      ['ten-empty', (r) => r.answer === 0]]) {
+      // The tour, then the closing.
+      let { round, answerAt } = await devAt(page, level, ok);
+      const where = `${width}px ${JSON.stringify(round.equation)}`;
+      await toTheTour(page, round, answerAt);
+      await expect(page.locator('[data-tour="0"]')).toHaveCount(1);
+      expect(await page.evaluate(zeroInHint), `${where}, the tour`).toEqual([]);
+      await card(page, answerAt).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      expect(await page.evaluate(zeroInHint), `${where}, solved`).toEqual([]);
+      // The hint, then the answer: the closing draws the ring with 0.
+      await page.goto('about:blank');
+      ({ round, answerAt } = await devAt(page, level, ok));
+      for (const i of [...round.choices.keys()].filter((i) => i !== answerAt).slice(0, 2)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await card(page, answerAt).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      await expect(page.locator('[data-area="picture"] .tf-ring.is-zero')).toHaveCount(1);
+      expect(await page.evaluate(zeroInHint), `${where}, the closing after the hint`).toEqual([]);
     }
   }
 });

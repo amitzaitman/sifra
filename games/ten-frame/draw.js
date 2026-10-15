@@ -171,30 +171,39 @@ export function layoutBundles({ ones, tag = false }) {
  * do not overlap are still one outline: the boxes and a line along the gap between the rows,
  * from the lower row's end to the upper row's start (one group, one label). A run over more than
  * two rows (dots in rows of five) is always one stepped outline.
+ * A pad per side keeps a line off the cells round a frame's run: `out` on an edge on the frame's
+ * border (the top row's top, column 0's left, column 4's right, the last row's bottom), `in` on an
+ * edge inside the tray, where a gap of GAP lies between the run and the next cell.
  * @param {(Box & { row: number, col: number })[]} cells
- * @param {number} pad
+ * @param {number | { out: number, in: number, rows: number }} pad
  * @param {boolean} [join]
  * @returns {string}
  */
 export function runPath(cells, pad, join = false) {
   if (!cells.length) return '';
   const rows = [...new Set(cells.map((c) => c.row))];
+  /** @type {(border: boolean) => number} */
+  const by = (border) => (typeof pad === 'number' ? pad : border ? pad.out : pad.in);
+  const last = typeof pad === 'number' ? Infinity : pad.rows - 1;
   const span = (row) => {
     const own = cells.filter((c) => c.row === row);
-    return { l: Math.min(...own.map((c) => c.x)) - pad, r: Math.max(...own.map((c) => c.x + c.w)) + pad,
-      t: own[0].y - pad, b: own[0].y + own[0].h + pad };
+    const cols = own.map((c) => c.col);
+    return { l: Math.min(...own.map((c) => c.x)) - by(Math.min(...cols) === 0), r: Math.max(...own.map((c) => c.x + c.w)) + by(Math.max(...cols) === 4),
+      t: own[0].y - by(row === 0), b: own[0].y + own[0].h + by(row === last), top: own[0].y, bottom: own[0].y + own[0].h };
   };
   const rect = (s) => `M${n(s.l)} ${n(s.t)}H${n(s.r)}V${n(s.b)}H${n(s.l)}Z`;
   const s = rows.map(span);
   if (rows.length === 1) return rect(s[0]);
   const cols = (row) => cells.filter((c) => c.row === row).map((c) => c.col);
   if (!join && rows.length === 2 && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(s[0]) + rect(s[1]);
-  // Down the right side, stepping in the gap between rows, then up the left side.
-  const mid = s.slice(1).map((x, i) => (s[i].b - pad + x.t + pad) / 2);
+  // Down the right side, stepping in the gap between rows, then up the left side. A step is the
+  // middle of the gap; with a pad per side, the edge of the row that reaches further, padded `in`.
+  /** @type {(a: any, b: any, upper: boolean) => number} the step between rows a and b */
+  const step = (a, b, upper) => (typeof pad === 'number' ? (a.bottom + b.top) / 2 : upper ? a.bottom + pad.in : b.top - pad.in);
   let d = `M${n(s[0].l)} ${n(s[0].t)}H${n(s[0].r)}`;
-  for (let i = 1; i < s.length; i++) d += `V${n(mid[i - 1])}H${n(s[i].r)}`;
+  for (let i = 1; i < s.length; i++) d += `V${n(step(s[i - 1], s[i], s[i].r < s[i - 1].r))}H${n(s[i].r)}`;
   d += `V${n(s.at(-1).b)}H${n(s.at(-1).l)}`;
-  for (let i = s.length - 1; i > 0; i--) d += `V${n(mid[i - 1])}H${n(s[i - 1].l)}`;
+  for (let i = s.length - 1; i > 0; i--) d += `V${n(step(s[i - 1], s[i], s[i - 1].l < s[i].l))}H${n(s[i - 1].l)}`;
   return `${d}Z`;
 }
 

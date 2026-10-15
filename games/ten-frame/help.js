@@ -2,7 +2,7 @@
 // (step 1), the structure hint (step 2), the counting tour (step 3), the closing, and the demo's
 // steps. One object per kind of picture; game.js runs them in order and settles their motion.
 import { settle } from '../../lib/settle.js';
-import { around, at, boxPath, disc, el, grow, outline, put, runPath, segments, stagger } from './draw.js';
+import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, segments, stagger } from './draw.js';
 
 /**
  * A drawn picture: the drawing's elements (from draw.js), its size, and its state.
@@ -163,6 +163,13 @@ const under = (root, node) => {
 const frameAt = (pic) => pic.t.L;
 
 /**
+ * How far the tour's line stands off the cells along a whole tray's border: past the tray's edge
+ * (GAP) by half its 9px halo at the smallest unit a round draws (about 43px at 320px), so the
+ * halo meets the edge and the navy rim stays whole.
+ */
+const OFF_TRAY = GAP + 0.105;
+
+/**
  * Hypothetical frames under the real one for places past it (design 6.7), and the size that holds them.
  * @param {Pic} pic
  * @param {Element} root
@@ -198,7 +205,7 @@ export const FRAME = {
     const lids = liftForDisplay(pic);
     if (display === 'empty-plate') {
       const box = disc(t.empty);
-      ring(root, grow(box, 0.08), '150ms', 'is-round is-zero');
+      ring(root, box, '150ms', 'is-round is-zero is-inset');
       digit(root, box, '0', '150ms');
       return lids;
     }
@@ -238,15 +245,20 @@ export const FRAME = {
   },
 
   /**
-   * The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). The
-   * outline runs outside the tray, its halo clear of it, so the tour's outline round the unknown
-   * (inside the tray, with its halo) nests in it and neither cuts the other; the tag sits on it.
+   * The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). On the
+   * tray's border the outline runs outside the tray, its halo clear of it, so the tour's outline
+   * round the unknown (inside the tray, with its halo) nests in it and neither cuts the other.
+   * Where the whole ends inside the tray, its line stays in the gap between cells (0.14 units),
+   * off the cells outside it, and about 3px off the hint's ring: an unknown cell's inside the
+   * whole, or the empty place's after it (answer 0). There the tour's outline, which ends at the
+   * same place, lies on it. The tag sits on it.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
     const { t, d } = pic;
     const L = frameAt(pic);
-    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), 0.27)], 'tf-line-whole');
+    const pad = { out: 0.27, in: d.unknown ? 0.1 : 0.035, rows: d.rows };
+    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), pad)], 'tf-line-whole');
     for (const c of t.run.length ? t.run : [t.empty]) at(root, 'tf-ring is-cell is-hint', c);
   },
 
@@ -259,12 +271,15 @@ export const FRAME = {
       pic.lidsUp = true;
       await settled(lift(pic, true), signal);
       await count(root, [{ box: disc(t.empty), n: 0 }], signal);
-      return settle(ring(root, grow(disc(t.empty), 0.08), '', 'is-round is-zero is-unknown'), signal);
+      return settle(ring(root, disc(t.empty), '', 'is-round is-zero is-inset is-unknown'), signal);
     }
     await count(root, t.run.map((c, j) => ({ box: c, n: j + 1, cls: 'on-cell' })), signal);
     // A bracket around the empty cells is already the ring, and a second outline's halo would
-    // cut its '?' dome (design 6.6, 7.3). A run that wraps a row is one group: one outline.
-    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, 0.1, true)], 'tf-line-unknown tf-enter'), signal);
+    // cut its '?' dome (design 6.6, 7.3). A run that wraps a row is one group: one outline. On
+    // make-ten the tray is the whole: along its border the line runs outside it, its halo clear of
+    // the navy edge, so the whole keeps its outline round the unknown (design 3, 6.7).
+    const pad = pic.d.whole ? { out: OFF_TRAY, in: 0.1, rows: pic.d.rows } : 0.1;
+    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, pad, true)], 'tf-line-unknown tf-enter'), signal);
   },
 
   /** The cover lifts and the unknown fills in, in fill order (design 6.9). @param {Pic} pic */
@@ -284,11 +299,14 @@ export const FRAME = {
   },
 };
 
-/** The empty unknown, closed: a ring with 0 in --role-unknown (design 7.3). @param {Pic} pic */
+/**
+ * The empty unknown, closed: a ring with 0 in --role-unknown (design 7.3), on the counter's place,
+ * inside the hint's ring round the cell, which stays (7.2). @param {Pic} pic
+ */
 function zero(pic) {
   const root = layer(pic, '');
   const box = disc(pic.t.empty);
-  at(root, 'tf-ring is-round is-zero is-unknown tf-enter', grow(box, 0.08));
+  at(root, 'tf-ring is-round is-zero is-inset is-unknown tf-enter', box);
   at(root, 'tf-digit tf-tour tf-enter', box, '0');
 }
 

@@ -115,6 +115,9 @@
    dashed edge. A ring with 0 crosses nothing either, and its hole is the 0's: no inner halo eats
    into the grown digit (design 7.1, 7.2). */
 [data-game="ten-frame"] .tf-ring.on-part, [data-game="ten-frame"] .tf-ring.on-ghost, [data-game="ten-frame"] .tf-ring.is-zero { box-shadow: 0 0 0 3px var(--halo); }
+/* A ring with 0 on a frame's empty place stands on the counter's place, inside the cell and the
+   hint's 4px ring round it: it crosses nothing, so it has no halo, which would cut that ring. */
+[data-game="ten-frame"] .tf-ring.is-zero.is-inset { box-shadow: none; }
 /* A ring around a thing's own box, in pixels at every unit: its inner halo is a 3px gap off the
    thing, then its 3px line, so the thing keeps its edge and its size (design 7.1). */
 [data-game="ten-frame"] .tf-ring.is-around {
