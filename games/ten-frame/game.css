@@ -219,9 +219,9 @@
 [data-game="ten-frame"] .tf-tour.is-last { transform: scale(1.3); }
 /* Two-digit numbers on a counter (bridging: the tour's 11-18, count-up's 10) are smaller and set 0.06em
    apart (the left padding centres them again), so the 1's foot never meets the next digit; they sit on the
-   white circle (design 7.1, 7.2). The tour's last one grows in height only, as wide as the numbers before
+   white circle (design 7.1, 7.2). Only on a counter: the bond's 10 on a dot is also is-two, and keeps its size. The tour's last one grows in height only, as wide as the numbers before
    it, and its white circle does not grow, so the counter's shade still shows round it. */
-[data-game="ten-frame"] .tf-digit.is-two { font-size: max(14px, calc(var(--u) * 0.38)); letter-spacing: 0.06em; padding-left: 0.06em; }
+[data-game="ten-frame"] .tf-digit.on-disc.is-two { font-size: max(14px, calc(var(--u) * 0.38)); letter-spacing: 0.06em; padding-left: 0.06em; }
 [data-game="ten-frame"] .tf-tour.is-last.on-disc { transform: scaleY(1.3); }
 [data-game="ten-frame"] .tf-tour.is-last.on-disc::before { transform: scaleY(0.7692); }
 /* On a small dot (the bond) the grown digit passes the dot's edge: a thin outline in the dot's
