@@ -708,7 +708,10 @@ export const BRIDGE = {
    * number (layoutBridge's labels): the counters that make the ten, dashed like the empty cells
    * they go to, and the rest in one outline, also when it wraps a row (one group, one label). Once
    * the first frame is full (level 10), the counters that came and the rest. No chip covers a
-   * counter, and the outlines go first, so none cuts a chip.
+   * counter, and the outlines go first, so none cuts a chip. The whole's outline (a haloless line
+   * on the paper, shown by the tour and the closing) moves up to just after this layer: the hint's
+   * 9px halos would cut its 3px line beside the first and last columns, and the tour's chip and
+   * numbers, drawn later, stay above it.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
@@ -721,6 +724,7 @@ export const BRIDGE = {
     }
     for (const g of groups) if (g.line) outline(root, L, [runPath(g.cells.map((i) => L.place(i)), 0.12, true)], 'tf-line-part');
     for (const g of groups) at(root, 'tf-chip', g.box, String(g.n));
+    root.after(pic.t.whole);
   },
   /**
    * Ten, then on over the rest (addsub-facts 4.7, R5). Level 10 first fills the first frame, so

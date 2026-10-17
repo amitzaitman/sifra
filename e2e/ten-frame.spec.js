@@ -2190,6 +2190,101 @@ for (const [level, w, h, reduce, [a, b], dpr] of TOUR) {
   });
 }
 
+/**
+ * How thick the whole's magenta line is along its two straight sides, in CSS px, read from a screenshot decoded in
+ * the page (any engine): per device-pixel row, the colour that lies on the white-to-magenta axis, each pixel by how
+ * much of the way to magenta it is (so antialiasing counts a half pixel as a half), within 4.5px of the line's
+ * middle, where the tray's rim and the hint's gold line are not on that axis. The rounded corners are left out.
+ * `left` and `right` are the thinnest row of each side, `rows` how many rows the shorter side gave.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{ left: number, right: number, rows: number }>}
+ */
+async function wholeLine(page) {
+  const picture = page.locator('[data-area="picture"]');
+  const png = (await picture.screenshot()).toString('base64');
+  const geo = await picture.evaluate((p) => {
+    const path = /** @type {SVGPathElement} */ (p.querySelector('.tf-whole .tf-line'));
+    const [bb, m, box] = [path.getBBox(), path.getScreenCTM(), p.getBoundingClientRect()];
+    // The corners are quarter circles of 0.5 units; the sides run straight between them.
+    const corner = 0.5 * m.d;
+    return { left: m.a * bb.x + m.e - box.x, right: m.a * (bb.x + bb.width) + m.e - box.x,
+      top: m.d * bb.y + m.f - box.y + corner, bottom: m.d * (bb.y + bb.height) + m.f - box.y - corner };
+  });
+  return page.evaluate(async ({ data, geo }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const g = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    g.drawImage(img, 0, 0);
+    const k = window.devicePixelRatio;
+    const magenta = [214, 51, 108];
+    const axis = magenta.map((c) => 255 - c);
+    const norm = axis.reduce((n, c) => n + c * c, 0);
+    const thinnest = (x) => {
+      let least = Infinity;
+      let rows = 0;
+      const [x0, x1] = [Math.round((x - 4.5) * k), Math.round((x + 4.5) * k)];
+      for (let y = Math.ceil((geo.top + 1) * k); y <= Math.floor((geo.bottom - 1) * k); y++) {
+        const d = g.getImageData(x0, y, x1 - x0, 1).data;
+        let sum = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const v = [255 - d[i], 255 - d[i + 1], 255 - d[i + 2]];
+          const t = (v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2]) / norm;
+          if (Math.hypot(v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]) < 40) sum += Math.max(0, Math.min(1, t));
+        }
+        least = Math.min(least, sum / k);
+        rows += 1;
+      }
+      return { least, rows };
+    };
+    const [l, r] = [thinnest(geo.left), thinnest(geo.right)];
+    return { left: l.least, right: r.least, rows: Math.min(l.rows, r.rows) };
+  }, { data: png, geo });
+}
+
+// The whole's line is 3px (design 6.7). The hint stays to the end of the round, and its 9px halos once cut that line
+// along the first and last columns of the frames at 320 and 360px: the line is now drawn above the hint, and without
+// a halo of its own (it stands 0.12 units off the trays, on the paper, and crosses nothing). Thinnest row of a side,
+// measured in Chromium (Pixel 7), before / after: 1.58-1.61 / 3.07-3.09px at 320, 2.16-2.28 / 3.06-3.08px at 360,
+// 3.00 / 3.09-3.10px at 390. The test asks for 2px, a pixel under the line, so the fixed line has a pixel to spare;
+// at 360px the unfixed line (2.2px) is above that, and the drawing order is what fails there.
+for (const [level, sum] of [['bridge-move', '8,+,8'], ['bridge-frames', '7,+,6']]) {
+  for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
+    test(`${level} at ${w}px: the whole's line stays 3px beside the hint, at the tour's end and when solved after two misses (design 6.7)`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.setViewportSize({ width: w, height: h });
+      const thick = async (when) => {
+        await expect(page.locator('[data-hint]')).toHaveCount(1);
+        await expect(page.locator('[data-area="picture"] .tf-whole')).toHaveCSS('opacity', '1');
+        await quiet(page);
+        // Drawn above the hint and under the tour's chip and numbers, and with no halo of its own.
+        const order = await page.locator('[data-area="picture"] .tf-draw').evaluate((draw) => {
+          const [hint, whole, tour] = [draw.querySelector('[data-hint]'), draw.querySelector('.tf-whole'), draw.querySelector('.tf-layer:has([data-tour])')];
+          const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+          return { aboveHint: after(hint, whole), underTour: !tour || after(whole, tour), halos: whole.querySelectorAll('.tf-halo').length };
+        });
+        expect(order, `${when}: the whole's place in the drawing`).toEqual({ aboveHint: true, underTour: true, halos: 0 });
+        const seen = await wholeLine(page);
+        expect(seen.rows, `${when}: rows measured`).toBeGreaterThan(50);
+        expect(seen.left, `${when}: the left side's thinnest row, CSS px`).toBeGreaterThanOrEqual(2);
+        expect(seen.right, `${when}: the right side's thinnest row, CSS px`).toBeGreaterThanOrEqual(2);
+      };
+      const first = await devAt(page, level, (r) => r.equation.left.join() === sum);
+      await toTheTour(page, first.round, first.answerAt);
+      await thick('the tour\'s end');
+      await page.goto('about:blank');
+      const { round, answerAt } = await devAt(page, level, (r) => r.equation.left.join() === sum);
+      for (const i of [...round.choices.keys()].filter((j) => j !== answerAt).slice(0, 2)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await card(page, answerAt).click();
+      await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+      await thick('solved after two misses');
+    });
+  }
+}
+
 test('a home thumb at a bridging level draws the second addend light (owner decision 2026-10-15)', async ({ page }) => {
   await seedStore(page, storeWith({ games: { [ID]: ladderAt('bridge-frames') } }));
   await page.clock.install({ time: NOW });

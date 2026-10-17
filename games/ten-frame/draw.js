@@ -601,7 +601,9 @@ export function drawBundles(host, d) {
  * second in the second, in the part's light shade (data-second, design 3); trays without a role
  * (R6). The unknown is the whole, and no veil covers a counter, so both shades stay to the end
  * (owner decision 2026-10-15, design 2, principle 3's exception): the revealed whole is a magenta
- * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css).
+ * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css). It
+ * stands off the trays on the paper and crosses nothing, so it has no halo, and the hint draws it
+ * above its own layer (help.js), so the hint's halos never cut its 3px line (design 6.7).
  * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d
@@ -616,6 +618,6 @@ export function drawBridge(host, d) {
     node.toggleAttribute('data-second', second);
     return node;
   });
-  const whole = outline(host, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-whole');
+  const whole = outline(host, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-whole', false);
   return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a), whole };
 }
