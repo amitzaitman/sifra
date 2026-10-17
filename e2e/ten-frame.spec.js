@@ -1866,7 +1866,8 @@ for (const [form, solved] of [['n = n + ?', (k) => `${10 + k}=10+${k}`], ['n + ?
     await expect(picture.locator('.tf-tag')).toHaveText(String(10 + k));
     await expect(picture.locator('.tf-bundle[data-role="part"]')).toBeVisible();
     await expect(picture.locator('.tf-stick[data-role="unknown"]')).toHaveCount(k);
-    await expect(page.locator('[data-display="flash"] .tf-ring.is-chip')).toBeVisible();
+    await expect(picture.locator('.tf-tag')).toHaveClass(/is-flashed/);
+    await expect(picture.locator('.tf-tag')).toHaveClass(/tf-blink/);
     // 10 (given.part): the bundle blinks; the hint labels it 10 and rings the cover.
     await card(page, at('given.part')).click();
     await unlocked(page);
