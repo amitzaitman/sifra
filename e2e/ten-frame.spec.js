@@ -863,12 +863,16 @@ const textBoxes = (locator) => locator.evaluateAll((els) => els.map((el) => {
   return { text: el.textContent, left, right, top, bottom, size: parseFloat(getComputedStyle(el).fontSize), cls: el.className };
 }));
 
-/** No two boxes on one line touch: at least 2px apart (design 4: digits at 14px and more stay separate). */
+/**
+ * No two boxes on one line touch: at least 1px apart (design 4: digits at 14px and more stay separate). A text box
+ * has the glyphs' side bearings inside it, about 0.5px a side at 14px, so 1px of box is 2px of ink; the box gap
+ * was 3.1px here and 2.2px when the text was hinted, so a 2px floor sat on the edge.
+ */
 function expectApart(boxes) {
   for (const [i, a] of boxes.entries()) {
     for (const b of boxes.slice(i + 1)) {
       const sameLine = a.top < b.bottom && b.top < a.bottom;
-      if (sameLine) expect(Math.max(b.left - a.right, a.left - b.right), `"${a.text}" and "${b.text}"`).toBeGreaterThanOrEqual(2);
+      if (sameLine) expect(Math.max(b.left - a.right, a.left - b.right), `"${a.text}" and "${b.text}"`).toBeGreaterThanOrEqual(1);
     }
   }
 }
