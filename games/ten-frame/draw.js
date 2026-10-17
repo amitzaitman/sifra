@@ -597,6 +597,13 @@ export function drawBundles(host, d) {
 }
 
 /**
+ * How far the whole's line stands off the trays (bridging ten), in units. It has no halo, so in a thumb (cells of
+ * 12.6px, a line of 0.08 units) 0.12 left 1px of paper between it and the tray, and painted none at dpr 2 and 3:
+ * at 0.4 there are 4.5px, and the tray keeps its edge (design 3, 6.7).
+ */
+const WHOLE_OFF = 0.4;
+
+/**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
  * second in the second, in the part's light shade (data-second, design 3); trays without a role
  * (R6). The unknown is the whole, and no veil covers a counter, so both shades stay to the end
@@ -618,6 +625,6 @@ export function drawBridge(host, d) {
     node.toggleAttribute('data-second', second);
     return node;
   });
-  const whole = outline(host, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-whole', false);
+  const whole = outline(host, L, [boxPath(around(L.trays), WHOLE_OFF, 0.5)], 'tf-line-unknown tf-whole', false);
   return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a), whole };
 }

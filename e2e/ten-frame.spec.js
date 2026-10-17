@@ -2273,7 +2273,7 @@ async function wholeLine(page) {
 
 // The whole's line is 3px (design 6.7). The hint stays to the end of the round, and its 9px halos once cut that line
 // along the first and last columns of the frames at 320 and 360px: the line is now drawn above the hint, and without
-// a halo of its own (it stands 0.12 units off the trays, on the paper, and crosses nothing). Thinnest row of a side,
+// a halo of its own (it crosses nothing; it stood 0.12 units off the trays on the paper when this was measured, now 0.4). Thinnest row of a side,
 // measured in Chromium (Pixel 7), before / after: 1.58-1.61 / 3.07-3.09px at 320, 2.16-2.28 / 3.06-3.08px at 360,
 // 3.00 / 3.09-3.10px at 390. The test asks for 2px, a pixel under the line, so the fixed line has a pixel to spare;
 // at 360px the unfixed line (2.2px) is above that, and the drawing order is what fails there.
@@ -2312,6 +2312,72 @@ for (const [level, sum] of [['bridge-move', '8,+,8'], ['bridge-frames', '7,+,6']
       await thick('solved after two misses');
     });
   }
+}
+
+/**
+ * How much paper lies between the whole's magenta line and the tray's rim in a thumb, in CSS px, read from the
+ * thumb's screenshot along a row through the middle of the first frame, left of it: the device pixels that are
+ * paper (all three channels 240 or more, so an edge pixel half covered does not count) between the last pixel
+ * of the line (more than half magenta, near the white-magenta axis) and the first of the rim (--frame, the same
+ * way). -1 when either is not found.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} thumb
+ * @returns {Promise<number>}
+ */
+async function paperToTray(page, thumb) {
+  const png = (await thumb.screenshot()).toString('base64');
+  const geo = await thumb.evaluate((t) => {
+    const box = t.getBoundingClientRect();
+    const tray = t.querySelector('.tf-base .tf-tray').getBoundingClientRect();
+    return { width: box.width, y: tray.y + tray.height / 2 - box.y, left: tray.x - box.x };
+  });
+  return page.evaluate(async ({ data, geo }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const k = img.width / geo.width;
+    const row = ctx.getImageData(0, Math.round(geo.y * k), img.width, 1).data;
+    const near = (i, axis) => {
+      const v = [255 - row[i], 255 - row[i + 1], 255 - row[i + 2]];
+      const t = v.reduce((n, c, j) => n + c * axis[j], 0) / axis.reduce((n, c) => n + c * c, 0);
+      return t > 0.5 && Math.hypot(v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]) < 60;
+    };
+    let tray = -1;
+    for (let x = 0; x < img.width && tray < 0; x++) if (near(x * 4, [133, 144, 163])) tray = x;
+    let line = -1;
+    for (let x = tray - 1; x >= 0 && line < 0; x--) if (near(x * 4, [41, 204, 147])) line = x;
+    if (tray < 0 || line < 0) return -1;
+    let paper = 0;
+    for (let x = line + 1; x < tray; x++) if (Math.min(row[x * 4], row[x * 4 + 1], row[x * 4 + 2]) >= 240) paper += 1;
+    return paper / k;
+  }, { data: png, geo });
+}
+
+// The whole's line has no halo (it crosses nothing). In a thumb its stroke is 0.08 units, and it once stood 0.12 units
+// off the tray, so 1.0px of paper lay between them, and painted none: the line's pixels sat against the rim at dpr 2
+// and 3 at 320px (1 device pixel of 6 at dpr 6), where the halo it had before at least kept a white band. It now stands
+// 0.4 units off, so 4.5px of paper lies between (design 3, 6.7). The test asks for 2px, so the fixed line has 1.5px to
+// spare. Measured in Chromium at 320px (a thumb's cells are 12.6px at every width), before / after: 0 / 3.5px at dpr 2
+// and 0 / 3.7px at dpr 3.
+for (const dpr of [2, 3]) {
+  test.describe(`thumbs at dpr ${dpr}`, () => {
+    test.use({ deviceScaleFactor: dpr });
+    test(`the end screen's solved thumbs of bridging at 320px, dpr ${dpr}: paper lies between the whole's line and the tray (design 3, 6.7)`, async ({ page }) => {
+      test.setTimeout(90000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.setViewportSize({ width: 320, height: 568 });
+      await playAt(page, 'bridge-frames');
+      await playToEnd(page);
+      const thumbs = page.locator('.end-thumbs > [data-thumb][data-solved]');
+      await expect(thumbs).toHaveCount(8);
+      for (const [i, thumb] of (await thumbs.all()).entries()) {
+        await expect(thumb.locator('.tf-whole')).toHaveCSS('opacity', '1');
+        expect(await paperToTray(page, thumb), `thumb ${i}: CSS px of paper between the line and the tray`).toBeGreaterThanOrEqual(2);
+      }
+    });
+  });
 }
 
 test('a home thumb at a bridging level draws the second addend light (owner decision 2026-10-15)', async ({ page }) => {
