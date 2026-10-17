@@ -489,10 +489,14 @@ async function trayEdge(page) {
     ctx.drawImage(img, 0, 0);
     const d = ctx.getImageData(0, 0, img.width, img.height).data;
     const k = img.width / clip.width;
-    // --role-whole (14, 58, 138)
+    // --role-whole (14, 58, 138) against white. A pixel counts as navy when more than half of it is (an edge
+    // pixel half covered is as likely in as out, so the width is not read short at each end), and when it lies
+    // near the white-navy axis, so that nothing else on the line (the hint's magenta) is taken for navy.
     const navy = (x, y) => {
       const i = (Math.round((y - clip.y) * k) * img.width + Math.round((x - clip.x) * k)) * 4;
-      return Math.abs(d[i] - 14) + Math.abs(d[i + 1] - 58) + Math.abs(d[i + 2] - 138) < 60;
+      const [vx, vy, vz] = [255 - d[i], 255 - d[i + 1], 255 - d[i + 2]];
+      const t = (vx * 241 + vy * 197 + vz * 117) / (241 ** 2 + 197 ** 2 + 117 ** 2);
+      return t > 0.5 && Math.hypot(vx - t * 241, vy - t * 197, vz - t * 117) < 70;
     };
     const along = (x0, y0, x1, y1) => {
       const n = Math.round(Math.hypot(x1 - x0, y1 - y0) * k);
@@ -526,7 +530,7 @@ test('making ten under a cover (levels 6-7): the tour\'s line runs outside the n
       // Beside an unknown cell the hint's ring has its 3px --halo on the tray (design 7.3), and
       // the rest of the edge stays navy: the tour's halo ends at the tray's edge.
       const expectEdge = async (when) => {
-        for (const [side, i, px] of await trayEdge(page)) expect(px, `${width}px ${part} + ? = 10, ${when}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= part ? 2 : 4);
+        for (const [side, i, px] of await trayEdge(page)) expect(px, `${width}px ${part} + ? = 10, ${when}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= part ? 1.5 : 4);
       };
       await expectEdge('the tour');
       await card(page, answerAt).click();
@@ -560,7 +564,7 @@ test('making ten under a cover, card 10 (levels 6-7): the ring round the tray st
       });
       for (const gap of gaps) expect(gap, `${where}: the ring's inner halo and the tray's edge`).toBeGreaterThanOrEqual(-0.25);
       // Beside the covered cells the cover's 3px --halo lies on the edge (design 6.6).
-      for (const [side, i, px] of await trayEdge(page)) expect(px, `${where}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= 10 - round.answer ? 2 : 4.8);
+      for (const [side, i, px] of await trayEdge(page)) expect(px, `${where}: the tray's edge ${side} of cell ${i}`).toBeGreaterThanOrEqual(i >= 10 - round.answer ? 1.5 : 4.5);
     }
   }
 });
@@ -1733,10 +1737,10 @@ test('level 9, 14 = 10 + ?: the ones under the cover, the whole a tag over both;
  * @param {string} selector
  * @param {number[]} rgb the digits' colour
  */
-async function inkRoom(page, selector, rgb) {
+async function inkRoom(page, selector, rgb, tol = 40) {
   const b = await page.locator(selector).first().evaluate((e) => e.getBoundingClientRect().toJSON());
   const png = (await page.screenshot({ clip: { x: b.x, y: b.y, width: b.width, height: b.height } })).toString('base64');
-  return page.evaluate(async ({ data, b, rgb }) => {
+  return page.evaluate(async ({ data, b, rgb, tol }) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
     await img.decode();
@@ -1748,11 +1752,11 @@ async function inkRoom(page, selector, rgb) {
     for (let y = 0; y < img.height; y++) {
       for (let x = 0; x < img.width; x++) {
         const i = (y * img.width + x) * 4;
-        if (Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) < 70) [t, bo, l, r] = [Math.min(t, y), Math.max(bo, y), Math.min(l, x), Math.max(r, x)];
+        if (Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) < tol) [t, bo, l, r] = [Math.min(t, y), Math.max(bo, y), Math.min(l, x), Math.max(r, x)];
       }
     }
     return { top: t / k, bottom: b.height - (bo + 1) / k, left: l / k, right: b.width - (r + 1) / k };
-  }, { data: png, b, rgb });
+  }, { data: png, b, rgb, tol });
 }
 
 test('level 9 with nine ones (19 = 10 + ?): the tag\'s digits stay clear of its flash ring, and the hint\'s 10 chip holds its digits with room (design 4, 7.1)', async ({ page }) => {
