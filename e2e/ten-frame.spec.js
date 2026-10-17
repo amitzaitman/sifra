@@ -658,6 +658,7 @@ async function hintHalo(page) {
 }
 
 test('the hint\'s ring on a cell keeps a 3px --halo off the tray, --frame or navy, in the hint, the tour and solved (design 3, 7.2)', async ({ page }) => {
+  test.setTimeout(90000);   // screenshots in a loop: 13s here at dpr 3, more on a slower engine
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 568 });
@@ -1035,6 +1036,7 @@ async function bandHalo(page) {
 }
 
 test('bundles: shown sticks keep no hairline of the part\'s edge, and the band keeps a --halo off the shown bundle, after the tour and after a first try (motion on)', async ({ page }) => {
+  test.setTimeout(90000);   // screenshots in a loop: 13s here at dpr 3, more on a slower engine
   // Where a veil's layer snapped apart from its stick at the Pixel 7's and the iPhone's pixel ratios.
   for (const [width, answer] of [[320, 11], [360, 16]]) {
     await page.setViewportSize({ width, height: 568 });
@@ -1113,6 +1115,7 @@ function ringInCell() {
 }
 
 test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks, a bond\'s circles and dots (design 7.1)', async ({ page }) => {
+  test.setTimeout(90000);   // screenshots in a loop: 13s here at dpr 3, more on a slower engine
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const value = (r, rule) => r.choices.find((c) => c.rule === rule)?.value;
   // [level, round, cards in order ('tour': every wrong card)]
