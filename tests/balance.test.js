@@ -105,6 +105,14 @@ test('a ring is cut back 2px where another group\'s cube lies next to it, and on
     'calc(3 * var(--u) + 2px) calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
 });
 
+test('the last tour number grows 1.3 in the CSS: font-size 1.3 times on a cube, height 1.3 times for two digits (design 7.3)', () => {
+  // The browser spec only asks for "clearly bigger" (1.1 times): line boxes are whole pixels, so the measured
+  // ratio is 1.28-1.29, and a pixel of rounding in another engine moves it by 0.05. The factor itself is pinned here.
+  const css = readFileSync(new URL('../games/balance/game.css', import.meta.url), 'utf8');
+  assert.match(css, /\.bl-digit\.is-last \{[^}]*font-size: calc\(1\.3 \* max\(14px, var\(--cube\) \* \.6\)\)/);
+  assert.match(css, /\.bl-digit\.is-over > \.bl-fit \{ transform: scale\(var\(--sx, 1\), 1\.3\); \}/);
+});
+
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {
   // ? + 4 on a pan: the unknown first (3 places), then the four cubes.
   const layout = layoutPan([{ role: 'unknown', count: 3, cover: true }, { role: 'part', count: 4 }]);
