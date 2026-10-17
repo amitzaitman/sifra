@@ -1114,6 +1114,25 @@ function ringInCell() {
   return out;
 }
 
+/**
+ * A round ring in one of the frames' real cells has no halo at all (design 7.1): the computed box-shadow says so,
+ * which holds at every cell size (ringInCell reads how far it reaches, in pixels, and a ghost's ring may pass a
+ * cell under 37px by 0.35px, so it keeps only 0.2px to spare there).
+ * @returns {string[]}
+ */
+function ringsBare() {
+  const out = [];
+  const cells = [...document.querySelectorAll('[data-area="picture"] .tf-base .tf-cell')].map((c) => c.getBoundingClientRect());
+  for (const ring of document.querySelectorAll('[data-area="picture"] [data-display] .tf-ring.is-round:not(.is-zero)')) {
+    const b = ring.getBoundingClientRect();
+    const [x, y] = [b.left + b.width / 2, b.top + b.height / 2];
+    if (!cells.some((c) => x > c.left && x < c.right && y > c.top && y < c.bottom)) continue;
+    const shadow = getComputedStyle(ring).boxShadow;
+    if (shadow !== 'none') out.push(`${ring.className.replace('tf-at ', '')} keeps ${shadow} in a cell`);
+  }
+  return out;
+}
+
 test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, sticks, a bond\'s circles and dots (design 7.1)', async ({ page }) => {
   test.setTimeout(90000);   // screenshots in a loop: 13s here at dpr 3, more on a slower engine
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -1132,6 +1151,10 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     ['split-10', (r) => r.equation.right[0] === 10 && value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['ten-cover', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['bridge-frames', (r) => value(r, 'bridge.whole-second') > 12, ['bridge.whole-second']],
+    ['bridge-move', (r) => value(r, 'bridge.whole-second') > 12, ['bridge.whole-second']],
+    // The count that stops at ten: the counters left over keep a ring each, in their cells.
+    ['bridge-frames', () => true, ['bridge.stopped-at-ten']],
+    ['bridge-move', () => true, ['bridge.stopped-at-ten']],
     ['teen-bundle', () => true, ['pv.ones-only']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
@@ -1161,8 +1184,11 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
       }
       await expect(page.locator('[data-area="picture"] .tf-ring').first()).toBeVisible();
       expect(await page.evaluate(ringProblems), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
-      // Bridging's two frames (levels 10-12) are not checked here.
-      if (/^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`).toEqual([]);
+      // Bridging's two frames (levels 10-12) have real cells too: a ring in one is bare (ringsBare), and its reach
+      // is read on the part's rings, which keep 1.2px to spare; a ghost's ring has 0.2px (see ringsBare).
+      const here = `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`;
+      if (level.startsWith('bridge-')) expect(await page.evaluate(ringsBare), here).toEqual([]);
+      if (level.startsWith('bridge-') ? cards.includes('bridge.stopped-at-ten') : /^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), here).toEqual([]);
     }
     // On a bond the dots stand too close for a ring each: what does not fit is one group in one
     // outline per part, its line halfway between dots, a pixel or more off each (also where the

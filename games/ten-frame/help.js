@@ -679,7 +679,8 @@ export const BRIDGE = {
       if (places.at(-1) >= 20) hypothetical(pic, root, places.at(-1), 20);
       places.forEach((i, j) => {
         ghost(root, slot(pic, i), stagger(j, extra));
-        ring(root, slot(pic, i), stagger(j, extra), GHOST_RING);
+        // In a real cell (the first 20 places) the ring keeps to the cell's white; in a hypothetical frame it has its halo.
+        ring(root, slot(pic, i), stagger(j, extra), i < 20 ? CELL_GHOST_RING : GHOST_RING);
       });
       return [];
     }
@@ -688,7 +689,7 @@ export const BRIDGE = {
       const n = Math.min(value, counters.length);
       for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
       const left = counters.slice(value);
-      left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part'));
+      left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part in-cell'));
       return blink(pic, left);
     }
     // label-ten: the full first frame is the ten that was forgotten.
