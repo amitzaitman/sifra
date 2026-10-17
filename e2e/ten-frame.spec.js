@@ -1080,7 +1080,10 @@ function ringProblems() {
         ? Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) + Math.max(b.width, b.height) / 2 - (hole.right - hole.left) / 2
         : Math.max(hole.left - b.left, b.right - hole.right, hole.top - b.top, b.bottom - hole.bottom);
       if (over > 0.25) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(over * 10) / 10}px over ${el.className.replace('tf-at ', '')}`);
-      // A ghost's dashed edge is the ring's colour: a pixel or more of white stays between them.
+      // A ghost's dashed edge is the ring's colour: a pixel or more of white stays between them. The floor
+      // is not far above that in bridging's real cells (game.css .in-cell): the ring's --out clamps to
+      // 4.25px under 37px cells, so the gap, --out less the 3px line, is 1.25px at 320 (cells 32.7px) and
+      // 1.5px at 390. It is layout geometry, not text, so it does not drift with the font; the 1 is kept.
       const line = parseFloat(s.borderTopWidth);
       const gap = round ? (r.width - 2 * line - Math.max(b.width, b.height)) / 2 - Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2)
         : Math.min(b.left - r.left, r.right - b.right, b.top - r.top, r.bottom - b.bottom) - line;
