@@ -1257,6 +1257,8 @@ test('two known numbers on a pan: one pile in rows of five, the second number in
     const [a, b] = round.picture.filter((g) => g.role === 'part').map((g) => g.count);
     const cubes = stack(page, 'left').locator('.bl-cube');
     await expect(cubes).toHaveCount(a + b);
+    // The cubes come in one after another (up to 0.53 s); a box read on the way is off its place.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished.catch(() => null))));
     const boxes = await Promise.all((await cubes.all()).map((c) => c.boundingBox()));
     for (let i = 0; i < a + b; i++) {
       // Rows of five from the bottom: the i-th cube is in column i % 5 of row i / 5.
