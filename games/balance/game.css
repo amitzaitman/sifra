@@ -133,10 +133,11 @@
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 /* The last number grows 1.3; its cube, and the white disc on a known cube, never do (design 7.3). */
 [data-game="balance"] .bl-digit.is-last { align-content: center; font-size: calc(1.3 * max(14px, var(--cube) * .6)); }
-/* Two tabular digits at 14px (1.36em) are wider than a small cube: they are condensed to its width
-   less 2px each side (--sx, from the cube's width), so its colour shows round them; their height,
-   and so the 14px, stays (design 4, 7.3). Centred on the cube whatever their width (a grid item
-   wider than its cell would start at its left), their ink too, which sits high in its line box. */
+/* Two digits at 14px can be wider than a small cube: they are condensed (--sx, from the cube's width;
+   the factor fits two tabular digits, 1.36em, into the cube less 2px each side, and the proportional
+   digits drawn here are 1.05em to 1.38em) so its colour shows round them; their height, and so the
+   14px, stays (design 4, 7.3). Centred on the cube whatever their width (a grid item wider than its
+   cell would start at its left), their ink too, which sits high in its line box. */
 [data-game="balance"] .bl-fit { position: absolute; left: 50%; top: 50%; translate: -50% calc(-50% + 0.055em); white-space: nowrap; transform: scaleX(var(--sx, 1)); }
 /* The last two-digit number is drawn in the hint's pan at its cube's place, above the ring, and
    grows 1.3 in height only, so it stays on its cube whatever follows it there: a cube of the other

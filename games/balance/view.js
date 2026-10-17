@@ -554,9 +554,11 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
           ? put(hint[side], `${kind} is-over`, { col: target.style.getPropertyValue('--c'), row: target.style.getPropertyValue('--r') }, n)
           : put(target, kind, undefined, n);
         digit.dataset.tour = String(n);
-        // Two tabular digits at 14px are 1.36em, wider than a small cube: condensed to its width
-        // less 2px each side, so the cube's colour shows round them; on a known cube, less its 2px
-        // edge and 1px more each side, so they sit on white inside the edge (design 4, 7.3).
+        // Two digits at 14px can be wider than a small cube: condensed (--sx) so that a number as wide as two
+        // tabular digits, 0.68em each, fits the cube's width less 2px each side and the cube's colour shows round
+        // it. The digits drawn are proportional (1.05em for 11 to 1.38em for 24), so they end up about 2px or
+        // more from the edge. On a known cube: less its 2px edge and 1px more each side, so they sit on white
+        // inside the edge (design 4, 7.3).
         if (n > 9) {
           digit.textContent = '';
           put(digit, 'bl-fit', undefined, n);
