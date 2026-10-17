@@ -175,6 +175,7 @@ main {
 @keyframes hand-tap { 50% { scale: 0.8; } }
 
 /* #/dev (a tool for the owner, not a child's screen). */
-.dev-list { margin: 0; padding: 0 1em 0 0; }
+/* The list is ltr: its bullets hang in the padding on the left (they hung 2px past the page's edge). */
+.dev-list { margin: 0; padding: 0 0 0 1em; }
 .dev-list a { display: inline-block; padding: 8px 0; color: var(--action); }
 .dev-json { margin: 0; padding: 12px; overflow-wrap: anywhere; white-space: pre-wrap; border-radius: 12px; background: var(--panel); font-size: 12px; line-height: 1.3; }

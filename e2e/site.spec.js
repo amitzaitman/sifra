@@ -318,7 +318,8 @@ for (const site of SITES) {
     await open(page, site.path);
     for (const [width, height] of [[320, 568], [375, 550]]) {
       await page.setViewportSize({ width, height });
-      for (const hash of ['#/', '#/parents', ...levelRoutes(site)]) {
+      // #/dev is the owner's list of levels: its outside bullets hung 2px past the left edge (scrollWidth 322 at 320).
+      for (const hash of ['#/', '#/parents', '#/dev', ...levelRoutes(site)]) {
         await page.goto(`${site.path}${hash}`);
         await expect(page.locator('main')).toBeVisible();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
