@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringPieces, rowsFor, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -130,8 +130,33 @@ function balanceScene(host, round, solved, signal) {
     scene.dataset.tilt = to;
     scene.style.setProperty('--rows', String(rows));
   };
-  /** @type {(stack: Element, runs: Run[], className: string) => HTMLElement[]} rings over runs of places, a box per row */
-  const rings = (stack, runs, className) => runs.flatMap((r) => ringPieces(r.start, r.length)).map((box) => put(stack, `bl-ring ${className}`, box));
+  /**
+   * Rings over runs of places in a layer's pan, a box per row, each cut back where another group's
+   * cube or cover lies next to it, and where its own group goes on in the next row (ringClip), so
+   * a ring never paints over a cube. Two pieces that share no column (a run from mid-row into the
+   * next row) are joined by a link of the ring's line in the rows' gap, where the cover's bridge
+   * runs, so the group reads as one outline (design 6.8, 7.2).
+   * @type {(layer: Layer, side: Side, runs: Run[], className: string) => HTMLElement[]}
+   */
+  const rings = (layer, side, runs, className) => {
+    const own = new Set(runs.flatMap((r) => Array.from({ length: r.length }, (_, i) => r.start + i)));
+    const { layout } = pans[side];
+    const covered = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
+    const taken = new Set([...layout.cubes.map((c) => c.slot), ...covered].filter((slot) => !own.has(slot)));
+    const on = (col, row) => col >= 0 && col < 5 && row >= 0;
+    const other = (col, row) => on(col, row) && taken.has(row * 5 + col);
+    return runs.flatMap((r) => {
+      const nodes = ringPieces(r.start, r.length).map((box) => {
+        const node = put(layer[side], `bl-ring ${className}`, box);
+        const outside = (col, row) => col < box.col || col >= box.col + box.w || row < box.row || row >= box.row + box.h;
+        const clip = ringClip(box, other, (col, row) => on(col, row) && own.has(row * 5 + col) && outside(col, row));
+        if (clip) node.style.clipPath = clip;
+        return node;
+      });
+      const links = ringLinks(r.start, r.length).map((b) => put(layer[side], `bl-ring-link ${className}`, { col: b.from, row: b.row, w: b.to - b.from }));
+      return [...nodes, ...links];
+    });
+  };
   /** @type {(stack: Element, slots: number[]) => HTMLElement[]} */
   const ghosts = (stack, slots) => stagger(slots.map((slot) => put(stack, 'bl-cube bl-ghost', at(slot))));
   /** @type {(tokens: (string | number)[], side: Side, layer: Element) => void} a chip under a pan (design 6.8) */
@@ -213,7 +238,7 @@ function balanceScene(host, round, solved, signal) {
         const target = [u, k].flatMap((side) => data[side].map((g, i) => ({ g, i, side })))
           .find(({ g }) => g.role === (rule === 'given.whole' ? 'whole' : 'part'));
         for (const cube of cubesOf(target.side, target.i)) cube.classList.add('is-flash');
-        rings(layer[target.side], pans[target.side].layout.spans[target.i].runs, 'is-wrong');
+        rings(layer, target.side, pans[target.side].layout.spans[target.i].runs, 'is-wrong');
       } else if (display === 'empty-plate') {
         lift();
         put(layer[u], 'bl-zero is-wrong', at(span.places[0]), 0);
@@ -230,7 +255,7 @@ function balanceScene(host, round, solved, signal) {
           if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
           return put(layer[k], 'bl-mark', at(slot), first + j);
         }));
-        rings(layer[k], runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
+        rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
       } else {
         // overflow, balance: ghosts in the unknown's pan.
         if (rule === 'equal.compensate-wrong' && moving) {
@@ -260,7 +285,13 @@ function balanceScene(host, round, solved, signal) {
         // How many on each pan; the cover shows the missing cubes' outline.
         chip(groups('left'), 'left', layer.el);
         chip(groups('right'), 'right', layer.el);
-        for (const slot of span.places.slice(0, data[u][ui].count)) put(layer[u], 'bl-dash', at(slot));
+        // At each end of a cover's piece a dash rounds its top outer corner as the dome does, so
+        // it stays inside the dome's shoulder (design 6.6).
+        const { places } = span;
+        for (const slot of places.slice(0, data[u][ui].count)) {
+          const ends = `${slot === places[0] || slot % 5 === 0 ? ' is-start' : ''}${slot === places.at(-1) || slot % 5 === 4 ? ' is-end' : ''}`;
+          put(layer[u], `bl-dash${ends}`, at(slot));
+        }
       } else if (round.skill === 'eq.sign.both-sides') {
         // "7 | 7": how many on each side.
         chip([all('left')], 'left', layer.el);
@@ -270,8 +301,8 @@ function balanceScene(host, round, solved, signal) {
         // cover. Rings in the colours of the roles they mark (design 7.2).
         shift(hinted = moving.d);
         tilt(restTilt);
-        rings(layer[k], pans[k].layout.spans[1].runs, 'is-hint is-part is-late');
-        rings(layer[u], span.runs, 'is-hint is-late');
+        rings(layer, k, pans[k].layout.spans[1].runs, 'is-hint is-part is-late');
+        rings(layer, u, span.runs, 'is-hint is-late');
       }
       // eq.sign.true-false: each card's small balance shows (game.css).
       return layer;
@@ -286,22 +317,22 @@ function balanceScene(host, round, solved, signal) {
         // The true card's sides counted together, pair by pair.
         layCard();
         const right = pans.right.cubes;
-        return { steps: pans.left.cubes.flatMap((c, j) => [[c, j + 1], [right[j], j + 1]]), pace: 2, ring: () => rings(layer.right, cubeRuns('right'), 'is-tour') };
+        return { steps: pans.left.cubes.flatMap((c, j) => [[c, j + 1], [right[j], j + 1]]), pace: 2, ring: () => rings(layer, 'right', cubeRuns('right'), 'is-tour') };
       }
       const first = data[k][0]?.count;
       if (round.unknown === 'result-left') {
         // The unknown is the whole: counting on over what was covered, a + 1 to a + b.
-        return { steps: cubesOf(u, ui).slice(first).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer[u], span.runs, 'is-tour') };
+        return { steps: cubesOf(u, ui).slice(first).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer, u, span.runs, 'is-tour') };
       }
       if (round.unknown === 'result-right') {
         // same-as: counting on from the left's first group over its second.
         tilt('level');
-        return { steps: cubesOf(k, 1).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer[k], cubeRuns(k), 'is-tour') };
+        return { steps: cubesOf(k, 1).map((c, j) => [c, first + j + 1]), pace: 1, ring: () => rings(layer, k, cubeRuns(k), 'is-tour') };
       }
       const steps = /** @type {Steps} */ (cubesOf(u, ui).map((c, j) => [c, j + 1]));
       // Nothing under the cover: a ring with 0.
       if (!steps.length) put(layer[u], 'bl-zero is-tour', at(span.places[0]), 0).dataset.tour = '0';
-      return { steps, pace: 1, ring: () => (steps.length ? rings(layer[u], span.runs, 'is-tour') : []) };
+      return { steps, pace: 1, ring: () => (steps.length ? rings(layer, u, span.runs, 'is-tour') : []) };
     },
     /** @param {Hand} hand */
     async demo(hand) {
@@ -516,13 +547,23 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       const digits = steps.slice(j, j + pace).map(([target, n]) => {
         const last = j + pace >= steps.length ? ' is-last' : '';
         const kind = `bl-digit${target.dataset.role === 'unknown' ? '' : ' on-known'}${last}`;
-        // A two-digit last number, grown 1.3, is wider than a small cube: it goes in the hint's pan
-        // at its cube's place, above the ring that follows; the cube keeps its size (design 7.3).
+        // A two-digit last number grows 1.3 in height only: it goes in the hint's pan at its cube's
+        // place, above the ring that follows; the cube keeps its size (design 7.3).
         const side = last && n > 9 ? /** @type {Side | undefined} */ (target.closest('.bl-pan')?.getAttribute('data-pan')) : undefined;
         const digit = side
           ? put(hint[side], `${kind} is-over`, { col: target.style.getPropertyValue('--c'), row: target.style.getPropertyValue('--r') }, n)
           : put(target, kind, undefined, n);
         digit.dataset.tour = String(n);
+        // Two tabular digits at 14px are 1.36em, wider than a small cube: condensed to its width
+        // less 2px each side, so the cube's colour shows round them; on a known cube, less its 2px
+        // edge and 1px more each side, so they sit on white inside the edge (design 4, 7.3).
+        if (n > 9) {
+          digit.textContent = '';
+          put(digit, 'bl-fit', undefined, n);
+          const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(digit).fontSize);
+          const room = target.offsetWidth - (target.dataset.role === 'unknown' ? 4 : 6);
+          digit.style.setProperty('--sx', Math.min(1, room / wide).toFixed(3));
+        }
         return digit;
       });
       await Promise.all(digits.map((digit) => settle(digit, signal)));

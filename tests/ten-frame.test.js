@@ -85,6 +85,46 @@ test('runPath: one rectangle in a row, a stepped outline over two rows, two rect
   assert.equal(joined(4, 2), 1, 'joined: one outline for one group, also across the row end');
   assert.equal(joined(4, 5), 1);
   assert.equal(runPath(L.cells.slice(3, 10), 0.1, true), runPath(L.cells.slice(3, 10), 0.1), 'rows that overlap: the same step');
+  // A pad per side: out on the frame's border, in inside the tray (cells 0-2 of a ten-frame: the
+  // top and left on the border, the right and bottom beside other cells).
+  const box = runPath(L.cells.slice(0, 3), { out: 0.27, in: 0.1, rows: 2 }).match(/-?[\d.]+/g).map(Number);
+  const [c0, c2] = [L.cells[0], L.cells[2]];
+  assert.deepEqual(box, [c0.x - 0.27, c0.y - 0.27, c2.x + 1 + 0.1, c0.y + 1 + 0.1, c0.x - 0.27].map((v) => Math.round(v * 1000) / 1000));
+  // A stepped run's step is the edge of the row that reaches further, padded in.
+  const steps = runPath(L.cells.slice(0, 8), { out: 0.27, in: 0.1, rows: 2 });
+  assert.ok(steps.includes(`V${Math.round((L.cells[4].y + 1 + 0.1) * 1000) / 1000}`), steps);
+  assert.ok(steps.includes(`V${Math.round((L.cells[9].y + 1 + 0.27) * 1000) / 1000}`), 'the last row\'s bottom on the border');
+});
+
+test('runPath, join \'end\': what does not fit in a bond is one outline, joined round the rows\' end, under no dot that fits (design 7.1)', () => {
+  const T = layoutTree({ whole: 10 });
+  const dots = Array.from({ length: 15 }, (_, i) => ({ ...T.rightAt(i), row: Math.floor(i / 5), col: i % 5 }));
+  /** The path's horizontal segments: [y, x0, x1]. */
+  const flats = (d) => {
+    const out = [];
+    let [x, y] = [0, 0];
+    for (const [, c, v] of d.matchAll(/([MHVZ])\s*(-?[\d.]*)/g)) {
+      if (c === 'M') [x, y] = d.slice(1).split(/[H\s]/).slice(0, 2).map(Number);
+      else if (c === 'H') {
+        out.push([y, Math.min(x, Number(v)), Math.max(x, Number(v))]);
+        x = Number(v);
+      } else if (c === 'V') y = Number(v);
+    }
+    return out;
+  };
+  // 5 = 1 + ?, 6 chosen: places 4 and 5 do not fit; 10 = 1 + ?, 11 chosen: places 9 and 10.
+  for (const from of [4, 9]) {
+    const run = dots.slice(from, from + 2);
+    const d = runPath(run, 0.175, 'end');
+    assert.equal(d.split('M').length - 1, 1, 'one outline');
+    const [upper, lower] = run;
+    // In the gap between the two rows, a line lies only over or under a dot of the run.
+    for (const [y, x0, x1] of flats(d)) {
+      if (y <= upper.y + upper.h || y >= lower.y) continue;
+      const near = run.filter((c) => x0 >= c.x - 0.175 - 1e-9 && x1 <= c.x + c.w + 0.175 + 1e-9);
+      assert.ok(near.length, `a line along the gap from ${x0} to ${x1}, under dots that fit: ${d}`);
+    }
+  }
 });
 
 test('level 5: the small ? dome sits on the bracket\'s top edge and hides no counter (design 6.6)', () => {
@@ -106,7 +146,9 @@ test('level 5: the small ? dome sits on the bracket\'s top edge and hides no cou
     const dome = domeOver(top, run[0].row > 0);
     const mid = dome.x + dome.w / 2;
     assert.ok(mid >= top.x - 0.12 && mid <= top.x + top.w + 0.12, `${k} + ?: on the bracket's top edge`);
-    assert.equal(dome.y + dome.h / 2, top.y - 0.12, `${k} + ?: centred on the bracket's line`);
+    // Centred on the bracket's top line; on the outer corner (9 + ?), lowered but still across it.
+    if (k === 9) assert.ok(dome.y < top.y - 0.12 && dome.y + dome.h > top.y - 0.12 && dome.y > top.y - 0.12 - 0.3, `${k} + ?: across the bracket's line, lowered`);
+    else assert.equal(dome.y + dome.h / 2, top.y - 0.12, `${k} + ?: centred on the bracket's line`);
     for (const c of L.cells.slice(0, k)) {
       const d = disc(c);
       const [r, cx, cy] = [d.w / 2, d.x + d.w / 2, d.y + d.h / 2];
@@ -118,6 +160,8 @@ test('level 5: the small ? dome sits on the bracket\'s top edge and hides no cou
         if (inDome(dome, x, y)) hid += 1;
       }
       assert.ok(hid / all <= 0.01, `${k} + ?: counter ${c.i + 1} ${Math.round((100 * hid) / all)}% hidden`);
+      // Beside the run in its own row (9 + ?: counter 9 beside the last cell), the dome and its halo touch nothing.
+      if (c.row === run[0].row) assert.equal(hid, 0, `${k} + ?: counter ${c.i + 1}, in the dome's row, ${hid} points under it`);
     }
   }
 });
@@ -289,6 +333,9 @@ test('bundles with the ones unknown: the tag sits over the bundle and the cover,
     const sticks = Array.from({ length: ones }, (_, j) => B.stick(j));
     for (const s of sticks) assert.ok(s.x >= B.places.x && s.x + s.w <= B.places.x + B.places.w && s.y === B.places.y && s.h === B.places.h, `${ones}: under the cover`);
     assert.ok(B.places.x > B.bundle.x + B.bundle.w, 'the cover leaves the bundle seen');
+    // A ring round the bundle and its band (8% of its width each side) reaches 9px with its halo:
+    // at 320px (unit about 26px) it stays a pixel off the cover.
+    assert.ok((B.places.x - (B.bundle.x + B.bundle.w * 1.08)) * 26 >= 10, `${ones}: room for a ring round the bundle`);
     const centre = (B.tag.x + B.tag.w / 2);
     assert.ok(Math.abs(centre - (B.bracket.l + B.bracket.r) / 2) < 1e-9, 'the tag on the middle of its bracket');
     assert.ok(B.bracket.l <= B.bundle.x && B.bracket.r >= B.places.x + B.places.w, 'the bracket spans the bundle and the cover');

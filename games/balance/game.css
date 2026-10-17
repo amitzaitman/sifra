@@ -1,5 +1,8 @@
-/* The balance (design 6.8, 7). The cube is (W - 78px) / 10 up to 28px, less when the pans need more
-   rows than the stage's height holds; places are in units of the cube (--c --r --w --h). */
+/* The balance (design 6.8, 7). The cube is (W - 84px) / 10 up to 28px, less when the pans need more
+   rows than the stage's height holds; places are in units of the cube (--c --r --w --h). The cubes
+   stand 11px in from a bowl's outer edge (its 3px rim, a 3px --halo, a ring's 5px), so a ring keeps
+   off the rim; the pans reach the scene's ends, and the pole passes between them 5px clear of each,
+   3px when the beam tilts. */
 @property --rows { syntax: '<number>'; inherits: true; initial-value: 2; }
 @property --len { syntax: '<number>'; inherits: true; initial-value: 10; }
 
@@ -9,11 +12,11 @@
 [data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 30px; }
 
 [data-game="balance"] .bl-scene {
-  --t: 0; --gx: 78px; --gt: 12px; --gc: 68px;
-  --cube: min(28px, calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 6px - 3px * var(--rows)) / (1.8 + var(--rows))));
-  --u: calc(var(--cube) + 3px); --w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 26px);
-  --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 21px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 6px);
-  --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 6px + 3px * var(--rows));
+  --t: 0; --gx: 84px; --gt: 12px; --gc: 68px;
+  --cube: min(28px, calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 11px - 3px * var(--rows)) / (1.8 + var(--rows))));
+  --u: calc(var(--cube) + 3px); --w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 34px);
+  --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 17px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 11px);
+  --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 11px + 3px * var(--rows));
   position: absolute; left: calc(50% - var(--w) / 2); top: calc(50% - var(--h) / 2); width: var(--w); height: var(--h); transition: --rows var(--t-move) var(--ease);
 }
 /* A reset goes at once: this wins over every element's own transition (a cube's colour fade too). */
@@ -31,19 +34,34 @@
 [data-game="balance"] .bl-strings { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - var(--bowl)); overflow: visible; }
 [data-game="balance"] .bl-strings path { fill: none; stroke: var(--frame); stroke-width: 2; }
 [data-game="balance"] .bl-bowl { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bowl); border: 3px solid var(--frame); border-top: 0; border-radius: 0 0 14px 14px; background: var(--surface); }
-[data-game="balance"] .bl-stack { position: absolute; left: 7px; right: 7px; bottom: 6px; height: calc(var(--u) * 2 - 3px); }
+[data-game="balance"] .bl-stack { position: absolute; left: 11px; right: 11px; bottom: 11px; height: calc(var(--u) * 2 - 3px); }
 [data-game="balance"] .bl-stack > * { position: absolute; left: calc(var(--u) * var(--c, 0)); bottom: calc(var(--u) * var(--r, 0)); }
 [data-game="balance"] .bl-layer { position: absolute; inset: 0; pointer-events: none; }
 [data-game="balance"] .bl-layer.is-leaving { opacity: 0; animation: balance-out 200ms var(--ease); }
 
 [data-game="balance"] .bl-cube { width: var(--cube); height: var(--cube); border-radius: calc(var(--cube) * .25); }
-[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); transition: background-color var(--t-move) var(--ease); }
+/* A part's 2px edge; on a cube under about 17px (an overflow or balance display that needs 6-8 rows)
+   it is 0.12 of the cube, so most of the cube stays its colour (design 3). */
+[data-game="balance"] .bl-cube[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 clamp(1px, calc(var(--cube) * .12), 2px) var(--role-part-edge); transition: background-color var(--t-move) var(--ease); }
 /* The second of two known parts (design 3, 6.8): the part's light shade, the same edge. A cube that
    changes group (relational) fades to its new colour. */
 [data-game="balance"] .bl-cube[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
+/* A ghost cube's dashed edge (design 7.1) is a solid 2px border masked to the same dashes on every
+   side, as fractions of the side: round each corner 28%, in the middle 16%, with gaps of 14%. A
+   dashed border fits about one dash a side on a small cube and left some ghosts an open cup
+   beside closed twins. */
+[data-game="balance"] .bl-cube.bl-ghost { border: 0; }
+[data-game="balance"] .bl-cube.bl-ghost::after {
+  content: ''; position: absolute; inset: 0; border: 2px solid var(--role-added-edge); border-radius: inherit;
+  --dash: linear-gradient(#000 0 0);
+  -webkit-mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
+    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+  mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
+    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+}
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
 /* A touch on a counted thing (design 6.3): an ink dot with a white edge, once; a tour digit covers it. */
@@ -59,21 +77,53 @@
 /* Over the hint's dashed places, the '?' of a piece over an even number of places sits on the place
    right of its middle, not squeezed between two of them (design 7.3). */
 [data-game="balance"] .bl-scene:has([data-hint] .bl-dash) .bl-lid.is-even > .cover::after { translate: calc(var(--u) / 2) 0; }
+/* Bridges join the pieces (design 6.6): over the columns two pieces share, 4px over the 3px gap and
+   into both pieces; in a thumb, scaled by --k, a device pixel into each, so no pale seam shows. */
 [data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
-[data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); width: calc(var(--u) * var(--w) + 15px); }
+[data-game="balance"] .is-thumb .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3px - 1px / var(--k, 1)); height: calc(3px + 2px / var(--k, 1)); }
+/* Across (the pieces share no column), the bridge runs over the empty places after the run, 2px
+   above the gap, so 2px of white stay over the cubes below it: from inside the upper piece to
+   where the lower piece's dome is flat (half a cube in), and a tab goes down into that piece. */
+[data-game="balance"] .bl-stack > .bl-bridge.is-across { left: calc(var(--u) * var(--c) - 9px); bottom: calc(var(--u) * var(--r) - 1px); width: calc(var(--u) * var(--w) + var(--cube) / 2 + 11px); height: 4px; }
+[data-game="balance"] .bl-stack > .bl-bridge.is-tab { left: calc(var(--u) * var(--c) + var(--cube) / 2 - 2px); bottom: calc(var(--u) * var(--r) - 5px); width: 4px; height: 8px; }
 [data-game="balance"] .bl-bridge > .cover { border-radius: 0; box-shadow: none; }
 
 [data-game="balance"] .bl-ring { left: calc(var(--u) * var(--c) - 5px); bottom: calc(var(--u) * var(--r) - 5px); width: calc(var(--u) * var(--w) + 7px); height: calc(var(--u) * var(--h, 1) + 7px); border: 3px solid var(--role-added-edge); border-radius: calc(var(--cube) * .25 + 5px); box-shadow: inset 0 0 0 2px var(--halo); animation: balance-ring var(--t-blink) var(--ease) backwards; }
-[data-game="balance"] .bl-ring.is-late { animation-delay: .25s; }
+/* Ring pieces that share no column (a run from mid-row into the next row) are joined by a link of
+   the ring's line: the lower piece's top line goes on, past its round corner, to the upper piece's
+   side (design 6.8). It lies 2px above the gap under the empty places after the run, so it keeps
+   2px of white off the cubes or the cover below it. */
+[data-game="balance"] .bl-ring-link { left: calc(var(--u) * var(--c) - 2px); bottom: calc(var(--u) * var(--r) - 1px); width: calc(var(--u) * var(--w) + var(--cube) * .25 + 2px); height: 3px; background: var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+[data-game="balance"] .bl-ring.is-late, [data-game="balance"] .bl-ring-link.is-late { animation-delay: .25s; }
 [data-game="balance"] .bl-ring.is-hint, [data-game="balance"] .bl-ring.is-tour { border-color: var(--role-unknown); }
+[data-game="balance"] .bl-ring-link.is-hint, [data-game="balance"] .bl-ring-link.is-tour { background: var(--role-unknown); }
 /* A hint ring in the colour of the role it marks (design 7.2). */
 [data-game="balance"] .bl-ring.is-hint.is-part { border-color: var(--role-part-edge); }
+[data-game="balance"] .bl-ring-link.is-hint.is-part { background: var(--role-part-edge); }
 [data-game="balance"] .bl-zero, [data-game="balance"] .bl-mark, [data-game="balance"] .bl-digit { display: grid; place-items: center; width: var(--cube); height: var(--cube); border-radius: 50%; color: var(--role-added-edge); font-size: max(14px, calc(var(--cube) * .6)); font-weight: 800; line-height: 1; }
 [data-game="balance"] .bl-zero { border: 3px solid var(--role-added-edge); animation: balance-ring var(--t-blink) var(--ease) .15s backwards; }
+/* A ring with 0 on an empty place (design 7.1) is 5px wider than the place, so its hole is clearly
+   wider than the 0: it grows up and to the right, into the row above and the next place, both empty
+   when nothing is to be found (a + ? = a), and keeps the place's left and bottom, so its halo stops
+   in the 3px gap before the cubes beside and below it. The 0, whose ink sits high, is centred in it.
+   It stands on an empty place as a cube would, hiding the pan's string behind it: its hole is
+   white, so no --frame line crosses the 0 or meets the tour's magenta ring inside it. */
+[data-game="balance"] .bl-stack > .bl-zero { width: calc(var(--cube) + 5px); height: calc(var(--cube) + 5px); padding-top: .08em; background: var(--surface); }
 [data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-mark { background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-added-edge); animation: balance-digit 150ms var(--ease) backwards; }
-[data-game="balance"] .bl-arc { left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube) * .7); width: var(--u); height: calc(var(--cube) * .5); border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; animation: balance-appear var(--t-move) var(--ease) backwards; }
+/* A jump (design 7.1): from the top of one mark to the top of the next, drawn over every mark, and
+   low enough to stay under the digits of a row above; a 1px --halo where it crosses a mark there. */
+[data-game="balance"] .bl-arc {
+  z-index: 1; left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube)); width: var(--u); height: calc(var(--cube) * .35);
+  border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  filter: drop-shadow(1px 0 0 var(--halo)) drop-shadow(-1px 0 0 var(--halo)) drop-shadow(0 1px 0 var(--halo)) drop-shadow(0 -1px 0 var(--halo));
+  animation: balance-appear var(--t-move) var(--ease) backwards;
+}
 [data-game="balance"] .bl-dash { width: var(--cube); height: var(--cube); border: 2px dashed var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+/* At a piece's ends the dome's top corners are rounded (app.css .cover: half the cube across, 80%
+   down): there a dash takes the same corner, scaled with it, so it stays inside the dome. */
+[data-game="balance"] .bl-dash.is-start { border-top-left-radius: 50% 80%; }
+[data-game="balance"] .bl-dash.is-end { border-top-right-radius: 50% 80%; }
 [data-game="balance"] .bl-scene.is-open .bl-dash { visibility: hidden; }
 [data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - var(--half)); transform: translateX(-50%); display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + var(--half)); }
@@ -83,17 +133,21 @@
 [data-game="balance"] .bl-digit.on-known { inset: 1px; border-radius: 50%; background: var(--surface); color: var(--role-unknown); }
 /* The last number grows 1.3; its cube, and the white disc on a known cube, never do (design 7.3). */
 [data-game="balance"] .bl-digit.is-last { align-content: center; font-size: calc(1.3 * max(14px, var(--cube) * .6)); }
-/* Two digits at 1.3 are wider than a small cube: drawn in the hint's pan at the cube's place, above
-   the ring. On the unknown, where a cube of the other number may follow in the row (? + 5), they
-   grow in height only, as wide as the numbers before them and like them with no outline, so they
-   stay on their cube and nothing magenta passes its edge (design 7.3). */
-[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1; }
-[data-game="balance"] .bl-stack > .bl-digit.is-over:not(.on-known) { font-size: max(14px, calc(var(--cube) * .6)); transform: scaleY(1.3); }
-/* A known cube's count ends its pan, so nothing follows it in the row: the digits grow both ways,
-   from 1px inside the cube's left edge on, away from the number before it, over the white disc,
-   outlined in --halo where they pass its edge. */
+/* Two tabular digits at 14px (1.36em) are wider than a small cube: they are condensed to its width
+   less 2px each side (--sx, from the cube's width), so its colour shows round them; their height,
+   and so the 14px, stays (design 4, 7.3). Centred on the cube whatever their width (a grid item
+   wider than its cell would start at its left), their ink too, which sits high in its line box. */
+[data-game="balance"] .bl-fit { position: absolute; left: 50%; top: 50%; translate: -50% calc(-50% + 0.055em); white-space: nowrap; transform: scaleX(var(--sx, 1)); }
+/* The last two-digit number is drawn in the hint's pan at its cube's place, above the ring, and
+   grows 1.3 in height only, so it stays on its cube whatever follows it there: a cube of the other
+   number (? + 5), the ring, the pan's string. Its cube, and the white disc on a known cube, keep
+   their size (design 7.3). */
+[data-game="balance"] .bl-stack > .bl-digit.is-over { inset: auto; left: calc(var(--u) * var(--c)); bottom: calc(var(--u) * var(--r)); width: var(--cube); height: var(--cube); z-index: 1; font-size: max(14px, calc(var(--cube) * .6)); }
+[data-game="balance"] .bl-stack > .bl-digit.is-over > .bl-fit { transform: scale(var(--sx, 1), 1.3); }
+/* On a known cube the grown digits pass the white disc's edge at its corners: outlined in --halo
+   there, and clipped inside the cube's 2px edge, so the cube keeps its outline and its size. */
 [data-game="balance"] .bl-stack > .bl-digit.is-over.on-known {
-  --edge: var(--halo); padding: 1px; justify-content: start; background-clip: content-box;
+  --edge: var(--halo); padding: 1px; background-clip: content-box; clip-path: inset(2px round calc(var(--cube) * .25 - 2px));
   text-shadow: 0 0 1px var(--edge), 1.5px 0 var(--edge), -1.5px 0 var(--edge), 0 1.5px var(--edge), 0 -1.5px var(--edge), 1px 1px var(--edge), -1px 1px var(--edge), 1px -1px var(--edge), -1px -1px var(--edge);
 }
 

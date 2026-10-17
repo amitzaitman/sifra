@@ -89,6 +89,61 @@ export const ringPieces = (start, length) => rowPieces(start, length).reduce((ou
   return out;
 }, /** @type {Box[]} */ ([]));
 
+/** How far a ring reaches past its cubes (game.css), and the gap to the next cube. */
+const RING_OUT = 5;
+const PILE_GAP = 3;
+
+/** A ring's line (game.css): cut back this far at its own group's next row, none of it is left in the gap. */
+const RING_LINE = 3;
+
+/**
+ * A ring's clip-path, from its top left, in the pile's pitch (--u): a ring reaches 5px past its
+ * cubes and the gap is 3px, so where a cube or cover of another group lies next to the ring, the
+ * ring is cut back to that thing's edge and never paints over it (on a balance, size reads as
+ * weight). A ring over two rows of one group is a piece per row: each is cut back where the other
+ * row's cubes lie, past its line, so the rows' gap stays white and the pieces read as one outline.
+ * '' when nothing lies next to it.
+ * @param {Box} box the ring's places
+ * @param {(col: number, row: number) => boolean} other another group's cube or cover is there
+ * @param {(col: number, row: number) => boolean} [own] a place of the ring's own group outside this box
+ * @returns {string}
+ */
+export function ringClip({ col, row, w, h }, other, own = () => false) {
+  const cut = RING_OUT - PILE_GAP;
+  const rows = Array.from({ length: h }, (_, k) => row + k);
+  const cols = Array.from({ length: w }, (_, j) => col + j);
+  const left = rows.some((r) => other(col - 1, r));
+  const right = rows.some((r) => other(col + w, r));
+  /** @type {(c: number, r: number) => number} how far to cut at a place: 0 when nothing is there */
+  const depth = (c, r) => (other(c, r) ? cut : own(c, r) ? RING_LINE : 0);
+  const above = cols.map((c) => depth(c, row + h));
+  const below = cols.map((c) => depth(c, row - 1));
+  if (!left && !right && !above.some(Boolean) && !below.some(Boolean)) return '';
+  /** @type {(px: number, k?: number) => string} */
+  const at = (px, k = 0) => (k ? `calc(${k} * var(--u) + ${px}px)` : `${px}px`);
+  // Each neighbour's extent across the ring: columns j0..j1 of the ring's places, cut alike.
+  const spans = (cuts) => cuts.reduce((out, d, j) => {
+    if (d && out.at(-1)?.[1] === j - 1 && out.at(-1)[2] === d) out.at(-1)[1] = j;
+    else if (d) out.push([j, j, d]);
+    return out;
+  }, /** @type {number[][]} */ ([]));
+  const [l, r] = [at(left ? cut : 0), at(2 * RING_OUT - PILE_GAP - (right ? cut : 0), w)];
+  const [top, bottom] = [at(0), at(2 * RING_OUT - PILE_GAP, h)];
+  /** @type {(j: number) => string} where column j's cube starts */
+  const from = (j) => at(RING_OUT, j);
+  /** @type {(j: number) => string} where column j's cube ends */
+  const to = (j) => at(RING_OUT - PILE_GAP, j + 1);
+  const points = [[l, top]];
+  for (const [j0, j1, d] of spans(above)) points.push([from(j0), top], [from(j0), at(d)], [to(j1), at(d)], [to(j1), top]);
+  points.push([r, top], [r, bottom]);
+  for (const [j0, j1, d] of spans(below).reverse()) {
+    const inside = at(2 * RING_OUT - PILE_GAP - d, h);
+    points.push([to(j1), bottom], [to(j1), inside], [from(j0), inside], [from(j0), bottom]);
+  }
+  points.push([l, bottom]);
+  return `polygon(${points.map((p) => p.join(' ')).join(', ')})`;
+}
+
 /**
  * The 4px bridges joining cover pieces, in the gap under the upper row (design 6.6): over the
  * columns two pieces share, or across the gap between them when they share none.
@@ -103,6 +158,16 @@ export function bridges(pieces) {
     return from < to ? { from, to, row: upper.row, across: false } : { from: upper.col + upper.w, to: lower.col, row: upper.row, across: true };
   });
 }
+
+/**
+ * Links between a ring's pieces that share no column (a run from mid-row into the next row): one
+ * per pair, from the upper piece's end column to the lower piece's first, along the lower piece's
+ * top line (game.css .bl-ring-link), so the pieces read as one outline (design 6.8).
+ * @param {number} start
+ * @param {number} length
+ * @returns {Bridge[]}
+ */
+export const ringLinks = (start, length) => bridges(ringPieces(start, length)).filter((b) => b.across);
 
 /**
  * Where ghosts for a value lie (design 7.1): the unknown's places, then on after the pan's last.
@@ -224,8 +289,11 @@ export function drawBalance(host, data) {
         node.append(data.cover(mark));
         return node;
       };
+      // A bridge across (the pieces share no column) runs over the places between them and goes
+      // down into the lower piece by a tab where its dome is flat (game.css).
       return [...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid' : 'bl-lid is-even', p, k ? '' : '?')),
-        ...bridges(pieces).map((b) => lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''))];
+        ...bridges(pieces).flatMap((b) => [lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''),
+          ...(b.across ? [lid('bl-lid bl-bridge is-tab', { col: b.to, row: b.row, w: 1 }, '')] : [])])];
     });
     pans[name] = { el: node, stack, layout, cubes, lids };
   }

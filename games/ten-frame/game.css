@@ -4,7 +4,7 @@
 [data-game="ten-frame"] .tf-stage { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; container-type: size; }
 [data-game="ten-frame"] .tf-draw {
   --u: min(calc(100cqw / var(--dw)), calc(100cqh / var(--dh)));
-  position: relative; width: calc(var(--dw) * var(--u)); height: calc(var(--dh) * var(--u));
+  position: relative; width: calc(var(--dw) * var(--u)); height: calc(var(--dh) * var(--u)); isolation: isolate;
 }
 [data-game="ten-frame"] .tf-base, [data-game="ten-frame"] .tf-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 [data-game="ten-frame"] .tf-layer { pointer-events: none; }
@@ -42,7 +42,21 @@
   display: grid; place-items: center; border-radius: calc(var(--u) * 0.2); background: var(--surface); color: var(--ink);
   font-size: max(14px, calc(var(--u) * 0.48)); font-weight: 800; line-height: 1;
 }
-[data-game="ten-frame"] .tf-tag { color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
+/* The tag is a label on the whole: the hint's outline and the tour's pass under it (z-index in the
+   drawing, which isolates it). Flashed, it keeps its ring inside its edge (design 7.1). */
+[data-game="ten-frame"] .tf-tag { z-index: 1; color: var(--role-whole); box-shadow: 0 0 0 2px var(--frame); }
+[data-game="ten-frame"] .tf-tag.is-flashed { box-shadow: inset 0 0 0 3px var(--role-added-edge), 0 0 0 2px var(--frame); }
+/* Over nine sticks a round's unit is about 20px at 320px, but the digits stay 14px: the tag on the
+   bracket is held at 22px or more (the digits and a flash ring of 3px above and below them), and
+   the hint's 10 chip at 26 x 18px, both centred on their place. Digits sit high in a line box of
+   line-height 1, so 0.12em on top centres their ink. */
+[data-game="ten-frame"] .tf-tag.on-bracket {
+  height: max(calc(var(--dy) * var(--u)), 22px); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: 0 -50%; padding-top: 0.12em;
+}
+[data-game="ten-frame"] .tf-chip.is-held {
+  width: max(calc(var(--dx) * var(--u)), 26px); height: max(calc(var(--dy) * var(--u)), 18px); padding-top: 0.12em;
+  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+}
 /* Over nine sticks a thumb's unit is about 10px: there the tag grows around its 14px digits,
    centred on its place on the bracket. */
 [data-game="ten-frame"][data-thumb] .tf-tag.on-bracket {
@@ -57,20 +71,27 @@
 [data-game="ten-frame"] .tf-circle[data-role="unknown"] { color: var(--on-unknown); }
 [data-game="ten-frame"] .tf-dot[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="ten-frame"] .tf-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+/* In a thumb dots are about 7px and counters 12-14px: a part's edge scales with the unit there,
+   so most of each stays yellow (design 3). */
+[data-game="ten-frame"][data-thumb] .tf-dot[data-role="part"] { box-shadow: inset 0 0 0 calc(var(--u) * 0.12) var(--role-part-edge); }
+[data-game="ten-frame"][data-thumb] .tf-disc[data-role="part"] { box-shadow: inset 0 0 0 min(3px, calc(var(--u) * 0.12)) var(--role-part-edge); }
 
 /* Bundles (place value 4.5): ten sticks tied with a band, and loose sticks; veils show the whole. */
 [data-game="ten-frame"] .tf-bundle, [data-game="ten-frame"] .tf-stick { border-radius: calc(var(--u) * 0.2); }
+/* Ten sticks: a line every 10%, 2px on a wide bundle and 3% of a narrow one (a thumb's, or a build display's at
+   320px, about 20-26px), where 2px lines would fill it: most of it stays its colour. */
 [data-game="ten-frame"] .tf-bundle[data-role="part"] {
   background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge);
-  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-part-edge) calc(10% - 2px) 10%);
-}
-/* A thumb's bundle is about 20-26px wide, where 2px lines fill it: there each line is 3% of the bundle, so most of
-   it stays part yellow (rounds keep 2px lines). */
-[data-game="ten-frame"][data-thumb] .tf-bundle[data-role="part"] {
   background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - min(2px, 3%)), var(--role-part-edge) calc(10% - min(2px, 3%)) 10%);
 }
-[data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 2px var(--role-part-edge); }
+/* A stick is 0.4 units wide: under a unit of 20px (a thumb, the build display at 320px) its edge
+   is a tenth of the unit, not 2px, so half of it stays yellow. */
+[data-game="ten-frame"] .tf-stick[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 min(2px, calc(var(--u) * 0.1)) var(--role-part-edge); }
 [data-game="ten-frame"] .tf-band { position: absolute; left: -8%; right: -8%; top: 42%; height: 14%; border-radius: 4px; background: var(--frame); }
+/* On a bundle shown as the unknown the band gets a --halo off the magenta (design 3); 2px, so its
+   tips stay inside the tour ring's 3px inner gap. */
+[data-game="ten-frame"] .tf-bundle:has(> .tf-veil.is-shown) > .tf-band,
+[data-game="ten-frame"][data-solved] .tf-bundle:has(> .tf-veil) > .tf-band { box-shadow: 0 0 0 min(2px, calc(var(--u) * 0.08)) var(--halo); }
 /* A 0.5px rim in its own colour covers the counter's antialiased edge, so no hairline of the part's
    edge shows round the shown unknown. */
 [data-game="ten-frame"] .tf-veil { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 0.5px var(--role-unknown); }
@@ -81,6 +102,10 @@
 [data-game="ten-frame"] .tf-lid { --cover-h: calc(var(--dy) * var(--u)); }
 [data-game="ten-frame"] .tf-lid > .cover { --cover-fs: calc(var(--u) * 0.6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-lid.is-small > .cover { --cover-fs: calc(var(--u) * 0.42); }
+/* The bracket's small dome stays over the layers drawn after it (a flash ring round the tray, the
+   hint's rings), as it stays over the bracket: nothing crosses its '?' (design 6.6). The drawing
+   isolates it, so the demo's hand stays over it. */
+[data-game="ten-frame"] .tf-lid.is-small { z-index: 1; }
 /* On a bond circle the cover is the circle it covers (design 6.6), so its hint ring rounds it whole. */
 [data-game="ten-frame"] .tf-lid.is-round > .cover { --cover-fs: calc(var(--u) * 1.3); border-radius: 50%; }
 /* Over the ones (14 = 10 + ?): the '?' as big as the dome allows, and never wider than it. */
@@ -94,21 +119,25 @@
 [data-game="ten-frame"] .tf-svg path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
 [data-game="ten-frame"] .tf-svg .tf-halo { stroke: var(--halo); stroke-width: 9px; }
 [data-game="ten-frame"] .tf-svg .tf-line { stroke-width: 3px; }
+[data-game="ten-frame"] .tf-svg .tf-notch { fill: var(--halo); }
 /* A thumb's cells are about 18-23px: there the halo and line scale with the unit, so the white cells, the
    tray and the part's disc still show (rounds keep design 6.6's 3px). */
 [data-game="ten-frame"][data-thumb] .tf-svg .tf-halo { stroke-width: calc(var(--u) * 0.2); }
 [data-game="ten-frame"][data-thumb] .tf-svg .tf-line { stroke-width: calc(var(--u) * 0.08); }
+/* So does a cover's halo: 3px would cover the tray's edge, 0.14 units (about 2.5px at 320px). */
+[data-game="ten-frame"][data-thumb] .tf-lid > .cover { box-shadow: 0 0 0 calc(var(--u) * 0.08) var(--halo); }
 [data-game="ten-frame"] .tf-line-unknown .tf-line { stroke: var(--role-unknown); }
 [data-game="ten-frame"] .tf-line-whole .tf-line { stroke: var(--role-whole); }
 [data-game="ten-frame"] .tf-line-part .tf-line { stroke: var(--role-part-edge); }
 [data-game="ten-frame"] .tf-line-frame .tf-line { stroke: var(--frame); }
+[data-game="ten-frame"] .tf-line-added .tf-line { stroke: var(--role-added-edge); }
 [data-game="ten-frame"] .tf-bracket.is-gone { opacity: 0; animation: ten-frame-out var(--t-move) var(--ease); }
 
 /* Displays (7.1): ghosts, rings and digits in --role-added-edge; what is chosen, never the answer. */
 [data-game="ten-frame"] .tf-ghost { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost); }
 [data-game="ten-frame"] .tf-ghost.is-dot { border-width: 2px; }
 [data-game="ten-frame"] .tf-ghost.is-bundle, [data-game="ten-frame"] .tf-ghost.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
-[data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--role-added-edge) calc(10% - 2px) 10%); }
+[data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - min(2px, 3%)), var(--role-added-edge) calc(10% - min(2px, 3%)) 10%); }
 [data-game="ten-frame"] .tf-place { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--surface); }
 [data-game="ten-frame"] .tf-place.is-target { border-color: var(--role-part-edge); background: none; }
 [data-game="ten-frame"] .tf-place.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
@@ -116,15 +145,41 @@
 [data-game="ten-frame"] .tf-ring { border: 3px solid var(--role-added-edge); border-radius: calc(var(--u) * 0.3); box-shadow: 0 0 0 3px var(--halo), inset 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-round { border-radius: 50%; }
 /* Round a part (a yellow disc or circle) a ring has no inner halo, so the part keeps its 3px edge
-   (design 3) and its size; the ring is drawn clear of that edge. */
-[data-game="ten-frame"] .tf-ring.on-part { box-shadow: 0 0 0 3px var(--halo); }
+   (design 3) and its size; the ring is drawn clear of that edge. So round a ghost, which keeps its
+   dashed edge. A ring with 0 crosses nothing either, and its hole is the 0's: no inner halo eats
+   into the grown digit (design 7.1, 7.2). */
+[data-game="ten-frame"] .tf-ring.on-part, [data-game="ten-frame"] .tf-ring.on-ghost, [data-game="ten-frame"] .tf-ring.is-zero { box-shadow: 0 0 0 3px var(--halo); }
+/* A ring with 0 on a frame's empty place stands on the counter's place, inside the cell and the
+   hint's 4px ring round it: it crosses nothing, so it has no halo, which would cut that ring. */
+[data-game="ten-frame"] .tf-ring.is-zero.is-inset { box-shadow: none; }
+/* A ring around a thing's own box, in pixels at every unit: its inner halo is a 3px gap off the
+   thing, then its 3px line, so the thing keeps its edge and its size (design 7.1). */
+[data-game="ten-frame"] .tf-ring.is-around {
+  --out: 6px;
+  left: calc(var(--x) * var(--u) - var(--out)); top: calc(var(--y) * var(--u) - var(--out));
+  width: calc(var(--dx) * var(--u) + 2 * var(--out)); height: calc(var(--dy) * var(--u) + 2 * var(--out));
+  border-radius: calc(var(--u) * 0.2 + var(--out));
+}
+[data-game="ten-frame"] .tf-ring.is-around.is-round { border-radius: 50%; }
+/* Round a bond's dot or a frame's ghost, whose neighbours stand 0.35-0.38 units off: a 1.5px gap,
+   then the line, at any unit. */
+[data-game="ten-frame"] .tf-ring.is-around.is-close { --out: 4.5px; }
+/* A ring in a frame's white cell (a flash round a counter, a ghost's ring) crosses nothing: the
+   cell's white is its gap off the tray, and a halo would bulge into the tray, so it has none
+   (design 7.1). Round a ghost it stays in the cell down to cells of about 37px, then stands
+   0.12 units off the ghost, but never closer than 1.25px to its dashes. */
+[data-game="ten-frame"] .tf-ring.in-cell { box-shadow: none; }
+[data-game="ten-frame"] .tf-ring.is-around.is-close.in-cell { --out: clamp(4.25px, calc(var(--u) * 0.12), 4.5px); }
 [data-game="ten-frame"] .tf-ring.is-tray { border-radius: calc(var(--u) * 0.5); }
-[data-game="ten-frame"] .tf-ring.is-chip { border-radius: calc(var(--u) * 0.3); }
+[data-game="ten-frame"] .tf-ring.is-tray.is-around { border-radius: calc(var(--u) * 0.4 + var(--out)); }
 [data-game="ten-frame"] .tf-ring.is-cell { border: 0; border-radius: calc(var(--u) * 0.22); box-shadow: inset 0 0 0 3px var(--role-added-edge); }
 [data-game="ten-frame"] .tf-ring.is-unknown { border-color: var(--role-unknown); }
 /* The hint (7.2): a 4px ring in the colour of what it marks, kept to the end of the round. */
 [data-game="ten-frame"] .tf-ring.is-hint { border-color: var(--role-unknown); }
 [data-game="ten-frame"] .tf-ring.is-cell.is-hint { box-shadow: inset 0 0 0 4px var(--role-unknown); }
+/* Its --halo is a 3px band on the tray round the cell, apart from the ring (help.js), so the
+   magenta never meets the tray (design 3: --frame and magenta are close under deuteranopia). */
+[data-game="ten-frame"] .tf-hint-halo { border-radius: calc(var(--u) * 0.22); box-shadow: 0 0 0 3px var(--halo); }
 /* A digit's entry fills backwards only: one still filling once it has run kept the digit in a layer of its own,
    drawn a little off where it rests with reduced motion. */
 [data-game="ten-frame"] .tf-digit {
@@ -133,12 +188,15 @@
 }
 [data-game="ten-frame"] .tf-digit.on-ghost { font-size: max(19px, calc(var(--u) * 0.45)); }
 [data-game="ten-frame"] .tf-digit.is-small { font-size: max(14px, calc(var(--u) * 0.62)); }
-/* On a ghost the contrast is 3.44, so a digit there is at least 19px (design 4); a two-digit
-   number does not fit a dot at 19px, so it sits on a white label over the ghost instead (5.47). */
-[data-game="ten-frame"] .tf-digit.is-small.on-ghost { font-size: max(19px, calc(var(--u) * 0.62)); }
-[data-game="ten-frame"] .tf-digit.is-label {
-  width: auto; height: auto; padding: 1px 0; border-radius: 4px; background: var(--surface);
-  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+/* A count-up digit on a bond's dot is about as big as the dot inside its dashed edge, and in the
+   same colour: a 1px white outline in the digit's own shape (5.47, so 14px; design 4) keeps it
+   off the dashes, which show round it, so the dot stays a dashed circle. Its ink, which sits high
+   in its line box, is centred on the dot. */
+[data-game="ten-frame"] .tf-digit.is-outlined {
+  width: auto; height: auto; left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u));
+  translate: -50% calc(-50% + 0.04em);
+  text-shadow: 1px 0 var(--surface), -1px 0 var(--surface), 0 1px var(--surface), 0 -1px var(--surface),
+    1px 1px var(--surface), -1px 1px var(--surface), 1px -1px var(--surface), -1px -1px var(--surface);
 }
 [data-game="ten-frame"] .tf-digit.is-above { font-size: max(14px, calc(var(--u) * 0.5)); }
 [data-game="ten-frame"] .tf-digit.is-big { font-size: calc(var(--u) * 1.3); }
@@ -172,6 +230,13 @@
   text-shadow: 0 0 1px var(--role-unknown), 1.2px 0 var(--role-unknown), -1.2px 0 var(--role-unknown), 0 1.2px var(--role-unknown), 0 -1.2px var(--role-unknown),
     .8px .8px var(--role-unknown), -.8px .8px var(--role-unknown), .8px -.8px var(--role-unknown), -.8px -.8px var(--role-unknown);
 }
+/* A digit's ink sits high in its line box (line-height 1): grown from a point above the middle,
+   it stays centred on its dot, a pixel or more off the line round its group above and below. */
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small:not(.is-two) { transform-origin: 50% 30%; }
+/* A 10 on a dot (a part of 10, level 4) is wider than the dot: centred on it, and grown in height
+   only, so with its outline it stays inside the line round its group (help.js; design 7.2). */
+[data-game="ten-frame"] .tf-digit.is-two { justify-content: center; }
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small.is-two { transform: scaleY(1.3); }
 [data-game="ten-frame"] .tf-tour.is-last.is-chip { transform: none; }
 /* In a row of digits above sticks the last grows to the right and up, away from the digit
    before it and from the outline below. */
@@ -194,6 +259,11 @@
 [data-game="ten-frame"] .tf-layer[data-display].is-leaving { opacity: 0; animation: ten-frame-leave 900ms linear; }
 [data-game="ten-frame"] [data-role="unknown"].is-shown { animation: ten-frame-in 150ms var(--ease) both; animation-delay: var(--d, 0ms); }
 [data-game="ten-frame"] .is-solved [data-role="unknown"]:not(.is-shown) { animation: ten-frame-in var(--t-move) var(--ease) both; animation-delay: var(--d, 0ms); }
+/* A transform animation that fills forwards keeps a veil on a layer of its own, snapped apart from
+   its stick, and a device pixel of the part's edge shows beside it. A veil's end state is its base
+   style, so it fills backwards only, and once in it paints with its stick or bundle. */
+[data-game="ten-frame"] .tf-bundle > .tf-veil.is-shown, [data-game="ten-frame"] .tf-stick > .tf-veil.is-shown,
+[data-game="ten-frame"] .is-solved .tf-bundle > .tf-veil, [data-game="ten-frame"] .is-solved .tf-stick > .tf-veil { animation-fill-mode: backwards; }
 
 /* Pair cards (level 4): two numbers and a bar, smaller when they are longer. */
 [data-game="ten-frame"] .tf-pair { display: flex; align-items: center; gap: 3px; font-size: 30px; font-weight: 800; line-height: 1.2; }

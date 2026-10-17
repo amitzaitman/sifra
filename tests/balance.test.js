@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
-import { bridges, ghostSlots, layoutLine, layoutPan, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
+import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -61,6 +61,48 @@ test('the stretched cover: one piece per row, joined by bridges; rings merge row
   assert.deepEqual(bridges(rowPieces(4, 3)), [{ from: 2, to: 4, row: 1, across: true }]);
   assert.deepEqual(bridges(rowPieces(2, 8)), [{ from: 2, to: 5, row: 1, across: false }]);
   assert.deepEqual(ringPieces(0, 13), [{ col: 0, row: 0, w: 5, h: 2 }, { col: 0, row: 2, w: 3, h: 1 }]);
+});
+
+test('a ring\'s pieces that share no column are joined by one link; pieces that share one need none (design 6.8)', () => {
+  // ? + 4 = 7: the 4 on places 3-6 (columns 3-4, then 0-1); 2 + ? = 6: the unknown on places 2-5.
+  assert.deepEqual(ringPieces(3, 4), [{ col: 3, row: 0, w: 2, h: 1 }, { col: 0, row: 1, w: 2, h: 1 }]);
+  assert.deepEqual(ringLinks(3, 4), [{ from: 2, to: 3, row: 1, across: true }]);
+  assert.deepEqual(ringLinks(2, 4), [{ from: 1, to: 2, row: 1, across: true }]);
+  // Five from place 3: columns 3-4, then 0-2; the link spans no column, only the pieces' corners.
+  assert.deepEqual(ringLinks(3, 5), [{ from: 3, to: 3, row: 1, across: true }]);
+  // Each link runs from the upper piece's end to the lower piece's start, in the row between them.
+  for (const [start, length] of [[3, 4], [2, 4], [4, 3], [1, 5], [9, 4]]) {
+    const pieces = ringPieces(start, length);
+    for (const [i, link] of ringLinks(start, length).entries()) {
+      const [lower, upper] = [pieces[i], pieces[i + 1]];
+      assert.deepEqual([link.from, link.to, link.row], [upper.col + upper.w, lower.col, upper.row], `${start}, ${length}`);
+    }
+  }
+  assert.deepEqual(ringLinks(0, 13), []);
+  assert.deepEqual(ringLinks(2, 8), []);
+  assert.deepEqual(ringLinks(4, 1), []);
+});
+
+test('a ring is cut back 2px where another group\'s cube lies next to it, and only there (design 6.8)', () => {
+  // ? + 3 = 10: the unknown on places 0-6, the 3 on places 7-9.
+  const other = (col, row) => [7, 8, 9].includes(row * 5 + col);
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, () => false), '');
+  // The second row's piece (places 5-6): the 3 starts right of it.
+  assert.equal(ringClip({ col: 0, row: 1, w: 2, h: 1 }, other),
+    'polygon(0px 0px, calc(2 * var(--u) + 5px) 0px, calc(2 * var(--u) + 5px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // The first row's piece: the 3 lies above its last three places, a 2px notch over their cubes.
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, other),
+    'polygon(0px 0px, calc(2 * var(--u) + 5px) 0px, calc(2 * var(--u) + 5px) 2px, calc(5 * var(--u) + 2px) 2px, calc(5 * var(--u) + 2px) 0px, ' +
+    'calc(5 * var(--u) + 7px) 0px, calc(5 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // Eight cubes of one group in rows of five and three: each row's piece is cut back 3px, past its
+  // line, where the other row's cubes lie, so no line of the ring is left in the gap between them.
+  const mine = (row) => (c, r) => r === row && c < 3;
+  assert.equal(ringClip({ col: 0, row: 0, w: 5, h: 1 }, () => false, mine(1)),
+    'polygon(0px 0px, 5px 0px, 5px 3px, calc(3 * var(--u) + 2px) 3px, calc(3 * var(--u) + 2px) 0px, ' +
+    'calc(5 * var(--u) + 7px) 0px, calc(5 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  assert.equal(ringClip({ col: 0, row: 1, w: 3, h: 1 }, () => false, mine(0)),
+    'polygon(0px 0px, calc(3 * var(--u) + 7px) 0px, calc(3 * var(--u) + 7px) calc(1 * var(--u) + 7px), calc(3 * var(--u) + 2px) calc(1 * var(--u) + 7px), ' +
+    'calc(3 * var(--u) + 2px) calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
 });
 
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {

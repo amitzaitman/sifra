@@ -669,9 +669,9 @@ function lastNumberProblems(n) {
     if (t.height / p.height < 1.25) out.push(`${at}: ${n} is ${r(t.height / p.height)} times ${n - 1}`);
     const apart = Math.max(t.left - p.right, p.left - t.right, t.top - p.bottom, p.top - t.bottom);
     if (apart < 2) out.push(`${at}: ${n} is ${r(apart)}px from ${n - 1}`);
-    if (atEnds(drawn, p, 0.5).some((e) => e !== before)) out.push(`${at}: ${n - 1} is covered`);
+    if (atEnds(drawn, p, 0.5).some((e) => !before.contains(e))) out.push(`${at}: ${n - 1} is covered`);
     const inCube = t.left >= c.left - 0.5 && t.right <= c.right + 0.5;
-    if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => e !== digit)) out.push(`${at}: ${n} is covered`);
+    if (!inCube && atEnds('[data-game] * { pointer-events: auto !important; }', t, 1).some((e) => !digit.contains(e))) out.push(`${at}: ${n} is covered`);
     // What is drawn counts as its cube: a box under the number (the white disc on a known cube),
     // and an outline in the cube's own colour around the number's text (each text-shadow's offset
     // plus its blur), which reads as cube where it passes the cube's edge.
@@ -727,6 +727,505 @@ test('the tour\'s last number: 1.3 times the one before it, clear of it and of t
   }
 });
 
+/**
+ * What is wrong with each two-digit tour number (design 4, 7.3), read in the page: at 14px at
+ * least, its digits' box (as drawn) is inside its cube with 1.5px of the cube's colour each side
+ * on the unknown, and inside a known cube's 2px edge with 0.5px of white; its ink, measured from
+ * its font, is inside the cube (a known cube's edge) from top to bottom too (the last one grows
+ * 1.3 in height).
+ * @returns {string[]}
+ */
+function twoDigitProblems() {
+  const out = [];
+  const ctx = document.createElement('canvas').getContext('2d');
+  const r = (x) => Math.round(x * 10) / 10;
+  for (const digit of document.querySelectorAll('[data-tour]')) {
+    const text = digit.textContent;
+    if (text.length < 2) continue;
+    const box = digit.getBoundingClientRect();
+    const cube = document.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2).find((e) => e.matches('.bl-scene > .bl-pan .bl-cube'));
+    const known = cube.getAttribute('data-role') !== 'unknown';
+    const c = cube.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(digit);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(digit.querySelector('*') ?? digit);
+    if (parseFloat(s.fontSize) < 14) out.push(`${text}: ${s.fontSize}`);
+    // Measured at 200px, where whole-pixel metrics are precise: k turns them into pixels as drawn
+    // (the text box is the font's ascent and descent, scaled with the digits).
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText(text);
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    const base = t.top + k * m.fontBoundingBoxAscent;
+    const [side, high] = known ? [2.5, 2] : [1.5, 1];
+    const room = Math.min(t.left - c.left, c.right - t.right);
+    if (room < side) out.push(`${text} on a${known ? ' known' : 'n unknown'} cube: ${r(room)}px from its side, not ${side}`);
+    const top = Math.min(base - k * m.actualBoundingBoxAscent - c.top, c.bottom - base - k * m.actualBoundingBoxDescent);
+    if (top < high) out.push(`${text} on a${known ? ' known' : 'n unknown'} cube: its ink ${r(top)}px from its top or bottom, not ${high}`);
+  }
+  return out;
+}
+
+test('two-digit tour numbers stay inside their cube, condensed, at 14px at least; the last grows in height only, on the unknown and on a known cube (design 4, 7.3)', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // On the unknown: 6 + 11 = ? + 5 (10 to 12), 12 + 3 = ? + 2, ? + 2 = 14, 16 + 3 = ? + 8, 1 + ? = 13,
+  // ? = 12 + 4 (13 to 16). On known cubes, 10 last: 6 + 4 = 10 and 3 + 7 = 10 (both pans), and same-as 3 + 7.
+  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 52],
+    ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 4], ['same', 4]];
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed] of rounds) {
+      const { round } = await devAt(page, level, seed);
+      for (const i of wrongOf(round)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed}`;
+      await expect(page.locator('[data-tour]').last(), where).toHaveText(/^\d\d$/);
+      expect(await page.evaluate(twoDigitProblems), where).toEqual([]);
+    }
+  }
+});
+
+/**
+ * Where a ring paints over a cube or a cover (design 6.8, 7.1), read in the page: along each shown
+ * cube and cover, 0.75px inside its edge, every point where it is drawn (hit testing follows
+ * rounded corners and clip-path) must have no ring above it, unless the thing is inside that ring
+ * piece's own box. A ring over two rows is a piece per row: neither piece may cover a cube of the
+ * other's row, of its own group or another (a covered cube would look smaller and lighter).
+ * @returns {string[]}
+ */
+function ringOverlaps() {
+  const out = [];
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '[data-game] :is(.bl-ring, .bl-ring-link) { pointer-events: auto !important; } [data-game] .bl-scene > .bl-pan .bl-cube, [data-game] .bl-scene > .bl-pan .cover { pointer-events: auto !important; }';
+  const inside = (b, x, y) => x > b.left && x < b.right && y > b.top && y < b.bottom;
+  const things = [...document.querySelectorAll('.bl-scene > .bl-pan > .bl-stack > .bl-cube, .bl-scene > .bl-pan > .bl-stack > .bl-lid:not(.bl-bridge) > .cover:not(.is-lifted)')]
+    .filter((n) => getComputedStyle(n).opacity !== '0');
+  for (const thing of things) {
+    const b = thing.getBoundingClientRect();
+    const [cx, cy] = [b.left + b.width / 2, b.top + b.height / 2];
+    const points = [];
+    for (let t = 0; t <= 1; t += 1 / 16) {
+      const [x, y] = [b.left + 0.75 + t * (b.width - 1.5), b.top + 0.75 + t * (b.height - 1.5)];
+      points.push([x, b.top + 0.75], [x, b.bottom - 0.75], [b.left + 0.75, y], [b.right - 0.75, y]);
+    }
+    for (const [x, y] of points) {
+      const hits = document.elementsFromPoint(x, y);
+      const at = hits.indexOf(thing);
+      if (at < 0) continue;
+      for (const ring of hits.slice(0, at).filter((h) => h.matches('.bl-ring, .bl-ring-link'))) {
+        if (inside(ring.getBoundingClientRect(), cx, cy)) continue;
+        const pan = thing.closest('.bl-pan').getAttribute('data-pan');
+        out.push(`${pan} pan: a ${ring.className.replace('bl-ring ', '')} ring over ${thing.className} ${thing.getAttribute('data-role') ?? ''}`.trim());
+      }
+    }
+  }
+  style.remove();
+  return [...new Set(out)];
+}
+
+test('a ring never paints over a cube or cover next to it, of another group or of its own next row: flash, jumps, hints and tours (design 6.8)', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // ? + 3 = 10: the 3 next to the cover (flash), the 7 counted next to the 3 (tour); ? = 6 + 4 with
+  // 9: the missed cube next to the counted ones (jumps); 10 + 3 = 11 + ?: the hint's rings next to
+  // the other group, then the tour. Rings over two rows of one group: the tours of same, missing-left
+  // and missing-symbols-20, and flashes of a whole and of a part of 6 to 9.
+  const states = [['missing-left', 4, ['given.part']], ['missing-left', 4, ['given.part', 'given.whole', 'op.other']],
+    ['missing-reversed', 2, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
+    ['relational', 1, ['equal.copy', 'equal.compensate-wrong', 'equal.add-to-equal']],
+    ['same', 1, 'tour'], ['missing-left', 1, 'tour'], ['missing-symbols-20', 3, 'tour'],
+    ['missing-right', 3, ['given.whole']], ['missing-symbols', 1, ['given.part']]];
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed, rules] of states) {
+      const { round } = await devAt(page, level, seed);
+      for (const i of rules === 'tour' ? wrongOf(round) : rules.map((rule) => round.choices.findIndex((c) => c.rule === rule))) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed} ${[rules].flat().join(', ')}`;
+      await expect(page.locator('.bl-scene .bl-ring'), where).not.toHaveCount(0);
+      expect(await page.evaluate(ringOverlaps), where).toEqual([]);
+    }
+  }
+});
+
+/**
+ * Whether a layer's ring pieces in a pan read as one outline, read from a screenshot: from a point
+ * on the first piece's line, the ring's colour reaches a point on every other piece's line.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} layer '[data-display]' or '[data-hint]'
+ * @param {'left' | 'right'} side
+ * @param {number[]} rgb the ring's colour
+ * @returns {Promise<string>} '' when joined
+ */
+async function ringJoined(page, layer, side, rgb) {
+  const sel = `${layer} .bl-pan[data-pan="${side}"] :is(.bl-ring, .bl-ring-link)`;
+  const boxes = await page.locator(sel).evaluateAll((els) => els.map((e) => ({ link: e.classList.contains('bl-ring-link'), ...e.getBoundingClientRect().toJSON() })));
+  const pieces = boxes.filter((b) => !b.link);
+  if (pieces.length < 2) return `${pieces.length} piece`;
+  const clip = { x: Math.min(...boxes.map((b) => b.left)) - 2, y: Math.min(...boxes.map((b) => b.top)) - 2 };
+  Object.assign(clip, { width: Math.max(...boxes.map((b) => b.right)) + 2 - clip.x, height: Math.max(...boxes.map((b) => b.bottom)) + 2 - clip.y });
+  const png = (await page.screenshot({ clip })).toString('base64');
+  return page.evaluate(async ({ data, clip, pieces, rgb }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const [w, h] = [img.width, img.height];
+    const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+    const k = w / clip.width;
+    const ring = (x, y) => x >= 0 && y >= 0 && x < w && y < h && Math.abs(d[(y * w + x) * 4] - rgb[0]) + Math.abs(d[(y * w + x) * 4 + 1] - rgb[1]) + Math.abs(d[(y * w + x) * 4 + 2] - rgb[2]) < 90;
+    // A point on each piece's line: the middle of a side, 2.5px in from its outer edge.
+    const seed = (b) => [[b.left + b.width / 2, b.top + 2.5], [b.left + 2.5, b.top + b.height / 2], [b.right - 2.5, b.top + b.height / 2], [b.left + b.width / 2, b.bottom - 2.5]]
+      .map(([x, y]) => [Math.round((x - clip.x) * k), Math.round((y - clip.y) * k)]).find(([x, y]) => ring(x, y));
+    const seeds = pieces.map(seed);
+    if (seeds.some((s) => !s)) return 'a piece without its line';
+    const seen = new Uint8Array(w * h);
+    const queue = [seeds[0]];
+    seen[seeds[0][1] * w + seeds[0][0]] = 1;
+    while (queue.length) {
+      const [x, y] = queue.pop();
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (ring(nx, ny) && !seen[ny * w + nx]) {
+          seen[ny * w + nx] = 1;
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    const apart = seeds.filter(([x, y]) => !seen[y * w + x]).length;
+    return apart ? `${apart} of ${pieces.length} pieces apart` : '';
+  }, { data: png, clip, pieces, rgb });
+}
+
+test('a ring round a group whose rows share no column is one outline: the flash of 4 in ? + 4 = 7, the tour of 2 + ? = 6 (design 6.8, 7.2)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    let { round } = await devAt(page, 'missing-left', 11);
+    expect(round.equation).toEqual({ left: ['?', '+', 4], right: [7] });
+    await card(page, round.choices.findIndex((c) => c.rule === 'given.part')).click();
+    await unlocked(page);
+    expect(await ringJoined(page, '[data-display]', 'left', [11, 111, 166]), `${width}px ? + 4 = 7, the flash of 4`).toBe('');
+    expect(await page.evaluate(ringOverlaps), `${width}px ? + 4 = 7, the flash of 4`).toEqual([]);
+    ({ round } = await devAt(page, 'missing-right', 2));
+    expect(round.equation).toEqual({ left: [2, '+', '?'], right: [6] });
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]').last()).toHaveText('4');
+    expect(await ringJoined(page, '[data-hint]', 'left', [214, 51, 108]), `${width}px 2 + ? = 6, the tour`).toBe('');
+    expect(await page.evaluate(ringOverlaps), `${width}px 2 + ? = 6, the tour`).toEqual([]);
+  }
+});
+
+/**
+ * How close each ring in a pan comes to the inside of its bowl's 3px rim, where the bowl is beside
+ * it (design 3, 7.1: magenta, or a ring, and --frame keep a 3px --halo between them).
+ * @returns {string[]}
+ */
+function ringsOffBowl() {
+  const out = [];
+  for (const ring of document.querySelectorAll('.bl-scene .bl-ring')) {
+    const side = ring.closest('.bl-pan').getAttribute('data-pan');
+    const b = document.querySelector(`.bl-scene > .bl-pan[data-pan="${side}"] .bl-bowl`).getBoundingClientRect();
+    const r = ring.getBoundingClientRect();
+    if (r.bottom <= b.top) continue;
+    const gaps = { bottom: b.bottom - 3 - r.bottom, left: r.left - (b.left + 3), right: b.right - 3 - r.right };
+    for (const [edge, gap] of Object.entries(gaps)) {
+      if (gap < 2.5) out.push(`${side} pan: a ${ring.className.replace('bl-ring ', '')} ring ${Math.round(gap * 10) / 10}px off the bowl's ${edge} rim`);
+    }
+  }
+  return out;
+}
+
+test('a ring round the bottom row keeps a 3px --halo off the bowl\'s rim, and a tilted pan stays clear of the pole (design 3, 6.8, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 3 + 5 = ?: the tour's ring over the first row, kept when solved; flashes of a bottom row; a tilted
+  // display (1 + 8 = ? + 4 with 1).
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed, rules] of [['same', 1, 'tour'], ['same', 4, 1], ['missing-right', 1, 1]]) {
+      const { round } = await devAt(page, level, seed);
+      const wrong = wrongOf(round);
+      for (const i of rules === 'tour' ? wrong : wrong.slice(0, rules)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const where = `${width}px ${level} ${seed}`;
+      await expect(page.locator('.bl-scene .bl-ring').first(), where).toBeVisible();
+      expect(await page.evaluate(ringsOffBowl), where).toEqual([]);
+      if (rules === 'tour') {
+        await card(page, round.choices.findIndex((c) => c.rule === null)).click();
+        await expect(page.locator('[data-next]')).toBeVisible();
+        expect(await page.evaluate(ringsOffBowl), `${where}, solved`).toEqual([]);
+      }
+    }
+    const { round } = await devAt(page, 'both-sides-symbols', 3);
+    await page.locator('[data-show-picture]').click();
+    await card(page, round.choices.findIndex((c) => c.rule === 'equal.copy')).click();
+    await unlocked(page);
+    await expect(page.locator('.bl-scene')).not.toHaveAttribute('data-tilt', 'level');
+    const gaps = await page.evaluate(() => {
+      const pole = document.querySelector('.bl-pole').getBoundingClientRect();
+      const [l, r] = [...document.querySelectorAll('.bl-scene > .bl-pan .bl-bowl')].map((b) => b.getBoundingClientRect());
+      return [pole.left - l.right, r.left - pole.right];
+    });
+    for (const gap of gaps) expect(gap, `${width}px: a tilted bowl and the pole`).toBeGreaterThanOrEqual(2);
+  }
+});
+
+/**
+ * What is wrong with each ring with 0 on a pan (design 7.1): its 0's ink keeps 2.5px or more of
+ * white inside the ring's line on every side, and the ring with its halo stays off the cubes beside
+ * and below it and inside the bowl's rim.
+ * @returns {string[]}
+ */
+function zeroRingProblems() {
+  const out = [];
+  const ctx = document.createElement('canvas').getContext('2d');
+  for (const z of document.querySelectorAll('.bl-scene .bl-zero')) {
+    const b = z.getBoundingClientRect();
+    const s = getComputedStyle(z);
+    const range = document.createRange();
+    range.selectNodeContents(z);
+    const t = range.getBoundingClientRect();
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText('0');
+    const [kx, ky] = [t.width / m.width, t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)];
+    const base = t.top + ky * m.fontBoundingBoxAscent;
+    const line = parseFloat(s.borderTopWidth);
+    const room = Math.min(base - ky * m.actualBoundingBoxAscent - b.top, b.bottom - base - ky * m.actualBoundingBoxDescent,
+      t.left - kx * m.actualBoundingBoxLeft - b.left, b.right - t.left - kx * m.actualBoundingBoxRight) - line;
+    if (room < 2.5) out.push(`${z.className}: ${Math.round(room * 10) / 10}px between the 0 and its ring`);
+    // It stands on an empty place as a cube would: its hole is white, and the pan's string stops at its edge.
+    if (s.backgroundColor !== 'rgb(255, 255, 255)') out.push(`${z.className}: its hole is ${s.backgroundColor}, not white`);
+    const halo = Math.max(0, ...s.boxShadow.split(/,(?![^(]*\))/).filter((e) => e && e !== 'none' && !e.includes('inset'))
+      .map((e) => parseFloat(e.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) || 0));
+    const pan = z.closest('.bl-pan').getAttribute('data-pan');
+    const reach = { left: b.left - halo, right: b.right + halo, top: b.top - halo, bottom: b.bottom + halo };
+    for (const cube of document.querySelectorAll(`.bl-scene > .bl-pan[data-pan="${pan}"] > .bl-stack > .bl-cube`)) {
+      const c = cube.getBoundingClientRect();
+      const over = Math.min(reach.right - c.left, c.right - reach.left, reach.bottom - c.top, c.bottom - reach.top);
+      if (over > 0.25) out.push(`${z.className}: ${Math.round(over * 10) / 10}px over a cube`);
+    }
+    const bowl = document.querySelector(`.bl-scene > .bl-pan[data-pan="${pan}"] .bl-bowl`).getBoundingClientRect();
+    const rim = Math.min(reach.left - bowl.left, bowl.right - reach.right, bowl.bottom - reach.bottom) - 3;
+    if (rim < -0.25) out.push(`${z.className}: ${Math.round(-rim * 10) / 10}px over the bowl's rim`);
+  }
+  return out;
+}
+
+test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, its hole is white over the pan\'s string, and it keeps off the cubes and the rim (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 8 + ? = 8 (the place in the second row), 2 + ? = 2 and 4 + ? = 4 (the bottom row, at its end),
+  // 5 + ? = 5 and 9 + ? = 9 (where the pan's string passes the place).
+  for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const seed of [3, 7, 19, 65, 53]) {
+      const { round } = await devAt(page, 'missing-right', seed);
+      expect(round.answer, `seed ${seed}`).toBe(0);
+      const where = `${width}px ${JSON.stringify(round.equation.left)}`;
+      const plate = round.choices.findIndex((c) => c.rule === 'zero.counted-as-one');
+      await card(page, plate).click();
+      await unlocked(page);
+      await expect(page.locator('.bl-zero.is-wrong')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, card 1`).toEqual([]);
+      for (const i of wrongOf(round).filter((i) => i !== plate)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('.bl-zero.is-tour')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, the tour`).toEqual([]);
+      await card(page, round.choices.findIndex((c) => c.rule === null)).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      expect(await page.evaluate(zeroRingProblems), `${where}, solved`).toEqual([]);
+    }
+  }
+});
+
+test('small part cubes stay yellow: where an overflow or balance display needs 6-8 rows, a part\'s edge thins with the cube (design 3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 13 + ? = 14 with 27 (eight rows), 1 + 15 = ? + 8 with 24, 7 + 13 = ? + 5 with 25.
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed, value] of [['missing-symbols-20', 1, 27], ['both-sides-symbols', 1, 24], ['both-sides-symbols', 4, 25]]) {
+      const { round } = await devAt(page, level, seed);
+      await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.value === value)).click();
+      await unlocked(page);
+      const shares = await page.locator('.bl-scene > .bl-pan > .bl-stack').evaluateAll((stacks) => stacks.flatMap((st) => [...st.querySelectorAll('.bl-cube[data-role="part"]')].map((p) => {
+        const b = p.getBoundingClientRect();
+        const inset = getComputedStyle(p).boxShadow.split(/,(?![^(]*\))/).find((e) => e.includes('inset'));
+        const edge = inset ? parseFloat(inset.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/)[3]) : 0;
+        return { what: `${b.width.toFixed(1)}px, its edge ${edge.toFixed(2)}px`, share: Math.max(0, b.width - 2 * edge) ** 2 / b.width ** 2 };
+      })));
+      expect(shares.length).toBeGreaterThan(0);
+      for (const { what, share } of shares) expect(share, `${width}px ${level} ${seed} with ${value}: a part cube ${what}`).toBeGreaterThanOrEqual(0.4);
+    }
+  }
+});
+
+/**
+ * Where the hint's dashed outline of a missing cube leaves the cover's dome (design 6.6, 7.3): the
+ * outer edge of each dash, as drawn (scaled, with its corner radii), stays half a pixel or more
+ * inside the dome as app.css draws it (top corners half the height across and 80% down, bottom
+ * corners a fifth), so no shoulder of the dome is bitten.
+ * @returns {string[]}
+ */
+function dashesOutOfDome() {
+  const out = [];
+  const domes = [...document.querySelectorAll('.bl-scene > .bl-pan .bl-lid:not(.bl-bridge) > .cover')].map((c) => c.getBoundingClientRect());
+  /** @type {(d: DOMRect, x: number, y: number, m: number) => boolean} inside the dome shrunk by m */
+  const inDome = (d, x, y, m) => {
+    const [l, t, r, b] = [d.left + m, d.top + m, d.right - m, d.bottom - m];
+    if (x < l || x > r || y < t || y > b) return false;
+    const top = y < (t + b) / 2;
+    const [rx, ry] = top ? [Math.min(d.width, d.height) / 2 - m, d.height * 0.8 - m] : [Math.min(d.width / 5, d.height / 5) - m, d.height / 5 - m];
+    const [cx, cy] = [x < (l + r) / 2 ? l + rx : r - rx, top ? t + ry : b - ry];
+    const corner = (x < (l + r) / 2 ? x < cx : x > cx) && (top ? y < cy : y > cy);
+    return !corner || ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  };
+  for (const dash of document.querySelectorAll('[data-hint] .bl-dash')) {
+    const b = dash.getBoundingClientRect();
+    const dome = domes.find((d) => b.left + b.width / 2 > d.left && b.left + b.width / 2 < d.right && b.top + b.height / 2 > d.top && b.top + b.height / 2 < d.bottom);
+    if (!dome) continue;
+    const s = getComputedStyle(dash);
+    const k = b.width / /** @type {HTMLElement} */ (dash).offsetWidth;
+    const radius = (v) => {
+      const [h, w = h] = v.split(' ');
+      const len = (x) => (x.endsWith('%') ? (parseFloat(x) / 100) * /** @type {HTMLElement} */ (dash).offsetWidth : parseFloat(x)) * k;
+      return [len(h), len(w)];
+    };
+    const corners = [[s.borderTopLeftRadius, -1, -1], [s.borderTopRightRadius, 1, -1], [s.borderBottomRightRadius, 1, 1], [s.borderBottomLeftRadius, -1, 1]];
+    let bad = 0;
+    for (const [v, sx, sy] of corners) {
+      const [rx, ry] = radius(v);
+      const [cx, cy] = [sx < 0 ? b.left + rx : b.right - rx, sy < 0 ? b.top + ry : b.bottom - ry];
+      for (let a = 0; a <= 90; a += 5) {
+        const t = (a * Math.PI) / 180;
+        if (!inDome(dome, cx + sx * rx * Math.cos(t), cy + sy * ry * Math.sin(t), 0.5)) bad += 1;
+      }
+    }
+    if (bad) out.push(`a dash at ${Math.round(b.left)},${Math.round(b.top)}: ${bad} points of its edge out of the dome`);
+  }
+  return out;
+}
+
+test('the hint\'s dashed outline of the missing cubes stays inside the cover\'s dome, its ends rounded as the dome\'s shoulders (design 6.6, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 6 + ? = 7 and 13 + ? = 14: a piece one place wide; 2 + ? = 6: a piece of one and a piece of three.
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed] of [['missing-symbols', 1], ['missing-symbols-20', 1], ['missing-right', 2]]) {
+      const { round } = await devAt(page, level, seed);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      for (const i of wrongOf(round).slice(0, 2)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-hint] .bl-dash').first()).toBeVisible();
+      expect(await page.evaluate(dashesOutOfDome), `${width}px ${level} ${seed}`).toEqual([]);
+    }
+  }
+});
+
+test('ghost cubes show their dashed edge on all four sides alike, also small (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 24 ghosts of 1 + 8 + 4 + 9 (cube about 11px at 320) and 27 of op.other (about 9.5px), and full size.
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const [level, seed, rule] of [['both-sides-symbols', 1, 'equal.add-all'], ['missing-symbols-20', 1, 'op.other'], ['missing-right', 1, 'op.other']]) {
+      const { round } = await devAt(page, level, seed);
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+      await unlocked(page);
+      const boxes = await page.locator('[data-display] .bl-ghost').evaluateAll((els) => els.map((g) => g.getBoundingClientRect().toJSON()));
+      expect(boxes.length).toBeGreaterThan(0);
+      const png = (await page.screenshot()).toString('base64');
+      // The middle of each side, on the 2px edge: the edge's colour, --role-added-edge (11, 111, 166).
+      const open = await page.evaluate(async ({ data, boxes }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${data}`;
+        await img.decode();
+        const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const k = img.width / innerWidth;
+        const edge = (x, y) => {
+          const p = ctx.getImageData(Math.floor(x * k), Math.floor(y * k), 1, 1).data;
+          return Math.abs(p[0] - 11) + Math.abs(p[1] - 111) + Math.abs(p[2] - 166) < 90;
+        };
+        return boxes.flatMap((b) => {
+          const [cx, cy] = [b.x + b.width / 2, b.y + b.height / 2];
+          const sides = { top: [cx, b.y + 1], bottom: [cx, b.y + b.height - 1], left: [b.x + 1, cy], right: [b.x + b.width - 1, cy] };
+          return Object.entries(sides).filter(([, [x, y]]) => !edge(x, y)).map(([side]) => `a ${b.width.toFixed(1)}px ghost at ${Math.round(b.x)},${Math.round(b.y)}: no dash on its ${side}`);
+        });
+      }, { data: png, boxes });
+      expect(open, `${width}px ${level} ${seed} ${rule}`).toEqual([]);
+    }
+  }
+});
+
+/**
+ * What is wrong with the jumps' arcs, read in the page (design 7.1: dashed arcs show the hops): each
+ * arc is drawn over everything at its ends and its top (its legs on two marks' tops, its top in a
+ * row above), and its top stays under the ink of the digits of the marks above it.
+ * @returns {string[]}
+ */
+function arcProblems() {
+  const out = [];
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '[data-game] .bl-scene * { pointer-events: auto !important; }';
+  const ctx = document.createElement('canvas').getContext('2d');
+  /** The bottom of a mark's digit ink, from its font measured at 200px. */
+  const inkBottom = (mark) => {
+    const range = document.createRange();
+    range.selectNodeContents(mark);
+    const t = range.getBoundingClientRect();
+    const s = getComputedStyle(mark);
+    ctx.font = `${s.fontWeight} 200px ${s.fontFamily}`;
+    const m = ctx.measureText(mark.textContent);
+    const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    return { left: t.left, right: t.right, bottom: t.top + k * (m.fontBoundingBoxAscent + m.actualBoundingBoxDescent) };
+  };
+  const marks = [...document.querySelectorAll('[data-display="jumps"] .bl-mark')];
+  for (const arc of document.querySelectorAll('[data-display="jumps"] .bl-arc')) {
+    const b = arc.getBoundingClientRect();
+    for (const [what, x, y] of [['start', b.left + 2, b.bottom - 1], ['end', b.right - 2, b.bottom - 1], ['top', b.left + b.width / 2, b.top + 1]]) {
+      const hit = document.elementFromPoint(x, y);
+      if (hit !== arc) out.push(`an arc at ${Math.round(b.left)},${Math.round(b.top)}: its ${what} under ${hit?.className}`);
+    }
+    for (const mark of marks) {
+      const ink = inkBottom(mark);
+      if (ink.right > b.left && ink.left < b.right && ink.bottom < b.bottom - 1 && ink.bottom > b.top - 0.5) {
+        out.push(`an arc at ${Math.round(b.left)},${Math.round(b.top)} over the ${mark.textContent} above it`);
+      }
+    }
+  }
+  style.remove();
+  return out;
+}
+
+test('the jumps: each arc hops from one mark\'s top to the next, drawn over the marks, under the digits of a row above (design 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // ? = 6 + 4 (one row), ? = 4 + 6 (an arc under the missed cube's ring), ? = 2 + 15 (three rows).
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 568 });
+    for (const [level, seed] of [['missing-reversed', 2], ['missing-reversed', 19], ['missing-symbols-20', 31]]) {
+      const { round } = await devAt(page, level, seed);
+      await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="jumps"] .bl-arc').first()).toBeVisible();
+      expect(await page.evaluate(arcProblems), `${width}px ${level} ${seed}`).toEqual([]);
+    }
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);
@@ -738,7 +1237,9 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover stretc
   expect(r6.y).toBeLessThan(r1.y);
   const lids = page.locator('.bl-pan[data-pan="left"] .bl-lid:not(.bl-bridge)');
   await expect(lids).toHaveCount(2);
-  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge')).toHaveCount(1);
+  // The pieces share no column: one bridge across, and its tab down into the first piece.
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge.is-across')).toHaveCount(1);
+  await expect(page.locator('.bl-pan[data-pan="left"] .bl-bridge.is-tab')).toHaveCount(1);
   await expect(page.locator('.bl-pan[data-pan="left"] .bl-lid .cover[data-mark="?"]')).toHaveCount(1);
   const [lid1, lid2] = [await lids.nth(0).boundingBox(), await lids.nth(1).boundingBox()];
   const cube = await page.locator('.bl-pan[data-pan="left"] .bl-cube').first().boundingBox();
@@ -778,6 +1279,103 @@ test('two known numbers on a pan: one pile in rows of five, the second number in
   // The cover's first piece spans the first row, as the right pan's first five cubes do.
   const [lid, c0, c1] = [await lids.first().boundingBox(), await right.nth(0).boundingBox(), await right.nth(1).boundingBox()];
   expect(Math.abs(lid.width - ((Math.min(5, a + b) - 1) * (c1.x - c0.x) + c0.width))).toBeLessThan(2);
+});
+
+/**
+ * A cover over two rows that share no column, read in the page and from a screenshot: its bridge
+ * leaves white over every cube under it, and from the upper piece the cover's magenta reaches the
+ * lower piece (design 6.6: the pieces are joined).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+async function coverAcross(page) {
+  const { bar, cubes, pieces } = await page.evaluate(() => {
+    const stack = document.querySelector('.bl-scene > .bl-pan[data-pan="left"] > .bl-stack');
+    const box = (e) => e.getBoundingClientRect().toJSON();
+    return { bar: box(stack.querySelector('.bl-bridge.is-across')), cubes: [...stack.querySelectorAll('.bl-cube:not([data-role="unknown"])')].map(box),
+      pieces: [...stack.querySelectorAll('.bl-lid:not(.bl-bridge)')].map(box) };
+  });
+  const out = [];
+  for (const c of cubes) {
+    if (c.right <= bar.left || c.left >= bar.right || c.bottom < bar.bottom) continue;
+    if (c.top - bar.bottom < 1.5) out.push(`${Math.round((c.top - bar.bottom) * 10) / 10}px between the bridge and a cube under it`);
+  }
+  const all = [bar, ...pieces];
+  const clip = { x: Math.min(...all.map((b) => b.left)) - 2, y: Math.min(...all.map((b) => b.top)) - 2 };
+  Object.assign(clip, { width: Math.max(...all.map((b) => b.right)) + 2 - clip.x, height: Math.max(...all.map((b) => b.bottom)) + 2 - clip.y });
+  const png = (await page.screenshot({ clip })).toString('base64');
+  const apart = await page.evaluate(async ({ data, clip, pieces }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const [w, h] = [img.width, img.height];
+    const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+    const k = w / clip.width;
+    const magenta = (x, y) => x >= 0 && y >= 0 && x < w && y < h && Math.abs(d[(y * w + x) * 4] - 214) + Math.abs(d[(y * w + x) * 4 + 1] - 51) + Math.abs(d[(y * w + x) * 4 + 2] - 108) < 90;
+    // A point in each piece, 2px above its bottom, under its '?'.
+    const seeds = pieces.map((b) => [Math.round((b.left + b.width / 2 - clip.x) * k), Math.round((b.bottom - 2 - clip.y) * k)]);
+    const seen = new Uint8Array(w * h);
+    const queue = [seeds[0]];
+    seen[seeds[0][1] * w + seeds[0][0]] = 1;
+    while (queue.length) {
+      const [x, y] = queue.pop();
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (magenta(nx, ny) && !seen[ny * w + nx]) {
+          seen[ny * w + nx] = 1;
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    return seeds.filter(([x, y]) => !seen[y * w + x]).length;
+  }, { data: png, clip, pieces });
+  if (apart) out.push(`${apart} of ${pieces.length} pieces apart from the first`);
+  return out;
+}
+
+test('a cover over two rows that share no column: its bridge runs 2px clear of the cubes under it and reaches the lower piece (design 6.6)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 2 + ? = 6 and 4 + ? = 7: the bridge passes over the 2 or the 4.
+  for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const seed of [2, 11]) {
+      const { round } = await devAt(page, 'missing-right', seed);
+      expect(await coverAcross(page), `${width}px ${JSON.stringify(round.equation.left)}`).toEqual([]);
+    }
+  }
+});
+
+test('home thumbs: a cover\'s bridge and its pieces meet with no pale seam, a device pixel into each (design 6.6)', async ({ context }) => {
+  // 3 + ? = 10 and ? + 8 = 16 at seed 1: bridges over the columns two pieces share.
+  for (const [level, width] of [['missing-right', 390], ['both-sides-symbols', 320], ['missing-right', 320]]) {
+    const tab = await context.newPage();
+    await tab.setViewportSize({ width, height: 844 });
+    await seedStore(tab, storeWith({ games: { balance: ladderAt(level) } }));
+    await tab.clock.install({ time: NOW });
+    await tab.goto(`${INDEX}#/`);
+    const bridge = tab.locator('[data-thumb][data-game="balance"] .bl-bridge').first();
+    await expect(bridge).toBeAttached();
+    const b = await bridge.evaluate((e) => e.getBoundingClientRect().toJSON());
+    // The bridge's band, a pixel above and below it, across its middle half; the '?' is hidden,
+    // so only the shapes show.
+    await tab.addStyleTag({ content: '[data-thumb] .cover::after { visibility: hidden; }' });
+    const clip = { x: b.left + b.width / 4, y: b.top - 1, width: b.width / 2, height: b.height + 2 };
+    const png = (await tab.screenshot({ clip })).toString('base64');
+    const worst = await tab.evaluate(async (data) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${data}`;
+      await img.decode();
+      const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, img.width, img.height).data;
+      let most = 0;
+      for (let i = 0; i < d.length; i += 4) most = Math.max(most, Math.abs(d[i] - 214) + Math.abs(d[i + 1] - 51) + Math.abs(d[i + 2] - 108));
+      return most;
+    }, png);
+    expect(worst, `${level} at ${width}px: off magenta across the bridge's band`).toBeLessThan(30);
+    await tab.close();
+  }
 });
 
 test('a cover over a run of places has the dome\'s corners at its ends, from its height, and covers each place (design 6.6)', async ({ page }) => {

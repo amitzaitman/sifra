@@ -2,7 +2,7 @@
 // (step 1), the structure hint (step 2), the counting tour (step 3), the closing, and the demo's
 // steps. One object per kind of picture; game.js runs them in order and settles their motion.
 import { settle } from '../../lib/settle.js';
-import { around, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
+import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, segments, stagger } from './draw.js';
 
 /**
  * A drawn picture: the drawing's elements (from draw.js), its size, and its state.
@@ -84,6 +84,18 @@ function blink(pic, nodes) {
 }
 
 /**
+ * Flashes the whole's tag: it blinks and keeps its ring inside its own edge, so nothing of it
+ * reaches the cover or the cells just under the tag (design 7.1). Undone with the display.
+ * @param {Pic} pic
+ * @param {HTMLElement} chip
+ */
+function chipFlash(pic, chip) {
+  chip.classList.add('is-flashed');
+  pic.undo.push(() => chip.classList.remove('is-flashed'));
+  return blink(pic, [chip]);
+}
+
+/**
  * @param {Element} parent
  * @param {string} cls
  * @param {Box} box
@@ -151,6 +163,25 @@ const under = (root, node) => {
 const frameAt = (pic) => pic.t.L;
 
 /**
+ * A ring round a ghost on a frame, in pixels round its box (game.css .is-around.is-close): a
+ * 1.5px gap off its dashed edge, then the line, at any unit, also where hypothetical frames shrink
+ * the drawing; its halo stays off the next counter, 0.38 units away (design 7.1).
+ */
+const GHOST_RING = 'is-round is-around is-close on-ghost';
+/**
+ * The same ring round a ghost in a frame's white cell: it stays in the cell, whose white is its
+ * gap off the tray, so it has no halo to bulge into the tray (game.css .in-cell; design 7.1).
+ */
+const CELL_GHOST_RING = `${GHOST_RING} in-cell`;
+
+/**
+ * How far the tour's line stands off the cells along a whole tray's border: past the tray's edge
+ * (GAP) by half its 9px halo at the smallest unit a round draws (about 43px at 320px), so the
+ * halo meets the edge and the navy rim stays whole.
+ */
+const OFF_TRAY = GAP + 0.105;
+
+/**
  * Hypothetical frames under the real one for places past it (design 6.7), and the size that holds them.
  * @param {Pic} pic
  * @param {Element} root
@@ -173,18 +204,23 @@ export const FRAME = {
     const L = frameAt(pic);
     const real = L.cells.length;
     if (display === 'flash' && rule === 'given.whole') {
-      const target = t.chip ?? t.tray;
-      ring(root, grow(t.chip ? L.tag : L.trays[0], 0.1), '', t.chip ? 'is-chip' : 'is-tray');
-      return blink(pic, [target]);
+      if (t.chip) return chipFlash(pic, t.chip);
+      // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
+      // whole; the small dome on that line stays over the ring (game.css). Round the tray alone it
+      // stands off in pixels (.is-around), its inner halo ending on the tray's edge, so the navy
+      // rim stays whole at any unit (design 7.1).
+      if (t.wrap) ring(root, grow(L.trays[0], 0.2), '', 'is-tray');
+      else ring(root, L.trays[0], '', 'is-tray is-around');
+      return blink(pic, [t.tray]);
     }
     if (display === 'flash') {
-      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part'));
+      t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part in-cell'));
       return blink(pic, t.parts);
     }
     const lids = liftForDisplay(pic);
     if (display === 'empty-plate') {
       const box = disc(t.empty);
-      ring(root, grow(box, 0.08), '150ms', 'is-round is-zero');
+      ring(root, box, '150ms', 'is-round is-zero is-inset');
       digit(root, box, '0', '150ms');
       return lids;
     }
@@ -199,7 +235,7 @@ export const FRAME = {
         const i = start + j;
         const box = disc(L.place(i));
         ghost(root, box, stagger(j, value));
-        if (t.chip && i >= whole && i < real) ring(root, grow(box, 0.1), stagger(j, value));
+        if (t.chip && i >= whole && i < real) ring(root, box, stagger(j, value), CELL_GHOST_RING);
       }
       return lids;
     }
@@ -212,7 +248,7 @@ export const FRAME = {
       digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
     }
     if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
-    else ring(root, grow(disc(L.place(start + value - 1)), 0.1), stagger(value - 1, value, 120));
+    else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), CELL_GHOST_RING);
     return lids;
   },
 
@@ -223,12 +259,25 @@ export const FRAME = {
     return lift(pic, true);
   },
 
-  /** The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). @param {Pic} pic @param {HTMLElement} root */
+  /**
+   * The whole's outline (parts of a number), and every unknown cell ringed (design 7.3). On the
+   * tray's border the outline runs outside the tray, its halo clear of it, so the tour's outline
+   * round the unknown (inside the tray, with its halo) nests in it and neither cuts the other.
+   * Where the whole ends inside the tray, its line stays in the gap between cells (0.14 units),
+   * off the cells outside it, and about 3px off the hint's ring: an unknown cell's inside the
+   * whole, or the empty place's after it (answer 0). There the tour's outline, which ends at the
+   * same place, lies on it. The tag sits on it. Each ring has a 3px --halo on the tray round its
+   * cell (design 3, 7.2), drawn under the whole's line, so that line stays whole beside it.
+   * @param {Pic} pic @param {HTMLElement} root
+   */
   hint(pic, root) {
     const { t, d } = pic;
     const L = frameAt(pic);
-    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), 0.1)], 'tf-line-whole');
-    for (const c of t.run.length ? t.run : [t.empty]) at(root, 'tf-ring is-cell is-hint', c);
+    const pad = { out: 0.27, in: d.unknown ? 0.1 : 0.035, rows: d.rows };
+    const ringed = t.run.length ? t.run : [t.empty];
+    for (const c of ringed) at(root, 'tf-hint-halo', c);
+    if (t.chip) outline(root, L, [runPath(L.cells.slice(0, d.part + d.unknown), pad)], 'tf-line-whole');
+    for (const c of ringed) at(root, 'tf-ring is-cell is-hint', c);
   },
 
   /** Counts the unknown from 1 on its cells, and rings them (R5: the unknown is a part). @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
@@ -236,13 +285,19 @@ export const FRAME = {
     const { t } = pic;
     const L = frameAt(pic);
     if (!t.run.length) {
+      // The small '?' over the empty place lifts for good first, or the 0 is drawn over it (R5).
+      pic.lidsUp = true;
+      await settled(lift(pic, true), signal);
       await count(root, [{ box: disc(t.empty), n: 0 }], signal);
-      return settle(ring(root, grow(disc(t.empty), 0.08), '', 'is-round is-zero is-unknown'), signal);
+      return settle(ring(root, disc(t.empty), '', 'is-round is-zero is-inset is-unknown'), signal);
     }
     await count(root, t.run.map((c, j) => ({ box: c, n: j + 1, cls: 'on-cell' })), signal);
     // A bracket around the empty cells is already the ring, and a second outline's halo would
-    // cut its '?' dome (design 6.6, 7.3).
-    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, 0.1)], 'tf-line-unknown tf-enter'), signal);
+    // cut its '?' dome (design 6.6, 7.3). A run that wraps a row is one group: one outline. On
+    // make-ten the tray is the whole: along its border the line runs outside it, its halo clear of
+    // the navy edge, so the whole keeps its outline round the unknown (design 3, 6.7).
+    const pad = pic.d.whole ? { out: OFF_TRAY, in: 0.1, rows: pic.d.rows } : 0.1;
+    if (!signal.aborted && !t.wrap) await settle(outline(root, L, [runPath(t.run, pad, true)], 'tf-line-unknown tf-enter'), signal);
   },
 
   /** The cover lifts and the unknown fills in, in fill order (design 6.9). @param {Pic} pic */
@@ -262,11 +317,14 @@ export const FRAME = {
   },
 };
 
-/** The empty unknown, closed: a ring with 0 in --role-unknown (design 7.3). @param {Pic} pic */
+/**
+ * The empty unknown, closed: a ring with 0 in --role-unknown (design 7.3), on the counter's place,
+ * inside the hint's ring round the cell, which stays (7.2). @param {Pic} pic
+ */
 function zero(pic) {
   const root = layer(pic, '');
   const box = disc(pic.t.empty);
-  at(root, 'tf-ring is-round is-zero is-unknown tf-enter', grow(box, 0.08));
+  at(root, 'tf-ring is-round is-zero is-inset is-unknown tf-enter', box);
   at(root, 'tf-digit tf-tour tf-enter', box, '0');
 }
 
@@ -286,6 +344,8 @@ function treeGhosts(pic, root, sides, fit, digits) {
   resize(pic, L.dw, L.height(Math.max(...sides.map((s) => s.n + (digits && total < fit ? 1 : 0)))));
   let k = 0;
   for (const side of sides) {
+    /** @type {(Box & { row: number, col: number })[]} */
+    const excess = [];
     for (let j = 0; j < side.n; j++, k++) {
       const box = side.place(j);
       const delay = stagger(k, total, digits ? 120 : 40);
@@ -293,21 +353,27 @@ function treeGhosts(pic, root, sides, fit, digits) {
       const place = digits && pic.kind === 'tree' && k < fit;
       if (place) mark(root, 'tf-place tf-enter', box, undefined, delay);
       else ghost(root, box, delay, 'is-dot');
-      // On a ghost a digit is 19px, or a two-digit number sits on a white label (design 4).
-      if (digits) digit(root, box, String(k + 1), delay, place ? 'is-small' : k + 1 > 9 ? 'is-small is-label' : 'is-small on-ghost');
-      if (!digits && k >= fit) ring(root, grow(box, 0.12), delay);
+      // A digit fills a dot inside its dashed edge: a white outline in its shape keeps it off the dashes (design 4).
+      if (digits) digit(root, box, String(k + 1), delay, 'is-small is-outlined');
+      if (!digits && k >= fit) excess.push({ ...box, row: Math.floor(j / 5), col: j % 5 });
     }
+    // What does not fit stays in one ring (design 7.1): dots stand too close for a ring each. Its
+    // line runs halfway between dots, 0.35 units apart, and crosses nothing, so it has no halo.
+    // Over two rows it joins round the rows' end, not under the dots that fit.
+    if (excess.length) under(root, outline(root, L, [runPath(excess, 0.175, 'end')], 'tf-line-added tf-blink-in', false));
   }
   if (!digits) return;
+  // One dot in a ring, drawn under the others: its line passes 1.5px off the dot and the halo
+  // goes under its neighbours, which stand only 0.35 units away.
+  const dotRing = (box, delay) => under(root, ring(root, box, delay, 'is-round is-around is-close on-ghost'));
   const lastSide = sides.at(-1);
   if (total < fit) {
     const box = lastSide.place(lastSide.n);
     mark(root, 'tf-place tf-enter', box, undefined, stagger(total, total + 1, 120));
-    ring(root, grow(box, 0.12), stagger(total, total + 1, 120));
+    dotRing(box, stagger(total, total + 1, 120));
   } else {
     const side = sides[sides.length - 1].n ? sides[sides.length - 1] : sides[0];
-    // Under the digits: a two-digit label is wider than its ghost.
-    under(root, ring(root, grow(side.place(side.n - 1), 0.12), stagger(total - 1, total, 120)));
+    dotRing(side.place(side.n - 1), stagger(total - 1, total, 120));
   }
 }
 
@@ -329,19 +395,24 @@ function treeWholeHint(pic, root) {
 async function treeCount(pic, root, side, signal) {
   const { L } = pic.t;
   if (!side.n) {
-    const box = side.place(0);
-    await count(root, [{ box, n: 0 }], signal);
-    return settle(ring(root, grow(box, 0.12), '', 'is-round is-zero is-unknown'), signal);
+    // A dot's place is too small for the grown 0 inside a ring: the ring grows down and out from
+    // the place's top (clear of the circle's hint ring above), and the 0 sits in its middle. It
+    // stands on the middle place of the row, under its own circle, not at the row's start.
+    const p = side.place(2);
+    const box = { x: p.x - 0.25, y: p.y - 0.12, w: p.w + 0.5, h: p.h + 0.5 };
+    await count(root, [{ box: { ...p, y: p.y + 0.13 }, n: 0 }], signal);
+    return settle(under(root, ring(root, box, '', 'is-round is-zero is-unknown')), signal);
   }
-  await count(root, side.dots.map((dot, j) => ({ box: side.place(j), n: j + 1, cls: 'on-unknown is-small',
+  await count(root, side.dots.map((dot, j) => ({ box: side.place(j), n: j + 1, cls: `on-unknown is-small${j > 8 ? ' is-two' : ''}`,
     before: () => show(dot) })), signal);
   if (!signal.aborted) {
-    const group = around(side.dots.map((_, j) => side.place(j)));
-    // Under the drawing: the dots sit 0.35 units below the part circle, too close for the outline's
-    // 9px halo to clear them, so the dots, their digits and the circle's ring are drawn over it.
-    const line = outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter');
-    pic.base.before(line);
-    await settle(line, signal);
+    const dots = around(side.dots.map((_, j) => side.place(j)));
+    // A grown 10 passes its dot's sides: the line stands off further across, not up.
+    const wide = side.n > 9 ? 0.12 : 0;
+    const group = { ...dots, x: dots.x - wide, w: dots.w + 2 * wide };
+    // Under the digits, over the circle's hint ring and its halo, clear of its line (draw.js BELOW).
+    // The line crosses nothing, so it has no halo, which would cut the dots.
+    await settle(under(root, outline(root, L, [boxPath(group, 0.16, 0.5)], 'tf-line-unknown tf-enter', false)), signal);
   }
 }
 
@@ -351,9 +422,8 @@ export const TREE = {
     const { t, d } = pic;
     if (display === 'flash') {
       const circle = rule === 'given.whole' ? t.top : t.left.circle;
-      // A ring round the part's circle clears its 3px edge, and the ring's halo the dots below.
-      if (rule === 'given.whole') ring(root, grow(t.L.top, 0.12));
-      else ring(root, grow(t.L.left, 0.17), '', 'is-round on-part');
+      // Round the circle, clear of its edge: it keeps its size; the dots stand clear of the ring.
+      ring(root, rule === 'given.whole' ? t.L.top : t.L.left, '', 'is-round is-around');
       return blink(pic, [circle]);
     }
     treeGhosts(pic, root, [{ place: t.right.place, n: value }], d.unknown, display === 'count-up');
@@ -363,7 +433,7 @@ export const TREE = {
   /** The whole's outline, and the cover of the unknown ringed. @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
     treeWholeHint(pic, root);
-    at(root, 'tf-ring is-round is-hint', grow(pic.t.L.right, 0.14));
+    at(root, 'tf-ring is-round is-around is-hint', pic.t.L.right);
   },
   /** @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
   tour: (pic, root, signal) => treeCount(pic, root, pic.t.right, signal),
@@ -384,14 +454,15 @@ export const PAIRS = {
   display(pic, root, { value, display }) {
     const { t, d } = pic;
     if (display === 'flash') {
-      ring(root, grow(t.L.top, 0.12));
+      ring(root, t.L.top, '', 'is-round is-around');
       return blink(pic, [t.top]);
     }
     if (display === 'empty-plate') {
       const sides = [t.left, t.right].filter((s) => s.n === 0);
       const lids = liftForDisplay(pic, sides.flatMap((s) => s.covers));
+      // The ring is the empty part's circle itself: a stem ends on its line, as on any circle.
       for (const s of sides) {
-        ring(root, grow(s.box, 0.1), '150ms', 'is-round is-zero');
+        ring(root, s.box, '150ms', 'is-round is-zero');
         digit(root, s.box, '0', '150ms', 'is-big');
       }
       return lids;
@@ -403,7 +474,7 @@ export const PAIRS = {
   /** @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
     treeWholeHint(pic, root);
-    for (const box of [pic.t.L.left, pic.t.L.right]) at(root, 'tf-ring is-round is-hint', grow(box, 0.14));
+    for (const box of [pic.t.L.left, pic.t.L.right]) at(root, 'tf-ring is-round is-around is-hint', box);
   },
   /**
    * Both parts, each from 1, each in its own row of digits (R7), so the last [data-tour] is the
@@ -431,6 +502,8 @@ export const PAIRS = {
 const stickBox = (pic, j) => pic.t.L.stick(j);
 /** @type {(node: Element) => HTMLElement} a counter's veil: the unknown whole on it */
 const veil = (node) => node.querySelector('.tf-veil');
+/** @type {(b: Box) => Box} a bundle with its band, which passes 8% of its width on each side (game.css) */
+const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
 
 export const BUNDLES = {
   /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
@@ -438,7 +511,7 @@ export const BUNDLES = {
     const { t, d } = pic;
     const L = t.L;
     if (display === 'label-ten') {
-      ring(root, grow(L.bundle, 0.14), '', 'is-tray');
+      ring(root, banded(L.bundle), '', 'is-around');
       chipAt(root, L.bundle, '10', 'tf-blink-in');
       return blink(pic, [t.bundle]);
     }
@@ -448,7 +521,7 @@ export const BUNDLES = {
       resize(pic, row.right + 0.3, L.belowH);
       const all = [...row.bundles, ...row.sticks];
       all.forEach((box, j) => ghost(root, box, stagger(j, all.length), j < row.bundles.length ? 'is-bundle' : 'is-stick'));
-      if (row.bundles.length) ring(root, grow(around(row.bundles), 0.14), '300ms', 'is-tray');
+      if (row.bundles.length) ring(root, around(row.bundles), '300ms', 'is-around');
       return [];
     }
     // count-up, counting on from the bundle: 10, then the loose sticks.
@@ -461,8 +534,8 @@ export const BUNDLES = {
       digit(root, L.above(stickBox(pic, j)), String(11 + j), delay, 'is-above');
     }
     const k = value - 10;
-    if (k < d.ones) ring(root, grow(stickBox(pic, k), 0.14), stagger(k + 1, k + 2, 120), 'is-tray');
-    else ring(root, grow(stickBox(pic, k - 1), 0.14), stagger(k, k + 1, 120), 'is-tray');
+    if (k < d.ones) ring(root, stickBox(pic, k), stagger(k + 1, k + 2, 120), 'is-around');
+    else ring(root, stickBox(pic, k - 1), stagger(k, k + 1, 120), 'is-around');
     return [];
   },
   prep: () => [],
@@ -476,8 +549,10 @@ export const BUNDLES = {
       { box: L.above(L.bundle), n: 10, cls: 'is-above', before: () => show(veil(t.bundle)) },
       ...t.sticks.map((s, j) => ({ box: L.above(stickBox(pic, j)), n: 11 + j, cls: 'is-above', before: () => show(veil(s)) })),
     ], signal);
-    const boxes = [L.bundle, ...t.sticks.map((_, j) => stickBox(pic, j))];
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(boxes), 0.18, 0.4)], 'tf-line-unknown tf-enter')), signal);
+    // A ring round the bundle with its band and the sticks, in pixels (game.css .is-around): its
+    // inner halo is a 3px gap off them, so the band's tips and the last stick keep their size.
+    const boxes = [banded(L.bundle), ...t.sticks.map((_, j) => stickBox(pic, j))];
+    if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', around(boxes))), signal);
   },
   solve: () => [],
   /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
@@ -496,12 +571,9 @@ export const BUNDLES_PART = {
   display(pic, root, { value, rule, display }) {
     const { t, d } = pic;
     const L = t.L;
-    if (display === 'flash' && rule === 'given.whole') {
-      ring(root, grow(L.tag, 0.18), '', 'is-chip');
-      return blink(pic, [t.chip]);
-    }
+    if (display === 'flash' && rule === 'given.whole') return chipFlash(pic, t.chip);
     if (display === 'flash') {
-      ring(root, grow(L.bundle, 0.14), '', 'is-tray');
+      ring(root, banded(L.bundle), '', 'is-around');
       return blink(pic, [t.bundle]);
     }
     // count-up from 1 on the ones' places (the unknown is a part): one place left without a digit
@@ -515,15 +587,16 @@ export const BUNDLES_PART = {
       else mark(root, 'tf-place is-stick tf-enter', L.stick(j), undefined, delay);
       if (j < value) digit(root, L.above(L.stick(j)), String(j + 1), delay, 'is-above');
     }
-    if (value < d.ones) ring(root, grow(L.stick(value), 0.14), stagger(value, last, 120), 'is-tray');
-    else ring(root, grow(L.stick(value - 1), 0.14), stagger(value - 1, last, 120), 'is-tray');
+    if (value < d.ones) ring(root, L.stick(value), stagger(value, last, 120), 'is-around');
+    else ring(root, L.stick(value - 1), stagger(value - 1, last, 120), 'is-around');
     return lids;
   },
   prep: () => [],
   /** The bundle gets a 10 label, and the cover over the ones a ring (7.2). @param {Pic} pic @param {HTMLElement} root */
   hint(pic, root) {
-    chipAt(root, pic.t.L.bundle, '10');
-    at(root, 'tf-ring is-tray is-hint', grow(pic.t.L.places, 0.14));
+    // Nine ones make the unit small: the chip is held in pixels round its 14px digits (game.css).
+    chipAt(root, pic.t.L.bundle, '10', 'is-held');
+    at(root, 'tf-ring is-around is-hint', pic.t.L.places);
   },
   /**
    * The cover lifts for good, and the ones are counted from 1 as they show (R5: the unknown is a
@@ -536,8 +609,8 @@ export const BUNDLES_PART = {
     pic.lidsUp = true;
     await settled(lift(pic, true), signal);
     await count(root, t.sticks.map((s, j) => ({ box: L.above(L.stick(j)), n: j + 1, cls: 'is-above', before: () => show(s) })), signal);
-    // The ring around the counted ones lies on the hint's ring around their places: one line.
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(L.places, 0.14, 0.5)], 'tf-line-unknown tf-enter')), signal);
+    // The ring around the counted ones is the hint's ring around their places: one line.
+    if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', L.places)), signal);
   },
   /** @param {Pic} pic */
   solve: (pic) => lift(pic, true),
@@ -606,7 +679,7 @@ export const BRIDGE = {
       if (places.at(-1) >= 20) hypothetical(pic, root, places.at(-1), 20);
       places.forEach((i, j) => {
         ghost(root, slot(pic, i), stagger(j, extra));
-        ring(root, grow(slot(pic, i), 0.1), stagger(j, extra));
+        ring(root, slot(pic, i), stagger(j, extra), GHOST_RING);
       });
       return [];
     }

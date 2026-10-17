@@ -58,6 +58,13 @@ export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, 
 const DOT = 0.95;
 const R = 1.35;
 /**
+ * How far dots stand off their circle. A ring round a circle reaches 9px with its halo (a 3px gap,
+ * its line, its halo; design 7.1); under a part the tour's line round the dots, 0.16 units out,
+ * also stays clear of that ring's line. Both hold from a unit of about 17px (320px).
+ */
+const BESIDE = 0.6;
+const BELOW = 0.7;
+/**
  * The dot pitch of the bond: wide enough that two two-digit count-up digits side by side
  * ("10", "11" on pair cards) do not touch at 320px (design 4).
  */
@@ -75,21 +82,21 @@ const ROW = 4 * DOT_PITCH + DOT;
 
 /**
  * The number bond (model tree, Singapore 1A): the whole's circle on top with its dots beside it,
- * two part circles below with their dots under them. Circles are boxes; lines join their centres.
+ * two part circles below with their dots under them. Circles are boxes; stems join their edges.
  * @param {{ whole: number }} data the whole's count (its dots: one row up to 5, else two)
  */
 export function layoutTree({ whole }) {
   const top = { x: 7.2 - R, y: 0.3, w: 2 * R, h: 2 * R };
   const rows = whole > 5 ? 2 : 1;
-  const wholeAt = grid(top.x + 2 * R + 0.35, top.y + R - ((rows - 1) * DOT_PITCH + DOT) / 2);
+  const wholeAt = grid(top.x + 2 * R + BESIDE, top.y + R - ((rows - 1) * DOT_PITCH + DOT) / 2);
   const left = { x: 3.6 - R, y: 4.55, w: 2 * R, h: 2 * R };
   const right = { x: 10.8 - R, y: 4.55, w: 2 * R, h: 2 * R };
-  const under = (c) => grid(c.x + R - ROW / 2, c.y + 2 * R + 0.35);
+  const under = (c) => grid(c.x + R - ROW / 2, c.y + 2 * R + BELOW);
   /** @param {number} n dots in rows of five under a part circle: the bottom of the drawing below them */
-  const below = (n) => left.y + 2 * R + 0.35 + (Math.ceil(Math.max(1, n) / 5) - 1) * DOT_PITCH + DOT + 0.3;
+  const below = (n) => left.y + 2 * R + BELOW + (Math.ceil(Math.max(1, n) / 5) - 1) * DOT_PITCH + DOT + 0.3;
   const dh = below(6);
   return {
-    dw: top.x + 2 * R + 0.35 + ROW + 0.3, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
+    dw: top.x + 2 * R + BESIDE + ROW + 0.3, dh, top, left, right, wholeAt, leftAt: under(left), rightAt: under(right),
     /** @param {number} n dots under a part circle: the height that holds them */
     height: (n) => Math.max(dh, below(n)),
   };
@@ -108,6 +115,12 @@ const LIFT = 1.4;
 /** Room above the digits for the whole's tag on its bracket (14 = 10 + ?), clear of a grown last digit. */
 const TAG_BAND = 1.2;
 /**
+ * The bundle's band passes 8% of its width on each side (game.css). The space from the bundle to
+ * the first stick, wider beside the cover (14 = 10 + ?), so a ring round the bundle and its band
+ * (9px with its halo) stays off the cover at 320px (unit about 26px).
+ */
+const AFTER_BUNDLE = { open: 0.4, covered: 0.6 };
+/**
  * The whole's tag over bundles: wider and taller than on a frame, because nine sticks make the
  * unit small (about 22px at 320px), and two digits at 14px still need room inside a ring.
  */
@@ -125,7 +138,7 @@ export function layoutBundles({ ones, tag = false }) {
   /** @param {number} t bundles @param {number} o sticks @param {number} y top */
   const row = (t, o, y) => {
     const bundles = Array.from({ length: t }, (_, j) => ({ x: 0.3 + j * (BUNDLE + 0.3), y, w: BUNDLE, h: STICK.h }));
-    const x0 = 0.3 + t * (BUNDLE + 0.3) + 0.4;
+    const x0 = 0.3 + t * (BUNDLE + 0.3) + (tag ? AFTER_BUNDLE.covered : AFTER_BUNDLE.open);
     const sticks = Array.from({ length: o }, (_, i) => ({ x: x0 + i * PITCH, y, w: STICK.w, h: STICK.h }));
     return { bundles, sticks, right: (sticks.at(-1) ?? bundles.at(-1)).x + (o ? STICK.w : BUNDLE) };
   };
@@ -204,30 +217,53 @@ export function layoutBridge({ a, b }) {
 }
 
 /**
- * An SVG path around a run of cells of one frame in fill order (at most two rows), padded: one
+ * An SVG path around a run of cells (or dots) in fill order, rows of one frame, padded: one
  * rectangle, a stepped outline when the rows overlap, or two rectangles. With join, rows that
- * do not overlap are still one outline: the two boxes and a line along the gap between the rows,
- * from the lower row's end to the upper row's start (one group, one label).
- * @param {Cell[]} cells
- * @param {number} pad
- * @param {boolean} [join]
+ * do not overlap are still one outline: the boxes and a line along the gap between the rows,
+ * from the lower row's end to the upper row's start (one group, one label). With join 'end' the
+ * line goes round the rows' end instead, down past the last column and back along the lower
+ * row's bottom, under nothing, for a run whose lower row is its last place (what does not fit
+ * in a bond: the gap holds the places that fit). A run over more than two rows (dots in rows of
+ * five) is always one stepped outline.
+ * A pad per side keeps a line off the cells round a frame's run: `out` on an edge on the frame's
+ * border (the top row's top, column 0's left, column 4's right, the last row's bottom), `in` on an
+ * edge inside the tray, where a gap of GAP lies between the run and the next cell.
+ * @param {(Box & { row: number, col: number })[]} cells
+ * @param {number | { out: number, in: number, rows: number }} pad
+ * @param {boolean | 'end'} [join]
  * @returns {string}
  */
 export function runPath(cells, pad, join = false) {
   if (!cells.length) return '';
   const rows = [...new Set(cells.map((c) => c.row))];
+  /** @type {(border: boolean) => number} */
+  const by = (border) => (typeof pad === 'number' ? pad : border ? pad.out : pad.in);
+  const last = typeof pad === 'number' ? Infinity : pad.rows - 1;
   const span = (row) => {
     const own = cells.filter((c) => c.row === row);
-    return { l: Math.min(...own.map((c) => c.x)) - pad, r: Math.max(...own.map((c) => c.x + c.w)) + pad,
-      t: own[0].y - pad, b: own[0].y + own[0].h + pad };
+    const cols = own.map((c) => c.col);
+    return { l: Math.min(...own.map((c) => c.x)) - by(Math.min(...cols) === 0), r: Math.max(...own.map((c) => c.x + c.w)) + by(Math.max(...cols) === 4),
+      t: own[0].y - by(row === 0), b: own[0].y + own[0].h + by(row === last), top: own[0].y, bottom: own[0].y + own[0].h };
   };
   const rect = (s) => `M${n(s.l)} ${n(s.t)}H${n(s.r)}V${n(s.b)}H${n(s.l)}Z`;
-  if (rows.length === 1) return rect(span(rows[0]));
-  const [a, b] = [span(rows[0]), span(rows[1])];
+  const s = rows.map(span);
+  if (rows.length === 1) return rect(s[0]);
   const cols = (row) => cells.filter((c) => c.row === row).map((c) => c.col);
-  if (!join && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]))) return rect(a) + rect(b);
-  const mid = (a.b - pad + b.t + pad) / 2;
-  return `M${n(a.l)} ${n(a.t)}H${n(a.r)}V${n(mid)}H${n(b.r)}V${n(b.b)}H${n(b.l)}V${n(mid)}H${n(a.l)}Z`;
+  const apart = rows.length === 2 && Math.max(...cols(rows[1])) < Math.min(...cols(rows[0]));
+  if (apart && !join) return rect(s[0]) + rect(s[1]);
+  if (apart && join === 'end') {
+    const [u, w] = s;
+    return `M${n(u.l)} ${n(u.t)}H${n(u.r)}V${n(w.b)}H${n(w.l)}V${n(w.t)}H${n(w.r)}V${n(w.b)}H${n(u.r)}V${n(u.b)}H${n(u.l)}Z`;
+  }
+  // Down the right side, stepping in the gap between rows, then up the left side. A step is the
+  // middle of the gap; with a pad per side, the edge of the row that reaches further, padded `in`.
+  /** @type {(a: any, b: any, upper: boolean) => number} the step between rows a and b */
+  const step = (a, b, upper) => (typeof pad === 'number' ? (a.bottom + b.top) / 2 : upper ? a.bottom + pad.in : b.top - pad.in);
+  let d = `M${n(s[0].l)} ${n(s[0].t)}H${n(s[0].r)}`;
+  for (let i = 1; i < s.length; i++) d += `V${n(step(s[i - 1], s[i], s[i].r < s[i - 1].r))}H${n(s[i].r)}`;
+  d += `V${n(s.at(-1).b)}H${n(s.at(-1).l)}`;
+  for (let i = s.length - 1; i > 0; i--) d += `V${n(step(s[i - 1], s[i], s[i - 1].l < s[i].l))}H${n(s[i - 1].l)}`;
+  return `${d}Z`;
 }
 
 /**
@@ -431,15 +467,19 @@ function lids(parent, cells, cover) {
 /**
  * The small '?' dome on the top edge of the bracket around a run (design 6.6), on the run's centre.
  * Under a row of counters, a centre over a cell moves to the column line on its left, so the dome
- * sits between two counters and hides neither (5 + ? = 10: between the second and third).
+ * sits between two counters and hides neither (5 + ? = 10: between the second and third). One
+ * empty cell (9 + ? = 10) has a counter on its left in its own row: the dome moves to its right,
+ * onto the bracket's outer corner, and down a little (it still straddles the bracket's top line),
+ * so it and its halo stay off a flash ring round the counter above the cell.
  * @param {Box} top the run's first row
  * @param {boolean} under the run starts in a lower row, under counters
  * @returns {Box}
  */
 export function domeOver(top, under) {
   const cells = Math.round((top.w + GAP) / (1 + GAP));
-  const x = top.x + top.w / 2 - (under && cells % 2 ? (1 + GAP) / 2 : 0);
-  return { x: x - 0.37, y: top.y - 0.12 - 0.3, w: 0.74, h: 0.6 };
+  const corner = under && cells === 1;
+  const x = top.x + top.w / 2 - (under && cells % 2 ? (corner ? -1 : 1) * (1 + GAP) / 2 : 0);
+  return { x: x - 0.37, y: top.y - 0.12 - 0.3 + (corner ? 0.15 : 0), w: 0.74, h: 0.6 };
 }
 
 /**
@@ -472,6 +512,16 @@ export function drawFrame(host, d) {
   if (!d.solved && bracket) {
     if (run.length) {
       wrap = outline(host, L, [runPath(run, 0.12)], 'tf-line-unknown tf-bracket');
+      // A run from mid-row steps round the last counter's cell: its halo leaves a sliver of the
+      // tray between that cell's round corner and the step, closed in the halo's white.
+      const before = run[0].col > 0 && run.at(-1).row > run[0].row ? L.cells[run[0].i - 1] : null;
+      if (before) {
+        const notch = document.createElementNS(SVG, 'rect');
+        const [x, y] = [before.x + before.w - 0.15, before.y + before.h - 0.15];
+        for (const [k, v] of Object.entries({ x, y, width: run[0].x - 0.12 - x, height: before.y + before.h + GAP / 2 - y })) notch.setAttribute(k, n(v));
+        notch.setAttribute('class', 'tf-notch');
+        wrap.prepend(notch);
+      }
       covers = [lid(host, domeOver(segments(run)[0], run[0].row > 0), d.cover, '?', 'is-small')];
     } else covers = [lid(host, { x: empty.x + 0.13, y: empty.y + 0.2, w: 0.74, h: 0.6 }, d.cover, '?', 'is-small')];
   }
@@ -488,9 +538,16 @@ export function drawFrame(host, d) {
  */
 export function drawTree(host, d) {
   const L = layoutTree({ whole: d.whole });
-  const centre = (b) => [b.x + b.w / 2, b.y + b.h / 2];
-  const [t, l, r] = [centre(L.top), centre(L.left), centre(L.right)];
-  outline(host, L, [`M${t[0]} ${t[1]}L${l[0]} ${l[1]}M${t[0]} ${t[1]}L${r[0]} ${r[1]}`], 'tf-line-frame tf-stems', false);
+  // A stem runs from circle edge to circle edge (its round cap hides under each circle), so none
+  // shows through an unknown circle whose cover lifts while it is still clear (empty-plate).
+  /** @type {(a: Box, b: Box) => string} */
+  const stem = (a, b) => {
+    const [ax, ay, bx, by] = [a.x + a.w / 2, a.y + a.h / 2, b.x + b.w / 2, b.y + b.h / 2];
+    const len = Math.hypot(bx - ax, by - ay);
+    const [ux, uy] = [(bx - ax) / len, (by - ay) / len];
+    return `M${n(ax + ux * a.w / 2)} ${n(ay + uy * a.h / 2)}L${n(bx - ux * b.w / 2)} ${n(by - uy * b.h / 2)}`;
+  };
+  outline(host, L, [stem(L.top, L.left) + stem(L.top, L.right)], 'tf-line-frame tf-stems', false);
   const top = at(host, 'tf-circle', L.top, String(d.whole));
   top.dataset.role = 'whole';
   const wholeDots = Array.from({ length: d.whole }, (_, i) => countable(at(host, 'tf-dot', L.wholeAt(i))));
