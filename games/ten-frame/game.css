@@ -230,9 +230,10 @@
   text-shadow: 0 0 1px var(--role-unknown), 1.2px 0 var(--role-unknown), -1.2px 0 var(--role-unknown), 0 1.2px var(--role-unknown), 0 -1.2px var(--role-unknown),
     .8px .8px var(--role-unknown), -.8px .8px var(--role-unknown), .8px -.8px var(--role-unknown), -.8px -.8px var(--role-unknown);
 }
-/* A digit's ink sits high in its line box (line-height 1): grown from a point above the middle,
-   it stays centred on its dot, a pixel or more off the line round its group above and below. */
-[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small:not(.is-two) { transform-origin: 50% 30%; }
+/* A digit's ink sits high in its line box (line-height 1): grown from a point above the middle
+   (36%, where its ink grows evenly up and down), it stays centred on its dot, about 1.6px off the
+   line round its group above and below. */
+[data-game="ten-frame"] .tf-tour.is-last.on-unknown.is-small:not(.is-two) { transform-origin: 50% 36%; }
 /* A 10 on a dot (a part of 10, level 4) is wider than the dot: centred on it, and grown in height
    only, so with its outline it stays inside the line round its group (help.js; design 7.2). */
 [data-game="ten-frame"] .tf-digit.is-two { justify-content: center; }
