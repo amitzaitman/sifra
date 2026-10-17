@@ -1232,6 +1232,42 @@ test('the jumps: each arc hops from one mark\'s top to the next, drawn over the 
   }
 });
 
+// A jump's marks (design 7.1) are 14px digits in a ring of the cube's size, 17.7-18.5px at 320 and 360px on a short
+// screen: a number of two digits (12 to 15) was 19.1px wide there, past the 13.7-14.5px inside the ring's 2px edge, and
+// 0.5px off centre. Its digits are condensed across (--sx) as the tour's are on a known cube (design 7.3). Measured in
+// Chromium (Pixel 7), the digits' box is now 12.0px wide and 0px off centre in those rings (16.0px in the 22px ring of
+// 360px, 19.0px in the 25.1px ring of 390px, where the digits already fitted). The test asks for the hole, which leaves
+// 1.7px or more, and 1px of centring, which leaves 1px.
+test('the jumps: the digits of a two-digit mark are condensed inside its ring and centred; a one-digit mark is left as it is (design 4, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    // ? = 12 + 4: the marks 12 to 15; ? = 3 + 10: the marks 3 to 12, where only 10, 11 and 12 have two digits.
+    for (const [seed, two] of [[10, ['12', '13', '14', '15']], [30, ['10', '11', '12']]]) {
+      const { round } = await devAt(page, 'missing-symbols-20', seed);
+      await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
+      await unlocked(page);
+      await expect(page.locator('[data-display="jumps"] .bl-mark').last()).toBeVisible();
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))));
+      const marks = await page.evaluate(() => [...document.querySelectorAll('[data-display="jumps"] .bl-mark')].map((mark) => {
+        const [b, range] = [mark.getBoundingClientRect(), document.createRange()];
+        range.selectNodeContents(mark);
+        const t = range.getBoundingClientRect();
+        return { text: mark.textContent, ring: b.width, off: t.left + t.width / 2 - (b.left + b.width / 2), wide: t.width, fitted: Boolean(mark.querySelector('.bl-fit')) };
+      }));
+      const here = `${width}px ? = ${round.equation.right.join(' ')} (seed ${seed})`;
+      expect(marks.filter((m) => m.text.length === 2).map((m) => m.text), `${here}: the two-digit marks`).toEqual(two);
+      for (const m of marks) {
+        if (m.text.length === 2) {
+          expect(m.wide, `${here}: the ${m.text}'s digits, inside the ring's 2px edge, px`).toBeLessThanOrEqual(m.ring - 4);
+          expect(Math.abs(m.off), `${here}: the ${m.text}'s digits off centre, px`).toBeLessThanOrEqual(1);
+        }
+        expect(m.fitted, `${here}: the ${m.text} is condensed only with two digits`).toBe(m.text.length === 2);
+      }
+    }
+  }
+});
+
 test('R6: cubes in rows of five from the bottom, left to right; the cover stretches over the places of the unknown, one piece per row', async ({ page }) => {
   // 4 + ? = 7: four cubes, the cover over places 5 to 7 (one on the first row, two on the second).
   const { round } = await devAt(page, 'missing-right', 11);

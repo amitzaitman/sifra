@@ -46,6 +46,18 @@ const put = (parent, className, box, text) => {
   return node;
 };
 
+/**
+ * The digits of a two-digit number in a node, condensed across (--sx, `.bl-fit` centres them) so that a number as
+ * wide as two tabular digits, 0.68em each, fits `room` px; their height, so the 14px, stays (design 4, 7.3).
+ * @type {(node: HTMLElement, n: number, room: number) => void}
+ */
+const condense = (node, n, room) => {
+  node.textContent = '';
+  put(node, 'bl-fit', undefined, n);
+  const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(node).fontSize);
+  node.style.setProperty('--sx', Math.min(1, room / wide).toFixed(3));
+};
+
 // The picture's description (design 6.3): locked templates with nikud.
 const WORDS = {
   balance: 'מֹאזְנַיִם', versus: 'מוּל', cover: 'מִכְסֶה', empty: 'כַּף רֵיקָה', emptyScale: 'מֹאזְנַיִם רֵיקִים',
@@ -253,7 +265,10 @@ function balanceScene(host, round, solved, signal) {
         stagger(steps.map((slot, j) => {
           if (slot === steps[j - 1] + 1 && slot % 5) put(layer[k], 'bl-arc', at(slot - 1));
           if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
-          return put(layer[k], 'bl-mark', at(slot), first + j);
+          const mark = put(layer[k], 'bl-mark', at(slot), first + j);
+          // A mark is a white disc with a 2px edge, like a known cube: its digits get the same room, 3px each side.
+          if (first + j > 9) condense(mark, first + j, mark.offsetWidth - 6);
+          return mark;
         }));
         rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
       } else {
@@ -559,13 +574,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
         // it. The digits drawn are proportional (1.05em for 11 to 1.38em for 24), so they end up about 2px or
         // more from the edge. On a known cube: less its 2px edge and 1px more each side, so they sit on white
         // inside the edge (design 4, 7.3).
-        if (n > 9) {
-          digit.textContent = '';
-          put(digit, 'bl-fit', undefined, n);
-          const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(digit).fontSize);
-          const room = target.offsetWidth - (target.dataset.role === 'unknown' ? 4 : 6);
-          digit.style.setProperty('--sx', Math.min(1, room / wide).toFixed(3));
-        }
+        if (n > 9) condense(digit, n, target.offsetWidth - (target.dataset.role === 'unknown' ? 4 : 6));
         return digit;
       });
       await Promise.all(digits.map((digit) => settle(digit, signal)));
