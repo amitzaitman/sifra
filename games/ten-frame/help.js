@@ -2,7 +2,7 @@
 // (step 1), the structure hint (step 2), the counting tour (step 3), the closing, and the demo's
 // steps. One object per kind of picture; game.js runs them in order and settles their motion.
 import { settle } from '../../lib/settle.js';
-import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, segments, stagger } from './draw.js';
+import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
 
 /**
  * A drawn picture: the drawing's elements (from draw.js), its size, and its state.
