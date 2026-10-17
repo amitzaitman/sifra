@@ -3,6 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
+import { layoutBridge } from '../games/ten-frame/draw.js';
 import { rng } from '../shell/rng.js';
 import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
@@ -2523,6 +2524,189 @@ for (const [w, h] of [[320, 568], [360, 640], [390, 844], [412, 915]]) {
     }
   });
 }
+
+/**
+ * The viewport heights of one width where the sweep looks (design 6.3, 6.7): 1.8 to 2.8 times the width in steps of
+ * 20, and the height where the drawing fills the panel's content box both ways. The drawing is the largest that fits
+ * the box, so its width and height limits cross where the box has the drawing's proportions, dh / dw: a panel
+ * `width * dh / dw + 2 * padding` tall. The panel is a share of the viewport's height up to a largest height
+ * (app.css .panel), both read from the page. Where the panel cannot get that tall the limits do not cross: the
+ * drawing is then the height's, a little narrower than the box, and the grid is all there is.
+ * @param {import('@playwright/test').Page} page a bridging round
+ * @param {number} w
+ * @returns {Promise<{ heights: number[], crossing: number | null }>}
+ */
+async function sweepHeights(page, w) {
+  const { dw, dh } = layoutBridge({ a: 7, b: 6 });
+  const heights = [];
+  for (let h = Math.ceil((1.8 * w) / 20) * 20; h <= 2.8 * w; h += 20) heights.push(h);
+  const read = () => page.evaluate(() => {
+    const p = document.querySelector('[data-area="picture"]');
+    const [box, pad] = [p.getBoundingClientRect(), parseFloat(getComputedStyle(p).paddingLeft)];
+    return { width: box.width - 2 * pad, height: box.height, pad, inner: innerHeight };
+  });
+  await page.setViewportSize({ width: w, height: heights[0] });
+  const small = await read();
+  await page.setViewportSize({ width: w, height: 4000 });
+  const largest = (await read()).height;
+  const needs = (small.width * dh) / dw + 2 * small.pad;
+  if (needs > largest) return { heights, crossing: null };
+  const crossing = (needs * small.inner) / small.height;
+  return { heights: [...new Set([...heights, Math.floor(crossing), Math.ceil(crossing)])].sort((x, y) => x - y), crossing };
+}
+
+/**
+ * The drawing's size against the panel's content box, in CSS px: how much narrower and shorter the drawing is.
+ * @returns {{ narrower: number, shorter: number }}
+ */
+function drawingFill() {
+  const p = document.querySelector('[data-area="picture"]');
+  const [box, draw, pad] = [p.getBoundingClientRect(), p.querySelector('.tf-draw').getBoundingClientRect(), parseFloat(getComputedStyle(p).paddingLeft)];
+  return { narrower: box.width - 2 * pad - draw.width, shorter: box.height - 2 * pad - draw.height };
+}
+
+/**
+ * A bridging round of a level at its tour's end (every wrong card played), and the sizes to visit, per width.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} level
+ * @param {number[]} widths
+ * @returns {Promise<{ plan: { w: number, sizes: number[][] }[], answerAt: number }>}
+ */
+async function bridgingToSweep(page, level, widths) {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 360, height: 800 });
+  const { round, answerAt } = await devAt(page, level);
+  await toTheTour(page, round, answerAt);
+  await expect(page.locator('[data-area="picture"] .tf-whole')).toHaveCSS('opacity', '1');
+  const plan = [];
+  for (const w of widths) {
+    const { heights, crossing } = await sweepHeights(page, w);
+    if (crossing !== null) {
+      await page.setViewportSize({ width: w, height: Math.round(crossing) });
+      const fill = await page.evaluate(drawingFill);
+      expect(Math.abs(fill.narrower), `${level} at ${w}x${Math.round(crossing)}: the drawing fills the box's width`).toBeLessThan(1);
+      expect(Math.abs(fill.shorter), `${level} at ${w}x${Math.round(crossing)}: the drawing fills the box's height`).toBeLessThan(1);
+    }
+    plan.push({ w, sizes: heights.map((h) => [w, h]) });
+  }
+  await page.setViewportSize({ width: 360, height: 800 });
+  return { plan, answerAt };
+}
+
+/**
+ * The least clip room of the whole's line over the sizes of each width, and where; the report lists the least of
+ * each width.
+ * @param {import('@playwright/test').Page} page
+ * @param {{ w: number, sizes: number[][] }[]} plan
+ * @param {string} state
+ * @returns {Promise<{ clip: number, w: number, h: number }>}
+ */
+async function leastClip(page, plan, state) {
+  let worst = { clip: Infinity, w: 0, h: 0 };
+  for (const { w, sizes } of plan) {
+    let least = { clip: Infinity, w, h: 0 };
+    for (const [, h] of sizes) {
+      await page.setViewportSize({ width: w, height: h });
+      const clip = await page.evaluate(wholeClip);
+      if (clip < least.clip) least = { clip, w, h };
+    }
+    test.info().annotations.push({ type: `${state}, ${w}px wide`, description: `least room ${least.clip.toFixed(2)}px, at ${w}x${least.h}` });
+    if (least.clip < worst.clip) worst = least;
+  }
+  return worst;
+}
+
+// The panel clips what is outside its rounded padding box, and the drawing is the largest that fits the box. Where
+// the drawing's width and height limits cross (a viewport 2.2 to 2.4 times as tall as it is wide, at 320 to 412px)
+// it fills the box both ways, and the whole's line, the drawing's outermost mark, stands nearest the panel's
+// corners. The line used to stand 0.14 units outside the drawing (0.36 units off the trays on a margin of 0.22),
+// so there its bottom corners were cut. Measured in Chromium, the least room of each width over the sizes below:
+// -4.9px at 320x729, -4.0 at 360x830, -3.3 at 390x906 and -1.2 at 412x960 (the crossing at 412px is at the panel's
+// largest height, so the grid is its worst), and at dpr 3 the bottom corners of the line painted 9.2 and 7.0px squared
+// of 50 and 52 at the top. Bridging now keeps the room for the line in its own margin (draw.js BRIDGE_MARGIN), and
+// the line stands inside the drawing: 6.8px at 320x698, 9.3 at 360x795, 11.3 at 390x867 and 12.7 at 412x921 (1 asked),
+// the four corners within 2% of each other. For each width the sizes are 1.8 to 2.8 times the width in steps of 20 and the
+// exact crossing, one page resized between them, at the tour's end and solved.
+const SWEEP_WIDTHS = [320, 360, 390, 412];
+for (const [level, n] of [['bridge-move', 10], ['bridge-frames', 11], ['bridge-symbols', 12]]) {
+  test(`level ${n} (${level}): the whole's line stays inside the panel's clip at every height where the drawing's limits cross, at the tour's end and solved (design 6.3, 6.7)`, async ({ page }) => {
+    test.setTimeout(120000);
+    const { plan, answerAt } = await bridgingToSweep(page, level, SWEEP_WIDTHS);
+    expect(plan.flatMap((p) => p.sizes).length, 'sizes visited').toBeGreaterThan(60);
+    await quiet(page);
+    const end = await leastClip(page, plan, 'the tour\'s end');
+    expect(end.clip, `the tour's end: the line's least room inside the clip, at ${end.w}x${end.h}`).toBeGreaterThanOrEqual(1);
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+    await quiet(page);
+    const solved = await leastClip(page, plan, 'solved');
+    expect(solved.clip, `solved: the line's least room inside the clip, at ${solved.w}x${solved.h}`).toBeGreaterThanOrEqual(1);
+  });
+}
+
+/**
+ * How much magenta the whole's line paints in each of its four corners, in CSS px squared, read from the picture's
+ * screenshot (any engine): a square of 12px inward from each outer corner of the line's box, each device pixel by how
+ * much of the way to magenta it is on the panel-to-magenta axis (a pixel off that axis, the tray's rim or the hint's
+ * gold, is left out).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<number[]>} top left, top right, bottom left, bottom right
+ */
+async function wholeCorners(page) {
+  const picture = page.locator('[data-area="picture"]');
+  const png = (await picture.screenshot()).toString('base64');
+  const geo = await picture.evaluate((p) => {
+    const path = p.querySelector('.tf-whole .tf-line');
+    const [bb, m, box] = [path.getBBox(), path.getScreenCTM(), p.getBoundingClientRect()];
+    const half = parseFloat(getComputedStyle(path).strokeWidth) / 2;
+    return { l: m.a * bb.x + m.e - box.x - half, r: m.a * (bb.x + bb.width) + m.e - box.x + half,
+      t: m.d * bb.y + m.f - box.y - half, b: m.d * (bb.y + bb.height) + m.f - box.y + half, bg: getComputedStyle(p).backgroundColor.match(/\d+/g).map(Number) };
+  });
+  return page.evaluate(async ({ data, geo }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const g = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    g.drawImage(img, 0, 0);
+    const k = window.devicePixelRatio;
+    const side = 12;
+    const axis = geo.bg.map((c, i) => c - [214, 51, 108][i]);
+    const norm = axis.reduce((n, c) => n + c * c, 0);
+    const area = (x, y) => {
+      const d = g.getImageData(Math.round(x * k), Math.round(y * k), Math.round(side * k), Math.round(side * k)).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = geo.bg.map((c, j) => c - d[i + j]);
+        const t = (v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2]) / norm;
+        if (Math.hypot(v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]) < 20) sum += Math.max(0, Math.min(1, t));
+      }
+      return sum / (k * k);
+    };
+    return [area(geo.l, geo.t), area(geo.r - side, geo.t), area(geo.l, geo.b - side), area(geo.r - side, geo.b - side)];
+  }, { data: png, geo });
+}
+
+// The same at the worst size, in pixels (dpr 3, an iPhone's): the four corners of the line paint the same magenta. A
+// corner outside the panel's clip loses part of it (over 80% of each bottom corner at 320x729 before the line had its
+// room). The worst size is where the line has the least room over the sweep's sizes at level 11, solved, at 320px wide:
+// the narrowest width has the least room at every height (see the sweep above), so the other widths are left out here.
+test.describe('the whole line\'s corners at dpr 3', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test('bridge-frames at the size where the whole\'s line has the least room inside the clip, solved: its four corners paint the same magenta (design 6.7)', async ({ page }) => {
+    test.setTimeout(120000);
+    const { plan, answerAt } = await bridgingToSweep(page, 'bridge-frames', SWEEP_WIDTHS.slice(0, 1));
+    await card(page, answerAt).click();
+    await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+    await quiet(page);
+    const worst = await leastClip(page, plan, 'solved');
+    await page.setViewportSize({ width: worst.w, height: worst.h });
+    await quiet(page);
+    const corners = await wholeCorners(page);
+    const where = `at ${worst.w}x${worst.h} (room ${worst.clip.toFixed(1)}px): top left, top right, bottom left, bottom right ${corners.map((c) => c.toFixed(1)).join(', ')} px squared`;
+    expect(Math.min(...corners), `the least corner is painted ${where}`).toBeGreaterThan(20);
+    expect(Math.min(...corners) / Math.max(...corners), `the corners match ${where}`).toBeGreaterThanOrEqual(0.9);
+  });
+});
 
 /**
  * How much paper lies between the whole's magenta line and the tray's rim in a thumb, in CSS px, read from the
