@@ -731,10 +731,11 @@ test('the tour\'s last number: bigger than the one before it, clear of it and of
 
 /**
  * What is wrong with each two-digit tour number (design 4, 7.3), read in the page: at 14px at
- * least, its digits' box (as drawn) is inside its cube with 1.5px of the cube's colour each side
- * on the unknown, and inside a known cube's 2px edge with 0.5px of white; its ink, measured from
- * its font, is inside the cube (a known cube's edge) from top to bottom too (the last one grows
- * 1.3 in height).
+ * least, its digits' box (as drawn) is inside its cube with 1px of the cube's colour each side
+ * on the unknown (--sx leaves at least 2px, so this has a pixel to spare), and inside a known cube's
+ * 2px edge with 0.5px of white; its ink, measured from its font, is inside the cube from top to
+ * bottom too (the last one grows 1.3 in height): on a known cube within 0.5px of its 2px edge, where
+ * the digits are clipped (clip-path), on the unknown 1px inside.
  * @returns {string[]}
  */
 function twoDigitProblems() {
@@ -759,7 +760,7 @@ function twoDigitProblems() {
     const m = ctx.measureText(text);
     const k = t.height / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
     const base = t.top + k * m.fontBoundingBoxAscent;
-    const [side, high] = known ? [2.5, 2] : [1.5, 1];
+    const [side, high] = known ? [2.5, 1.5] : [1, 1];
     const room = Math.min(t.left - c.left, c.right - t.right);
     if (room < side) out.push(`${text} on a${known ? ' known' : 'n unknown'} cube: ${r(room)}px from its side, not ${side}`);
     const top = Math.min(base - k * m.actualBoundingBoxAscent - c.top, c.bottom - base - k * m.actualBoundingBoxDescent);
@@ -1204,7 +1205,7 @@ function arcProblems() {
     }
     for (const mark of marks) {
       const ink = inkBottom(mark);
-      if (ink.right > b.left && ink.left < b.right && ink.bottom < b.bottom - 1 && ink.bottom > b.top - 0.5) {
+      if (ink.right > b.left && ink.left < b.right && ink.bottom < b.bottom - 1 && ink.bottom > b.top) {
         out.push(`an arc at ${Math.round(b.left)},${Math.round(b.top)} over the ${mark.textContent} above it`);
       }
     }
