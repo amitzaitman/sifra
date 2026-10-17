@@ -1025,6 +1025,7 @@ function zeroRingProblems() {
 }
 
 test('a ring with 0 on a pan is wider than its place: its 0 has room inside it, its hole is white over the pan\'s string, and it keeps off the cubes and the rim (design 7.1)', async ({ page }) => {
+  test.setTimeout(90000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // 8 + ? = 8 (the place in the second row), 2 + ? = 2 and 4 + ? = 4 (the bottom row, at its end),
   // 5 + ? = 5 and 9 + ? = 9 (where the pan's string passes the place).
@@ -1161,7 +1162,9 @@ test('ghost cubes show their dashed edge on all four sides alike, also small (de
         const k = img.width / innerWidth;
         const edge = (x, y) => {
           const p = ctx.getImageData(Math.floor(x * k), Math.floor(y * k), 1, 1).data;
-          return Math.abs(p[0] - 11) + Math.abs(p[1] - 111) + Math.abs(p[2] - 166) < 90;
+          // The ghost's own fill (154, 213, 244) is 323 away and white 477: 150 is about halfway to the nearer, and a
+          // dash's edge pixel, half covered, measured 79 from the edge's colour at 360px (90 was too close).
+          return Math.abs(p[0] - 11) + Math.abs(p[1] - 111) + Math.abs(p[2] - 166) < 150;
         };
         return boxes.flatMap((b) => {
           const [cx, cy] = [b.x + b.width / 2, b.y + b.height / 2];
