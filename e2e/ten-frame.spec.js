@@ -2377,59 +2377,95 @@ async function frameRim(page) {
 
 /**
  * The bridging hint's gold lines against what is round them, in CSS px, read from the page (design 6.7, 7.2):
- * the gap between a gold line's edge and the whole's line (3px: the halo's reach, 4.5px, and the whole's half
- * line, 1.5px, stay apart), the gap between a gold line's edge and a dashed place's outer edge, and whether the
- * dashed places are drawn after the lines (a line's 9px halo then never cuts a ring).
- * @returns {{ whole: number, ring: number, ringsAfter: boolean, lines: number, rings: number }}
+ * the paper between a gold line's edge and the whole's line, the paper between a gold line's edge and a dashed place's outer edge, the paper between
+ * two groups' gold lines (the line under the first frame and the one over the second face each other across the
+ * band between the trays), how many halos are drawn after a line they reach (a group's own comes first), whether
+ * the dashed places are drawn after the lines, and how far the whole's line stays inside the panel's clip (its
+ * padding box with the rounded corners, minus the line's half width).
+ * @returns {{ whole: number, ring: number, between: number, cut: number, ringsAfter: boolean, clip: number, lines: number, rings: number }}
  */
 function hintLines() {
   const p = document.querySelector('[data-area="picture"]');
+  // Points half a CSS px apart along a path (its length is in the viewBox's units, a unit is about 33px).
   const points = (path) => {
     const m = path.getScreenCTM();
     const out = [];
-    for (let t = 0, len = path.getTotalLength(); t <= len; t += 0.5) {
+    for (let t = 0, len = path.getTotalLength(); t <= len; t += 0.5 / m.a) {
       const q = path.getPointAtLength(t).matrixTransform(m);
       out.push([q.x, q.y]);
     }
     return out;
   };
-  const gold = [...p.querySelectorAll('[data-hint] .tf-line-part .tf-line')];
+  const near = (a, b) => {
+    let least = Infinity;
+    for (const [x, y] of a) for (const [u, v] of b) least = Math.min(least, Math.hypot(x - u, y - v));
+    return least;
+  };
+  const half = (path) => parseFloat(getComputedStyle(path).strokeWidth) / 2;
+  const all = [...p.querySelectorAll('[data-hint] .tf-line-part path')];
+  const gold = all.filter((n) => n.classList.contains('tf-line'));
+  const halos = all.filter((n) => n.classList.contains('tf-halo'));
+  const geo = new Map(all.map((n) => [n, points(n)]));
   const wholeLine = p.querySelector('.tf-whole .tf-line');
   const whole = points(wholeLine);
-  const half = (path) => parseFloat(getComputedStyle(path).strokeWidth) / 2;
-  let [toWhole, toRing] = [Infinity, Infinity];
+  let [toWhole, toRing, between, cut] = [Infinity, Infinity, Infinity, 0];
   const rings = [...p.querySelectorAll('[data-hint] .tf-place')].map((r) => {
     const b = r.getBoundingClientRect();
     return [b.x + b.width / 2, b.y + b.height / 2, b.width / 2];
   });
   for (const path of gold) {
-    for (const [x, y] of points(path)) {
-      for (const [wx, wy] of whole) toWhole = Math.min(toWhole, Math.hypot(x - wx, y - wy) - half(path) - half(wholeLine));
-      for (const [cx, cy, r] of rings) toRing = Math.min(toRing, Math.hypot(x - cx, y - cy) - r - half(path));
+    const [own, other] = [half(path), half(wholeLine)];
+    for (const [x, y] of geo.get(path)) {
+      for (const [wx, wy] of whole) toWhole = Math.min(toWhole, Math.hypot(x - wx, y - wy) - own - other);
+      for (const [cx, cy, r] of rings) toRing = Math.min(toRing, Math.hypot(x - cx, y - cy) - r - own);
     }
   }
+  // The k-th halo goes with the k-th line. A halo after another group's line, nearer than its reach and the
+  // line's half width, cuts that line; two groups' lines have paper between them by their distance less their widths.
+  gold.forEach((line, i) => gold.forEach((other, j) => {
+    if (i >= j) return;
+    between = Math.min(between, near(geo.get(line), geo.get(other)) - half(line) - half(other));
+  }));
+  gold.forEach((line, i) => halos.forEach((halo, j) => {
+    if (i === j || !(line.compareDocumentPosition(halo) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    if (near(geo.get(line), geo.get(halo)) < half(halo) + half(line)) cut += 1;
+  }));
+  // The panel clips to its rounded padding box: a signed distance to that rounded rectangle, the line's outer edge.
+  const panel = p.getBoundingClientRect();
+  const radius = parseFloat(getComputedStyle(p).borderTopLeftRadius);
+  const inside = ([x, y]) => {
+    const [qx, qy] = [Math.abs(x - panel.x - panel.width / 2) - (panel.width / 2 - radius), Math.abs(y - panel.y - panel.height / 2) - (panel.height / 2 - radius)];
+    return radius - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0);
+  };
+  const clip = Math.min(...whole.map(inside)) - half(wholeLine);
   const lines = [...p.querySelectorAll('[data-hint] > .tf-svg')];
   const places = [...p.querySelectorAll('[data-hint] > .tf-place')];
   const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-  return { whole: toWhole, ring: toRing, ringsAfter: lines.every((l) => places.every((r) => after(l, r))), lines: gold.length, rings: rings.length };
+  return { whole: toWhole, ring: toRing, between, cut, ringsAfter: lines.every((l) => places.every((r) => after(l, r))), clip, lines: gold.length, rings: rings.length };
 }
 
 // The hint's lines round a group in bridging stand off the tray's rim (design 6.7, 7.2). Their 9px halo was once
 // on it: the line stood 0.12 units off the cells, 0.02 inside the tray's edge, and the halo shaved the rim along
 // the group's top, bottom and outer end (0 of its 4.6px at 320 beside such a cell), and, where the group starts
-// in a row, the dashed ring of the cell before it. Now a line on a tray's border stands 0.18 units off the tray
-// and one in a gap in its middle, the rings are drawn after the lines, and the whole's line stands past the halo.
-// Measured in Chromium (Pixel 7) at 320, 360 and 390px, the least of each: the rim beside a border cell 3.8, 5.0 and 6.5px
-// (of 4.6, 5.2 and 6.9; 0, 0 and 0.8px before, and half of it is asked); a gold line's edge to the whole's line 4.2, 5.1 and
-// 7.9px (3 asked: the halo's reach and the line's half stay apart); a gold line's edge to a dashed place 2.1, 2.6 and 4.0px
-// (1 asked).
-for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
+// in a row, the dashed ring of the cell before it. Now a line on a tray's border stands 0.17 units off the tray
+// and one in a gap in its middle, and the rings are drawn after the lines. With the first frame full the line under
+// it and the line over the second frame face each other across the 0.5 units between the trays, 0.16 apart, and a
+// halo drawn after one cut it (by 1.4px of its 3px at 320 and 0.8px at 360, from the geometry), so every halo is drawn before every line.
+// The whole's line stands 0.36 units off the trays: past the gold lines, and inside the panel's clip (at 0.4 its
+// corners were 0.2px outside it at 412px, the Pixel 7). Measured in Chromium at 320, 360, 390 and 412px, the least of
+// each: the rim beside a border cell 3.8, 5.0, 6.5 and 6.9px (of 4.6, 5.2, 6.9 and 7.5; 0, 0 and 0.8px at 320, 360 and
+// 390 before, and half of it is asked); a gold line's edge to the whole's line 3.2, 4.0, 6.4 and 7.2px (2 asked); a gold
+// line's edge to a dashed place 2.1, 2.6, 4.0 and 4.4px (1 asked); the paper between the two groups' lines 2.2, 2.9,
+// 4.9 and 5.6px (1 asked); the whole's outer edge inside the panel's clip 3.5, 4.1, 3.2 and 2.6px (0 asked; it was 2.2,
+// 2.7, 0.8 and -0.2px with 0.4 units). The last four are layout geometry, exact, with no text in them. On a phone held
+// sideways (844x390: cells of 26px) the same read 3.4px of 3.7, 2.0, 1.4 and 1.2px, and the clip is far off.
+for (const [w, h] of [[320, 568], [360, 640], [390, 844], [412, 915]]) {
   test(`bridging at ${w}px: the hint's lines leave the tray's rim whole, the dashed places whole, and the whole's line clear (design 6.7, 7.2)`, async ({ page }) => {
     test.setTimeout(90000);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: w, height: h });
     // [level, sum, light counters moved up after the hint (level 10: the first frame then fills)]
-    for (const [level, sum, move] of [['bridge-move', '7,+,6', true], ['bridge-frames', '7,+,6'], ['bridge-frames', '8,+,9'], ['bridge-frames', '9,+,9']]) {
+    for (const [level, sum, move] of [['bridge-move', '7,+,6', true], ['bridge-move', '8,+,8', true], ['bridge-frames', '7,+,6'], ['bridge-frames', '8,+,9'], ['bridge-frames', '9,+,9']]) {
       await page.goto('about:blank');
       const { round } = await devAt(page, level, (r) => r.equation.left.join() === sum);
       const [a, , b] = round.equation.left;
@@ -2455,11 +2491,16 @@ for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
         for (const side of rim) expect(side.px, `${where}: the rim beside cell ${side.cell}, ${side.side} (of ${side.rim.toFixed(1)}px)`).toBeGreaterThanOrEqual(0.5 * side.rim);
         const seen = await page.evaluate(hintLines);
         expect(seen.lines, `${where}: lines`).toBeGreaterThan(0);
-        // The dashed places go when the first frame is full.
-        if (when === 'in the hint') expect(seen.rings, `${where}: dashed places`).toBeGreaterThan(0);
+        // The dashed places go when the first frame is full, and then the lines of two groups face each other.
+        const full = when === 'after the move';
+        if (!full) expect(seen.rings, `${where}: dashed places`).toBeGreaterThan(0);
+        if (full) expect(seen.lines, `${where}: groups with a line`).toBe(2);
         expect(seen.ringsAfter, `${where}: the dashed places come after the lines`).toBe(true);
+        expect(seen.cut, `${where}: halos drawn after a line they reach`).toBe(0);
         expect(seen.ring, `${where}: gold line to a dashed place`).toBeGreaterThanOrEqual(1);
-        expect(seen.whole, `${where}: gold line to the whole's line`).toBeGreaterThanOrEqual(3);
+        expect(seen.between, `${where}: paper between two groups' lines`).toBeGreaterThanOrEqual(full ? 1 : 0);
+        expect(seen.whole, `${where}: gold line to the whole's line`).toBeGreaterThanOrEqual(2);
+        expect(seen.clip, `${where}: the whole's line inside the panel's clip`).toBeGreaterThanOrEqual(0);
       }
     }
   });
@@ -2509,9 +2550,9 @@ async function paperToTray(page, thumb) {
 // The whole's line has no halo (it crosses nothing). In a thumb its stroke is 0.08 units, and it once stood 0.12 units
 // off the tray, so 1.0px of paper lay between them, and painted none: the line's pixels sat against the rim at dpr 2
 // and 3 at 320px (1 device pixel of 6 at dpr 6), where the halo it had before at least kept a white band. It now stands
-// 0.4 units off, so 4.5px of paper lies between (design 3, 6.7). The test asks for 2px, so the fixed line has 1.5px to
-// spare. Measured in Chromium at 320px (a thumb's cells are 12.6px at every width), before / after: 0 / 3.5px at dpr 2
-// and 0 / 3.7px at dpr 3.
+// 0.36 units off, so 4.0px of paper lies between (design 3, 6.7). The test asks for 1.5px, so the fixed line has 1.5px to
+// spare. Measured in Chromium at 320px (a thumb's cells are 12.6px at every width), before / after: 0 / 3.0px at dpr 2
+// and 0 / 3.0px at dpr 3.
 for (const dpr of [2, 3]) {
   test.describe(`thumbs at dpr ${dpr}`, () => {
     test.use({ deviceScaleFactor: dpr });
@@ -2525,7 +2566,7 @@ for (const dpr of [2, 3]) {
       await expect(thumbs).toHaveCount(8);
       for (const [i, thumb] of (await thumbs.all()).entries()) {
         await expect(thumb.locator('.tf-whole')).toHaveCSS('opacity', '1');
-        expect(await paperToTray(page, thumb), `thumb ${i}: CSS px of paper between the line and the tray`).toBeGreaterThanOrEqual(2);
+        expect(await paperToTray(page, thumb), `thumb ${i}: CSS px of paper between the line and the tray`).toBeGreaterThanOrEqual(1.5);
       }
     });
   });

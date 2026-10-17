@@ -666,11 +666,13 @@ export async function fill(pic, signal, hand) {
  * Where the bridging hint's gold lines stand (cells are 32.7px at 320px, 36.9px at 360px, 49.4px at 390px).
  * In the gap between cells (0.14 units) they run along its middle, 0.07: the line is then 2.1px off the dashed ring
  * of the cell beside it, and its 9px halo (4.5px each side) reaches 2.2px into that cell, so the rings are drawn after
- * the lines and keep their dashes whole. On a tray's border they run outside the tray, 0.18 units past its edge (5.9px
+ * the lines and keep their dashes whole. On a tray's border they run outside the tray, 0.17 units past its edge (5.6px
  * at 320px), so the halo stops a pixel short of the tray's rim and the rim stays whole; the whole's line stands past
- * the halo (draw.js WHOLE_OFF).
+ * them (draw.js WHOLE_OFF). No more than that: once the first frame is full, the line under the first frame and
+ * the line over the second face each other across the 0.5 units between the trays, 0.16 units apart (2.2px of paper
+ * between them at 320px), and all the halos are drawn before the lines.
  */
-const HINT_PAD = { out: 0.32, in: 0.07, rows: 2 };
+const HINT_PAD = { out: 0.31, in: 0.07, rows: 2 };
 
 export const BRIDGE = {
   /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
@@ -721,16 +723,19 @@ export const BRIDGE = {
    * the first frame is full (level 10), the counters that came and the rest. No chip covers a
    * counter, and the outlines go first (HINT_PAD), then the dashed places, so no halo cuts a ring, and
    * the chips last, so none is cut. The whole's outline (a haloless line on the paper, shown by the tour
-   * and the closing) stands past the hint's halos (draw.js WHOLE_OFF) and still moves up to just after
-   * this layer, so nothing of the hint can cut its 3px line even at the smallest unit; the tour's chip
-   * and numbers, drawn later, stay above it.
+   * and the closing) stands past the hint's lines (draw.js WHOLE_OFF) and still moves up to just after
+   * this layer, so no halo of the hint can cut its 3px line, as on a phone held sideways, where cells are
+   * 26px and the halo reaches it; the tour's chip and numbers, drawn later, stay above it.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
     const L = pic.t.L;
     const groups = L.labels(pic.top.length - pic.d.a);
     root.replaceChildren();
-    for (const g of groups) if (g.line) outline(root, L, [runPath(g.cells.map((i) => L.place(i)), HINT_PAD, true)], 'tf-line-part');
+    // One SVG for both groups' lines (once the first frame is full): the band between the frames is 0.5 units, so
+    // the lines facing each other there stand 0.16 apart, and a halo drawn after a line would cut it.
+    const lines = groups.filter((g) => g.line).map((g) => runPath(g.cells.map((i) => L.place(i)), HINT_PAD, true));
+    if (lines.length) outline(root, L, lines, 'tf-line-part');
     if (pic.top.length < 10) {
       for (let i = pic.top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
       for (const i of groups[0].cells) at(root, 'tf-place is-target', grow(disc(L.place(i)), 0.08));

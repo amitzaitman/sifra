@@ -356,7 +356,8 @@ export const disc = (c) => ({ x: c.x + c.w * 0.12, y: c.y + c.h * 0.12, w: c.w *
 export const grow = (b, p) => ({ x: b.x - p, y: b.y - p, w: b.w + 2 * p, h: b.h + 2 * p });
 
 /**
- * Outlines in an SVG over the drawing: each path gets a white halo under its line (design 6.6).
+ * Outlines in an SVG over the drawing: each path gets a white halo under its line (design 6.6). Every halo is
+ * drawn before every line, so with several paths no halo cuts another path's line.
  * @param {Element} parent
  * @param {{ dw: number, dh: number }} size
  * @param {string[]} paths
@@ -371,8 +372,8 @@ export function outline(parent, { dw, dh }, paths, cls, halo = true) {
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('aria-hidden', 'true');
   put(svg, { x: 0, y: 0, w: dw, h: dh });
-  for (const d of paths.filter(Boolean)) {
-    for (const part of halo ? ['tf-halo', 'tf-line'] : ['tf-line']) {
+  for (const part of halo ? ['tf-halo', 'tf-line'] : ['tf-line']) {
+    for (const d of paths.filter(Boolean)) {
       const path = document.createElementNS(SVG, 'path');
       path.setAttribute('d', d);
       path.setAttribute('class', part);
@@ -599,12 +600,13 @@ export function drawBundles(host, d) {
 /**
  * How far the whole's line stands off the trays (bridging ten), in units. It has no halo, so in a thumb (cells of
  * 12.6px, a line of 0.08 units) 0.12 left 1px of paper between it and the tray, and painted none at dpr 2 and 3:
- * at 0.4 there are 4.5px, and the tray keeps its edge (design 3, 6.7). It also stands past the hint's gold lines on
- * a tray's border (help.js HINT_PAD: 5.9px off the tray at 320px) and their 9px halos, which reach 10.4px off it,
- * so at least 3px of paper lies between a gold line and this one (4.2px at 320px).
+ * at 0.36 there are 4.0px, and the tray keeps its edge (design 3, 6.7). It also stands past the hint's gold lines on
+ * a tray's border (help.js HINT_PAD: 5.6px off the tray at 320px), with 3.2px of paper between a gold line and this
+ * one at 320px. No further: the panel clips what is outside its padding box and its rounded corners, and at 0.4 the
+ * line's corners were 0.2px outside the clip at 412px (the Pixel 7).
  */
-const WHOLE_OFF = 0.4;
-/** The whole's corners: tight, so they stay clear of the hint's square corners on a tray's border (0.18 units off it). */
+const WHOLE_OFF = 0.36;
+/** The whole's corners: tight, so they stay clear of the hint's square corners on a tray's border (0.17 units off it). */
 const WHOLE_RADIUS = 0.2;
 
 /**
