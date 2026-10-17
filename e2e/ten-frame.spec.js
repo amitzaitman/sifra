@@ -1082,7 +1082,7 @@ function ringProblems() {
       if (over > 0.25) out.push(`${ring.className.replace('tf-at ', '')} ${Math.round(over * 10) / 10}px over ${el.className.replace('tf-at ', '')}`);
       // A ghost's dashed edge is the ring's colour: a pixel or more of white stays between them. The floor
       // is not far above that in bridging's real cells (game.css .in-cell): the ring's --out clamps to
-      // 4.25px under 37px cells, so the gap, --out less the 3px line, is 1.25px at 320 (cells 32.7px) and
+      // 4.25px under 37px cells, so the gap, --out less the 3px line, is 1.25px at 320 (cells 32.2px) and
       // 1.5px at 390. It is layout geometry, not text, so it does not drift with the font; the 1 is kept.
       const line = parseFloat(s.borderTopWidth);
       const gap = round ? (r.width - 2 * line - Math.max(b.width, b.height)) / 2 - Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2)
@@ -2151,7 +2151,7 @@ async function onWhite(page, digit) {
 // (design 4): it keeps a gap between its digits, its ink stays on white (its white circle, and a white outline
 // where the digits pass it: at 320px and on a phone held sideways, where a counter is 20px), and at 390px its
 // counter shows its light shade round the white circle, as 1 to 9 do (design 7.1). Measured in Chromium: gaps of
-// 4-7 device pixels, 30-36 of the rim's 36 points in the counter's colour at 390px; set 0.1em tighter, the digits
+// 4-7 device pixels, 29-36 of the rim's 36 points in the counter's colour at 390px; set 0.1em tighter, the digits
 // touched (no gap), and the white circle reached the counter's edge (0 of 36).
 for (const [w, h, dpr] of [[320, 568], [390, 844], [390, 844, 3], [844, 390], [740, 360]]) {
   test.describe(`count-up at ${w}x${h}${dpr ? `, dpr ${dpr}` : ''}`, () => {
@@ -2180,7 +2180,7 @@ for (const [w, h, dpr] of [[320, 568], [390, 844], [390, 844, 3], [844, 390], [7
 // veil covers a counter (design 2, principle 3's exception), so each number sits on a white circle on its light
 // counter, as count-up's do (design 7.2): its digits apart, its ink on white, and at 390px the counter's shade
 // round the white circle, the grown last one's too (its circle does not grow). 390px runs with motion. Measured
-// in Chromium: gaps of 3-9 device pixels, 22-33 of the rim's 36 points at 390px (fewest round the grown last).
+// in Chromium: gaps of 4-8 device pixels, 21-31 of the rim's 36 points at 390px (fewest round the grown last).
 const TOUR = [
   ['bridge-frames', 320, 568, true, [9, 9]],
   ['bridge-symbols', 320, 568, true, [7, 8]],
@@ -2273,9 +2273,9 @@ async function wholeLine(page) {
 
 // The whole's line is 3px (design 6.7). The hint stays to the end of the round, and its 9px halos once cut that line
 // along the first and last columns of the frames at 320 and 360px: the line is now drawn above the hint, and without
-// a halo of its own (it crosses nothing; it stood 0.12 units off the trays on the paper when this was measured, now 0.4). Thinnest row of a side,
-// measured in Chromium (Pixel 7), before / after: 1.58-1.61 / 3.07-3.09px at 320, 2.16-2.28 / 3.06-3.08px at 360,
-// 3.00 / 3.09-3.10px at 390. The test asks for 2px, a pixel under the line, so the fixed line has a pixel to spare;
+// a halo of its own (it crosses nothing; it stood 0.12 units off the trays on the paper when this was measured, now 0.36).
+// Thinnest row of a side, measured in Chromium (Pixel 7), before / after: 1.58-1.61 / 3.07-3.09px at 320, 2.16-2.28 /
+// 3.10px at 360, 3.00 / 3.14-3.15px at 390. The test asks for 2px, a pixel under the line, so the fixed line has a pixel to spare;
 // at 360px the unfixed line (2.2px) is above that, and the drawing order is what fails there.
 for (const [level, sum] of [['bridge-move', '8,+,8'], ['bridge-frames', '7,+,6']]) {
   for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
@@ -2376,13 +2376,34 @@ async function frameRim(page) {
 }
 
 /**
+ * How far the whole's line stands inside the panel's clip, in CSS px, read from the page (design 6.3, 6.7): the panel
+ * clips to its rounded padding box (overflow hidden, 28px corners), so this is the least signed distance from the
+ * line's outer edge (its middle less half its width) to that rounded rectangle, over points half a CSS px apart on
+ * the line. Negative: the line is cut. Exact layout geometry, with no text in it.
+ * @returns {number}
+ */
+function wholeClip() {
+  const p = document.querySelector('[data-area="picture"]');
+  const line = p.querySelector('.tf-whole .tf-line');
+  const m = line.getScreenCTM();
+  const panel = p.getBoundingClientRect();
+  const radius = parseFloat(getComputedStyle(p).borderTopLeftRadius);
+  let least = Infinity;
+  for (let t = 0, len = line.getTotalLength(); t <= len; t += 0.5 / m.a) {
+    const q = line.getPointAtLength(t).matrixTransform(m);
+    const [qx, qy] = [Math.abs(q.x - panel.x - panel.width / 2) - (panel.width / 2 - radius), Math.abs(q.y - panel.y - panel.height / 2) - (panel.height / 2 - radius)];
+    least = Math.min(least, radius - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0));
+  }
+  return least - parseFloat(getComputedStyle(line).strokeWidth) / 2;
+}
+
+/**
  * The bridging hint's gold lines against what is round them, in CSS px, read from the page (design 6.7, 7.2):
  * the paper between a gold line's edge and the whole's line, the paper between a gold line's edge and a dashed place's outer edge, the paper between
  * two groups' gold lines (the line under the first frame and the one over the second face each other across the
- * band between the trays), how many halos are drawn after a line they reach (a group's own comes first), whether
- * the dashed places are drawn after the lines, and how far the whole's line stays inside the panel's clip (its
- * padding box with the rounded corners, minus the line's half width).
- * @returns {{ whole: number, ring: number, between: number, cut: number, ringsAfter: boolean, clip: number, lines: number, rings: number }}
+ * band between the trays), how many halos are drawn after a line they reach (a group's own comes first), and whether
+ * the dashed places are drawn after the lines.
+ * @returns {{ whole: number, ring: number, between: number, cut: number, ringsAfter: boolean, lines: number, rings: number }}
  */
 function hintLines() {
   const p = document.querySelector('[data-area="picture"]');
@@ -2430,18 +2451,10 @@ function hintLines() {
     if (i === j || !(line.compareDocumentPosition(halo) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
     if (near(geo.get(line), geo.get(halo)) < half(halo) + half(line)) cut += 1;
   }));
-  // The panel clips to its rounded padding box: a signed distance to that rounded rectangle, the line's outer edge.
-  const panel = p.getBoundingClientRect();
-  const radius = parseFloat(getComputedStyle(p).borderTopLeftRadius);
-  const inside = ([x, y]) => {
-    const [qx, qy] = [Math.abs(x - panel.x - panel.width / 2) - (panel.width / 2 - radius), Math.abs(y - panel.y - panel.height / 2) - (panel.height / 2 - radius)];
-    return radius - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0);
-  };
-  const clip = Math.min(...whole.map(inside)) - half(wholeLine);
   const lines = [...p.querySelectorAll('[data-hint] > .tf-svg')];
   const places = [...p.querySelectorAll('[data-hint] > .tf-place')];
   const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-  return { whole: toWhole, ring: toRing, between, cut, ringsAfter: lines.every((l) => places.every((r) => after(l, r))), clip, lines: gold.length, rings: rings.length };
+  return { whole: toWhole, ring: toRing, between, cut, ringsAfter: lines.every((l) => places.every((r) => after(l, r))), lines: gold.length, rings: rings.length };
 }
 
 // The hint's lines round a group in bridging stand off the tray's rim (design 6.7, 7.2). Their 9px halo was once
@@ -2451,14 +2464,19 @@ function hintLines() {
 // and one in a gap in its middle, and the rings are drawn after the lines. With the first frame full the line under
 // it and the line over the second frame face each other across the 0.5 units between the trays, 0.16 apart, and a
 // halo drawn after one cut it (by 1.4px of its 3px at 320 and 0.8px at 360, from the geometry), so every halo is drawn before every line.
-// The whole's line stands 0.36 units off the trays: past the gold lines, and inside the panel's clip (at 0.4 its
-// corners were 0.2px outside it at 412px, the Pixel 7). Measured in Chromium at 320, 360, 390 and 412px, the least of
-// each: the rim beside a border cell 3.8, 5.0, 6.5 and 6.9px (of 4.6, 5.2, 6.9 and 7.5; 0, 0 and 0.8px at 320, 360 and
-// 390 before, and half of it is asked); a gold line's edge to the whole's line 3.2, 4.0, 6.4 and 7.2px (2 asked); a gold
-// line's edge to a dashed place 2.1, 2.6, 4.0 and 4.4px (1 asked); the paper between the two groups' lines 2.2, 2.9,
-// 4.9 and 5.6px (1 asked); the whole's outer edge inside the panel's clip 3.5, 4.1, 3.2 and 2.6px (0 asked; it was 2.2,
-// 2.7, 0.8 and -0.2px with 0.4 units). The last four are layout geometry, exact, with no text in them. On a phone held
-// sideways (844x390: cells of 26px) the same read 3.4px of 3.7, 2.0, 1.4 and 1.2px, and the clip is far off.
+// The whole's line stands 0.36 units off the trays: past the gold lines, and inside the drawing, which keeps 0.42 units of
+// room left, right and under it (draw.js BRIDGE_MARGIN), so the panel's clip does not reach it. That room takes 1.5% off
+// the unit (cells of 32.2, 36.3, 48.6 and 52.8px at 320, 360, 390 and 412px; 32.7, 36.8, 49.4 and 53.7px before). Measured
+// in Chromium at 320, 360, 390 and 412px, the least of each: the rim beside a border cell 4.2, 5.0, 5.7 and 6.9px (of
+// 4.5, 5.1, 6.8 and 7.4; 0, 0 and 0.8px at 320, 360 and 390 before the line moved off it, and half of it is asked); a
+// gold line's edge to the whole's line 3.1, 3.9, 6.2 and 7.0px (2 asked); a gold line's edge to a dashed place 2.1, 2.5,
+// 3.9 and 4.3px (1 asked); the paper between the two groups' lines 2.2, 2.8, 4.8 and 5.5px (1 asked); the whole's outer
+// edge inside the panel's clip 10.0, 11.5, 13.1 and 13.4px (1 asked; it was 3.5, 4.1, 3.2 and 2.6px with a room of 0.22).
+// The last four are layout geometry, exact, with no text in them. A room of 0.42 on all four sides took 6% off the unit
+// and read 1.9, 2.8 and 1.9px at 320px for the second, third and fourth, under 1px above their asks, so the room over the
+// drawing is 0.12 (draw.js BRIDGE_TOP). On a phone held sideways (844x390: cells of 26px) the same read 3.4px of 3.7, 1.9,
+// 1.4 and 1.2px (3.4 of 3.7, 2.0, 1.4 and 1.2 with the old room); no test asks for these there, and the second is 0.06px
+// under the 2 asked at 320 to 412px.
 for (const [w, h] of [[320, 568], [360, 640], [390, 844], [412, 915]]) {
   test(`bridging at ${w}px: the hint's lines leave the tray's rim whole, the dashed places whole, and the whole's line clear (design 6.7, 7.2)`, async ({ page }) => {
     test.setTimeout(90000);
@@ -2500,7 +2518,7 @@ for (const [w, h] of [[320, 568], [360, 640], [390, 844], [412, 915]]) {
         expect(seen.ring, `${where}: gold line to a dashed place`).toBeGreaterThanOrEqual(1);
         expect(seen.between, `${where}: paper between two groups' lines`).toBeGreaterThanOrEqual(full ? 1 : 0);
         expect(seen.whole, `${where}: gold line to the whole's line`).toBeGreaterThanOrEqual(2);
-        expect(seen.clip, `${where}: the whole's line inside the panel's clip`).toBeGreaterThanOrEqual(0);
+        expect(await page.evaluate(wholeClip), `${where}: the whole's line inside the panel's clip`).toBeGreaterThanOrEqual(1);
       }
     }
   });
@@ -2550,9 +2568,10 @@ async function paperToTray(page, thumb) {
 // The whole's line has no halo (it crosses nothing). In a thumb its stroke is 0.08 units, and it once stood 0.12 units
 // off the tray, so 1.0px of paper lay between them, and painted none: the line's pixels sat against the rim at dpr 2
 // and 3 at 320px (1 device pixel of 6 at dpr 6), where the halo it had before at least kept a white band. It now stands
-// 0.36 units off, so 4.0px of paper lies between (design 3, 6.7). The test asks for 1.5px, so the fixed line has 1.5px to
-// spare. Measured in Chromium at 320px (a thumb's cells are 12.6px at every width), before / after: 0 / 3.0px at dpr 2
-// and 0 / 3.0px at dpr 3.
+// 0.36 units off, so 4.0px of paper lies between (design 3, 6.7). The test asks for 1.5px. Measured in Chromium at 320px
+// (a thumb's cells are 12.4px at every width), before / after: 0 / 3.5px at dpr 2 and 0 / 3.7px at dpr 3, so the fixed
+// line has 2.0px to spare. The reading counts only device pixels of paper (240 and up in every channel), which is why it
+// is under the 4.0px.
 for (const dpr of [2, 3]) {
   test.describe(`thumbs at dpr ${dpr}`, () => {
     test.use({ deviceScaleFactor: dpr });

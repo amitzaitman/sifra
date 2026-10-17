@@ -26,7 +26,7 @@
 /* Bridging ten: the second addend's counters are the second known part, in the part's light shade with
    the same edge, also in the first frame (design 3, 6.7). */
 [data-game="ten-frame"] .tf-disc[data-role="part"][data-second] { background-color: var(--role-part-2); }
-/* A thumb's counters are about 11.5px, where a 3px edge would leave little of either shade: there the edge
+/* A thumb's counters are about 11.3px, where a 3px edge would leave little of either shade: there the edge
    is 8% of a cell, at least 1px (rounds keep the 3px edge). This rule is more specific than the thumb rule
    for every other counter (12% of the unit, below), so it wins for bridging counters. */
 [data-game="ten-frame"][data-thumb] .tf-disc.is-counter[data-role="part"] { box-shadow: inset 0 0 0 max(1px, calc(var(--u) * 0.08)) var(--role-part-edge); }

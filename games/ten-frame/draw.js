@@ -22,17 +22,18 @@ const TAG_SINK = 0.08;
 /**
  * One or two frames, filled left to right, top row first (R6). Cells are numbered across the
  * frames in fill order; place(i) goes on past the last frame into hypothetical frames below it.
- * @param {{ frames?: number, rows?: number, whole?: boolean, tag?: boolean, end?: boolean, between?: number }} data
+ * @param {{ frames?: number, rows?: number, whole?: boolean, tag?: boolean, end?: boolean, between?: number, margin?: number, top?: number }} data
  *   whole: the tray is the whole (num.parts.make-ten only); tag: room for the whole's chip on the
  *   top edge; end: an end slot under the frame (a full frame with nothing to find); between: the
- *   space between two frames
+ *   space between two frames; margin: the room left, right and under the drawing (MARGIN); top: the
+ *   room over it (the margin)
  */
-export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, end = false, between = BETWEEN }) {
+export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, end = false, between = BETWEEN, margin = MARGIN, top = margin }) {
   const trayW = 5 + 6 * GAP;
   const trayH = rows + (rows + 1) * GAP;
   const per = rows * 5;
-  const x0 = MARGIN;
-  const y0 = MARGIN + (tag ? TAG.h - TAG_SINK : 0);
+  const x0 = margin;
+  const y0 = top + (tag ? TAG.h - TAG_SINK : 0);
   /** @param {number} f */
   const trayAt = (f) => ({ x: x0, y: y0 + f * (trayH + between), w: trayW, h: trayH, frame: f, role: whole ? 'whole' : null });
   /** @type {(i: number) => Cell} */
@@ -46,12 +47,12 @@ export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, 
   const cells = Array.from({ length: frames * per }, (_, i) => place(i));
   const last = trays[frames - 1];
   const endBox = end ? { x: place(4).x, y: last.y + last.h + BETWEEN, w: 1, h: 1 } : null;
-  const dh = (endBox ? endBox.y + endBox.h : last.y + last.h) + MARGIN;
+  const dh = (endBox ? endBox.y + endBox.h : last.y + last.h) + margin;
   return {
-    dw: trayW + 2 * MARGIN, dh, trays, cells, per, place, trayAt, end: endBox,
+    dw: trayW + 2 * margin, dh, trays, cells, per, place, trayAt, end: endBox,
     tag: tag ? { x: x0 + trayW / 2 - TAG.w / 2, y: y0 - TAG.h + TAG_SINK, ...TAG } : null,
     /** @param {number} n places 0..n-1 shown: the height that holds them (hypothetical frames grow it) */
-    height: (n) => Math.max(dh, trayAt(Math.floor((Math.max(1, n) - 1) / per)).y + trayH + MARGIN),
+    height: (n) => Math.max(dh, trayAt(Math.floor((Math.max(1, n) - 1) / per)).y + trayH + margin),
   };
 }
 
@@ -168,6 +169,31 @@ export function layoutBundles({ ones, tag = false }) {
 
 /** The space between bridging ten's two frames: room for the hint's numbers, clear of the counters (design 7.2). */
 const BRIDGE_GAP = 0.5;
+/**
+ * How far the whole's line stands off the trays (bridging ten), in units. It has no halo, so in a thumb (cells of
+ * 12.4px, a line of 0.08 units) 0.12 left 1px of paper between it and the tray, and painted none at dpr 2 and 3:
+ * at 0.36 there are 4.0px, and the tray keeps its edge (design 3, 6.7). It also stands past the hint's gold lines on
+ * a tray's border (help.js HINT_PAD: 5.5px off the tray at 320px), with 3.1px of paper between a gold line and this
+ * one at 320px. No further: the drawing holds the line (BRIDGE_MARGIN), and what it holds makes the unit smaller.
+ */
+export const WHOLE_OFF = 0.36;
+/** The whole's corners: tight, so they stay clear of the hint's square corners on a tray's border (0.17 units off it). */
+const WHOLE_RADIUS = 0.2;
+/**
+ * The room left, right and under bridging ten's drawing, in units (MARGIN elsewhere): the whole's line, WHOLE_OFF off
+ * the trays, and its 1.5px half width (0.06 units at 25px, a little under the smallest unit, 26px on a phone held
+ * sideways) stand inside the drawing. The panel clips what is outside its padding box and its rounded corners, and
+ * where the drawing fills the panel both ways (a viewport 2.2 to 2.4 times as tall as it is wide) a line outside the
+ * drawing had its bottom corners cut, by up to 4.9px at 320x729 (design 6.7).
+ */
+const BRIDGE_MARGIN = 0.42;
+/**
+ * The room over bridging ten's drawing: the first frame's label with the 3px ring the tour puts round it (0.09 units
+ * at 32px), and a hair. The whole's line needs none there, it stands 0.34 units under the top. A room of 0.42 on all
+ * four sides took 6% off the unit and left the hint's gaps at 320px (gold line to a dashed place, to the whole's
+ * line, between two groups' lines) under 1px above their tests (design 6.7); this takes 1.5%.
+ */
+const BRIDGE_TOP = 0.12;
 /** A hint number's chip in bridging ten: one digit (each part of the second addend is 1 to 8). */
 const LABEL = { w: 0.8, h: 0.62 };
 
@@ -185,7 +211,7 @@ const LABEL = { w: 0.8, h: 0.62 };
  * @param {{ a: number, b: number }} d
  */
 export function layoutBridge({ a, b }) {
-  const L = layoutFrame({ frames: 2, rows: 2, tag: true, between: BRIDGE_GAP });
+  const L = layoutFrame({ frames: 2, rows: 2, tag: true, between: BRIDGE_GAP, margin: BRIDGE_MARGIN, top: BRIDGE_TOP });
   const range = (from, to) => Array.from({ length: Math.max(0, to - from) }, (_, k) => from + k);
   /** @param {number} [moved] @returns {{ cell: number, second: boolean }[]} */
   const counters = (moved = 0) => range(0, a + b).map((k) => (k < a ? { cell: k, second: false }
@@ -598,25 +624,14 @@ export function drawBundles(host, d) {
 }
 
 /**
- * How far the whole's line stands off the trays (bridging ten), in units. It has no halo, so in a thumb (cells of
- * 12.6px, a line of 0.08 units) 0.12 left 1px of paper between it and the tray, and painted none at dpr 2 and 3:
- * at 0.36 there are 4.0px, and the tray keeps its edge (design 3, 6.7). It also stands past the hint's gold lines on
- * a tray's border (help.js HINT_PAD: 5.6px off the tray at 320px), with 3.2px of paper between a gold line and this
- * one at 320px. No further: the panel clips what is outside its padding box and its rounded corners, and at 0.4 the
- * line's corners were 0.2px outside the clip at 412px (the Pixel 7).
- */
-const WHOLE_OFF = 0.36;
-/** The whole's corners: tight, so they stay clear of the hint's square corners on a tray's border (0.17 units off it). */
-const WHOLE_RADIUS = 0.2;
-
-/**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
  * second in the second, in the part's light shade (data-second, design 3); trays without a role
  * (R6). The unknown is the whole, and no veil covers a counter, so both shades stay to the end
  * (owner decision 2026-10-15, design 2, principle 3's exception): the revealed whole is a magenta
  * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css). It
  * stands off the trays on the paper and crosses nothing, so it has no halo, and the hint draws it
- * above its own layer (help.js), so nothing of the hint can cut its 3px line (design 6.7).
+ * above its own layer (help.js), so nothing of the hint can cut its 3px line (design 6.7). The drawing's
+ * margin holds it, so the panel's clip never reaches it (BRIDGE_MARGIN).
  * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d

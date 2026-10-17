@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as game from '../games/ten-frame/game.js';
-import { disc, domeOver, grow, layoutBridge, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
+import { WHOLE_OFF, disc, domeOver, grow, layoutBridge, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
 import { pictureOf } from '../games/ten-frame/picture.js';
 import { rng } from '../shell/rng.js';
 import { SKILLS } from '../data/skills.js';
@@ -452,6 +452,29 @@ test('bridging ten: layoutBridge marks every counter of the second addend second
   // R6: the light shade, with the part's edge, on a counter marked data-second.
   const css = readFileSync(new URL('../games/ten-frame/game.css', import.meta.url), 'utf8');
   assert.match(css, /\.tf-disc\[data-role="part"\]\[data-second\] \{ background-color: var\(--role-part-2\); \}/);
+});
+
+test('bridging ten: the drawing holds the whole\'s line, WHOLE_OFF off the trays, and its half width on every side; a margin option moves nothing else (design 6.7)', () => {
+  // The panel clips what is outside its padding box: the line stands inside the drawing, 1.5px of half width
+  // (0.058 units at 26px, the unit on a phone held sideways) past WHOLE_OFF. Over the drawing the label's 3px ring is the need.
+  const half = 1.5 / 26;
+  const [a, b] = [7, 6];
+  const L = layoutBridge({ a, b });
+  const [first, last] = [L.trays[0], L.trays[1]];
+  assert.ok(first.x - WHOLE_OFF - half >= 0, 'left');
+  assert.ok(L.dw - (first.x + first.w + WHOLE_OFF + half) >= 0, 'right');
+  assert.ok(L.dh - (last.y + last.h + WHOLE_OFF + half) >= 0, 'under');
+  assert.ok(first.y - WHOLE_OFF - half >= 0, 'over');
+  assert.ok(L.tag.y >= 3 / 32, 'the label\'s tour ring (3px at 32px) stays inside the drawing');
+  assert.ok(Math.abs(first.x - (L.dw - first.x - first.w)) < 1e-9, 'as much room right as left');
+  // The option is layoutFrame's own, and without it every side has the same room.
+  const plain = layoutFrame({ frames: 2, rows: 2, tag: true });
+  const roomy = layoutFrame({ frames: 2, rows: 2, tag: true, margin: 0.5, top: 0.3 });
+  assert.ok(Math.abs(plain.tag.y - plain.trays[0].x) < 1e-9, 'one room on every side by default');
+  assert.ok(roomy.trays[0].x === 0.5 && Math.abs(roomy.tag.y - 0.3) < 1e-9, 'left and top');
+  assert.ok(Math.abs(roomy.dw - (roomy.trays[0].w + 1)) < 1e-9, 'right');
+  assert.ok(Math.abs(roomy.dh - (roomy.trays[1].y + roomy.trays[1].h + 0.5)) < 1e-9, 'under');
+  assert.ok(Math.abs(roomy.height(40) - (roomy.trayAt(3).y + roomy.trays[0].h + 0.5)) < 1e-9, 'under a growing display');
 });
 
 test('the bundle and its loose sticks stay part yellow: R6\'s written exception (owner decision 2026-10-15, "רק במעבר העשר")', () => {

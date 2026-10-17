@@ -663,10 +663,10 @@ export async function fill(pic, signal, hand) {
 }
 
 /**
- * Where the bridging hint's gold lines stand (cells are 32.7px at 320px, 36.9px at 360px, 49.4px at 390px).
+ * Where the bridging hint's gold lines stand (cells are 32.2px at 320px, 36.3px at 360px, 48.6px at 390px).
  * In the gap between cells (0.14 units) they run along its middle, 0.07: the line is then 2.1px off the dashed ring
  * of the cell beside it, and its 9px halo (4.5px each side) reaches 2.2px into that cell, so the rings are drawn after
- * the lines and keep their dashes whole. On a tray's border they run outside the tray, 0.17 units past its edge (5.6px
+ * the lines and keep their dashes whole. On a tray's border they run outside the tray, 0.17 units past its edge (5.5px
  * at 320px), so the halo stops a pixel short of the tray's rim and the rim stays whole; the whole's line stands past
  * them (draw.js WHOLE_OFF). No more than that: once the first frame is full, the line under the first frame and
  * the line over the second face each other across the 0.5 units between the trays, 0.16 units apart (2.2px of paper
