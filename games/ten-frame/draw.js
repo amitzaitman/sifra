@@ -599,9 +599,13 @@ export function drawBundles(host, d) {
 /**
  * How far the whole's line stands off the trays (bridging ten), in units. It has no halo, so in a thumb (cells of
  * 12.6px, a line of 0.08 units) 0.12 left 1px of paper between it and the tray, and painted none at dpr 2 and 3:
- * at 0.4 there are 4.5px, and the tray keeps its edge (design 3, 6.7).
+ * at 0.4 there are 4.5px, and the tray keeps its edge (design 3, 6.7). It also stands past the hint's gold lines on
+ * a tray's border (help.js HINT_PAD: 5.9px off the tray at 320px) and their 9px halos, which reach 10.4px off it,
+ * so at least 3px of paper lies between a gold line and this one (4.2px at 320px).
  */
 const WHOLE_OFF = 0.4;
+/** The whole's corners: tight, so they stay clear of the hint's square corners on a tray's border (0.18 units off it). */
+const WHOLE_RADIUS = 0.2;
 
 /**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
@@ -610,7 +614,7 @@ const WHOLE_OFF = 0.4;
  * (owner decision 2026-10-15, design 2, principle 3's exception): the revealed whole is a magenta
  * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css). It
  * stands off the trays on the paper and crosses nothing, so it has no halo, and the hint draws it
- * above its own layer (help.js), so the hint's halos never cut its 3px line (design 6.7).
+ * above its own layer (help.js), so nothing of the hint can cut its 3px line (design 6.7).
  * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d
@@ -625,6 +629,6 @@ export function drawBridge(host, d) {
     node.toggleAttribute('data-second', second);
     return node;
   });
-  const whole = outline(host, L, [boxPath(around(L.trays), WHOLE_OFF, 0.5)], 'tf-line-unknown tf-whole', false);
+  const whole = outline(host, L, [boxPath(around(L.trays), WHOLE_OFF, WHOLE_RADIUS)], 'tf-line-unknown tf-whole', false);
   return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a), whole };
 }

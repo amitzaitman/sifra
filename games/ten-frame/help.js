@@ -662,6 +662,16 @@ export async function fill(pic, signal, hand) {
   }
 }
 
+/**
+ * Where the bridging hint's gold lines stand (cells are 32.7px at 320px, 36.9px at 360px, 49.4px at 390px).
+ * In the gap between cells (0.14 units) they run along its middle, 0.07: the line is then 2.1px off the dashed ring
+ * of the cell beside it, and its 9px halo (4.5px each side) reaches 2.2px into that cell, so the rings are drawn after
+ * the lines and keep their dashes whole. On a tray's border they run outside the tray, 0.18 units past its edge (5.9px
+ * at 320px), so the halo stops a pixel short of the tray's rim and the rim stays whole; the whole's line stands past
+ * the halo (draw.js WHOLE_OFF).
+ */
+const HINT_PAD = { out: 0.32, in: 0.07, rows: 2 };
+
 export const BRIDGE = {
   /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
   display(pic, root, { value, display }) {
@@ -709,21 +719,22 @@ export const BRIDGE = {
    * number (layoutBridge's labels): the counters that make the ten, dashed like the empty cells
    * they go to, and the rest in one outline, also when it wraps a row (one group, one label). Once
    * the first frame is full (level 10), the counters that came and the rest. No chip covers a
-   * counter, and the outlines go first, so none cuts a chip. The whole's outline (a haloless line
-   * on the paper, shown by the tour and the closing) moves up to just after this layer: the hint's
-   * 9px halos would cut its 3px line beside the first and last columns, and the tour's chip and
-   * numbers, drawn later, stay above it.
+   * counter, and the outlines go first (HINT_PAD), then the dashed places, so no halo cuts a ring, and
+   * the chips last, so none is cut. The whole's outline (a haloless line on the paper, shown by the tour
+   * and the closing) stands past the hint's halos (draw.js WHOLE_OFF) and still moves up to just after
+   * this layer, so nothing of the hint can cut its 3px line even at the smallest unit; the tour's chip
+   * and numbers, drawn later, stay above it.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
     const L = pic.t.L;
     const groups = L.labels(pic.top.length - pic.d.a);
     root.replaceChildren();
+    for (const g of groups) if (g.line) outline(root, L, [runPath(g.cells.map((i) => L.place(i)), HINT_PAD, true)], 'tf-line-part');
     if (pic.top.length < 10) {
       for (let i = pic.top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
       for (const i of groups[0].cells) at(root, 'tf-place is-target', grow(disc(L.place(i)), 0.08));
     }
-    for (const g of groups) if (g.line) outline(root, L, [runPath(g.cells.map((i) => L.place(i)), 0.12, true)], 'tf-line-part');
     for (const g of groups) at(root, 'tf-chip', g.box, String(g.n));
     root.after(pic.t.whole);
   },

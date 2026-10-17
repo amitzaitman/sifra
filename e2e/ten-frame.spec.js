@@ -2315,6 +2315,157 @@ for (const [level, sum] of [['bridge-move', '8,+,8'], ['bridge-frames', '7,+,6']
 }
 
 /**
+ * The rim of bridging's trays (--frame, 0.14 units wide) beside each cell on a tray's border, in CSS px,
+ * read from a screenshot through the cell's middle, as trayEdge does for the whole tray: above the top row, under
+ * the bottom row, left of column 0, right of column 4. A side under a chip (the hint's numbers lie over the rim
+ * between the frames) is left out. Cell gaps are not on these lines, so a gold line crossing the rim is not read.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{ side: string, cell: number, px: number, rim: number }[]>}
+ */
+async function frameRim(page) {
+  const picture = page.locator('[data-area="picture"]');
+  const png = (await picture.screenshot()).toString('base64');
+  const geo = await picture.evaluate((p) => {
+    const box = p.getBoundingClientRect();
+    const rel = (n) => {
+      const r = n.getBoundingClientRect();
+      return { x: r.x - box.x, y: r.y - box.y, w: r.width, h: r.height };
+    };
+    return { trays: [...p.querySelectorAll('.tf-base .tf-tray')].map(rel), cells: [...p.querySelectorAll('.tf-base .tf-cell')].map(rel),
+      chips: [...p.querySelectorAll('.tf-chip, .tf-tag')].map(rel), width: box.width };
+  });
+  return page.evaluate(async ({ data, geo }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const k = img.width / geo.width;
+    // --frame (122, 111, 92) against white: a pixel is rim when more than half of it is, near the white-frame axis,
+    // so that the hint's gold and the whole's magenta are not taken for it.
+    const axis = [133, 144, 163];
+    const norm = axis.reduce((n, c) => n + c * c, 0);
+    const rim = (x, y) => {
+      const d = ctx.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data;
+      const v = [255 - d[0], 255 - d[1], 255 - d[2]];
+      const t = (v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2]) / norm;
+      return t > 0.5 && Math.hypot(v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]) < 40;
+    };
+    const covered = (x0, y0, x1, y1) => geo.chips.some((c) => Math.max(x0, x1) > c.x - 2 && Math.min(x0, x1) < c.x + c.w + 2 && Math.max(y0, y1) > c.y - 2 && Math.min(y0, y1) < c.y + c.h + 2);
+    const along = (x0, y0, x1, y1) => {
+      const n = Math.round(Math.hypot(x1 - x0, y1 - y0) * k);
+      let c = 0;
+      for (let j = 0; j <= n; j++) if (rim(x0 + ((x1 - x0) * j) / n, y0 + ((y1 - y0) * j) / n)) c += 1;
+      return Math.round((c / k) * 10) / 10;
+    };
+    const out = [];
+    geo.cells.forEach((c, i) => {
+      const [tray, k5] = [geo.trays[Math.floor(i / 10)], i % 10];
+      const [row, col, cx, cy] = [Math.floor(k5 / 5), k5 % 5, c.x + c.w / 2, c.y + c.h / 2];
+      const sides = [];
+      if (row === 0) sides.push(['top', cx, tray.y - 2, cx, c.y, c.y - tray.y]);
+      if (row === 1) sides.push(['bottom', cx, c.y + c.h, cx, tray.y + tray.h + 2, tray.y + tray.h - c.y - c.h]);
+      if (col === 0) sides.push(['left', tray.x - 2, cy, c.x, cy, c.x - tray.x]);
+      if (col === 4) sides.push(['right', c.x + c.w, cy, tray.x + tray.w + 2, cy, tray.x + tray.w - c.x - c.w]);
+      for (const [side, x0, y0, x1, y1, width] of sides) {
+        if (!covered(x0, y0, x1, y1)) out.push({ side, cell: i, px: along(x0, y0, x1, y1), rim: width });
+      }
+    });
+    return out;
+  }, { data: png, geo });
+}
+
+/**
+ * The bridging hint's gold lines against what is round them, in CSS px, read from the page (design 6.7, 7.2):
+ * the gap between a gold line's edge and the whole's line (3px: the halo's reach, 4.5px, and the whole's half
+ * line, 1.5px, stay apart), the gap between a gold line's edge and a dashed place's outer edge, and whether the
+ * dashed places are drawn after the lines (a line's 9px halo then never cuts a ring).
+ * @returns {{ whole: number, ring: number, ringsAfter: boolean, lines: number, rings: number }}
+ */
+function hintLines() {
+  const p = document.querySelector('[data-area="picture"]');
+  const points = (path) => {
+    const m = path.getScreenCTM();
+    const out = [];
+    for (let t = 0, len = path.getTotalLength(); t <= len; t += 0.5) {
+      const q = path.getPointAtLength(t).matrixTransform(m);
+      out.push([q.x, q.y]);
+    }
+    return out;
+  };
+  const gold = [...p.querySelectorAll('[data-hint] .tf-line-part .tf-line')];
+  const wholeLine = p.querySelector('.tf-whole .tf-line');
+  const whole = points(wholeLine);
+  const half = (path) => parseFloat(getComputedStyle(path).strokeWidth) / 2;
+  let [toWhole, toRing] = [Infinity, Infinity];
+  const rings = [...p.querySelectorAll('[data-hint] .tf-place')].map((r) => {
+    const b = r.getBoundingClientRect();
+    return [b.x + b.width / 2, b.y + b.height / 2, b.width / 2];
+  });
+  for (const path of gold) {
+    for (const [x, y] of points(path)) {
+      for (const [wx, wy] of whole) toWhole = Math.min(toWhole, Math.hypot(x - wx, y - wy) - half(path) - half(wholeLine));
+      for (const [cx, cy, r] of rings) toRing = Math.min(toRing, Math.hypot(x - cx, y - cy) - r - half(path));
+    }
+  }
+  const lines = [...p.querySelectorAll('[data-hint] > .tf-svg')];
+  const places = [...p.querySelectorAll('[data-hint] > .tf-place')];
+  const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return { whole: toWhole, ring: toRing, ringsAfter: lines.every((l) => places.every((r) => after(l, r))), lines: gold.length, rings: rings.length };
+}
+
+// The hint's lines round a group in bridging stand off the tray's rim (design 6.7, 7.2). Their 9px halo was once
+// on it: the line stood 0.12 units off the cells, 0.02 inside the tray's edge, and the halo shaved the rim along
+// the group's top, bottom and outer end (0 of its 4.6px at 320 beside such a cell), and, where the group starts
+// in a row, the dashed ring of the cell before it. Now a line on a tray's border stands 0.18 units off the tray
+// and one in a gap in its middle, the rings are drawn after the lines, and the whole's line stands past the halo.
+// Measured in Chromium (Pixel 7) at 320, 360 and 390px, the least of each: the rim beside a border cell 3.8, 5.0 and 6.5px
+// (of 4.6, 5.2 and 6.9; 0, 0 and 0.8px before, and half of it is asked); a gold line's edge to the whole's line 4.2, 5.1 and
+// 7.9px (3 asked: the halo's reach and the line's half stay apart); a gold line's edge to a dashed place 2.1, 2.6 and 4.0px
+// (1 asked).
+for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
+  test(`bridging at ${w}px: the hint's lines leave the tray's rim whole, the dashed places whole, and the whole's line clear (design 6.7, 7.2)`, async ({ page }) => {
+    test.setTimeout(90000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: w, height: h });
+    // [level, sum, light counters moved up after the hint (level 10: the first frame then fills)]
+    for (const [level, sum, move] of [['bridge-move', '7,+,6', true], ['bridge-frames', '7,+,6'], ['bridge-frames', '8,+,9'], ['bridge-frames', '9,+,9']]) {
+      await page.goto('about:blank');
+      const { round } = await devAt(page, level, (r) => r.equation.left.join() === sum);
+      const [a, , b] = round.equation.left;
+      // The misses whose displays lie in the cells only, so the picture holds the hint's lines and nothing on the rim.
+      for (const rule of ['bridge.whole-second', 'bridge.stopped-at-ten']) {
+        await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-hint]')).toHaveCount(1);
+      const states = [['in the hint', () => {}]];
+      if (move) {
+        states.push(['after the move', async () => {
+          for (let moved = 0; moved < 10 - a; moved++) await page.locator('[data-area="picture"] .tf-disc[data-role="part"]').nth(a + b - 1 - moved).click();
+          await expect(row(page)).toHaveText(/^10\+/);
+        }]);
+      }
+      for (const [when, go] of states) {
+        await go();
+        await quiet(page);
+        const where = `${level} ${sum} ${when}`;
+        const rim = await frameRim(page);
+        expect(rim.length, `${where}: sides read`).toBeGreaterThan(12);
+        for (const side of rim) expect(side.px, `${where}: the rim beside cell ${side.cell}, ${side.side} (of ${side.rim.toFixed(1)}px)`).toBeGreaterThanOrEqual(0.5 * side.rim);
+        const seen = await page.evaluate(hintLines);
+        expect(seen.lines, `${where}: lines`).toBeGreaterThan(0);
+        // The dashed places go when the first frame is full.
+        if (when === 'in the hint') expect(seen.rings, `${where}: dashed places`).toBeGreaterThan(0);
+        expect(seen.ringsAfter, `${where}: the dashed places come after the lines`).toBe(true);
+        expect(seen.ring, `${where}: gold line to a dashed place`).toBeGreaterThanOrEqual(1);
+        expect(seen.whole, `${where}: gold line to the whole's line`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+}
+
+/**
  * How much paper lies between the whole's magenta line and the tray's rim in a thumb, in CSS px, read from the
  * thumb's screenshot along a row through the middle of the first frame, left of it: the device pixels that are
  * paper (all three channels 240 or more, so an edge pixel half covered does not count) between the last pixel
