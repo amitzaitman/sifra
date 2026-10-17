@@ -552,7 +552,7 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   screen's home button (home stays).
 - On index.html, looping over the registry (both games, ten-frame and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
-  and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KB of same-origin
+  and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KiB of same-origin
   responses, counted in gzip bytes as GitHub Pages serves them (section 6, "First-load budget"); R7 on every
   `[data-math]` (attribute, computed direction, characters left to right); R10 (animations only on `[data-role]`,
   `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser]
