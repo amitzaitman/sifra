@@ -22,18 +22,19 @@ const TAG_SINK = 0.08;
 /**
  * One or two frames, filled left to right, top row first (R6). Cells are numbered across the
  * frames in fill order; place(i) goes on past the last frame into hypothetical frames below it.
- * @param {{ frames?: number, rows?: number, whole?: boolean, tag?: boolean, end?: boolean }} data
+ * @param {{ frames?: number, rows?: number, whole?: boolean, tag?: boolean, end?: boolean, between?: number }} data
  *   whole: the tray is the whole (num.parts.make-ten only); tag: room for the whole's chip on the
- *   top edge; end: an end slot under the frame (a full frame with nothing to find)
+ *   top edge; end: an end slot under the frame (a full frame with nothing to find); between: the
+ *   space between two frames
  */
-export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, end = false }) {
+export function layoutFrame({ frames = 1, rows = 2, whole = false, tag = false, end = false, between = BETWEEN }) {
   const trayW = 5 + 6 * GAP;
   const trayH = rows + (rows + 1) * GAP;
   const per = rows * 5;
   const x0 = MARGIN;
   const y0 = MARGIN + (tag ? TAG.h - TAG_SINK : 0);
   /** @param {number} f */
-  const trayAt = (f) => ({ x: x0, y: y0 + f * (trayH + BETWEEN), w: trayW, h: trayH, frame: f, role: whole ? 'whole' : null });
+  const trayAt = (f) => ({ x: x0, y: y0 + f * (trayH + between), w: trayW, h: trayH, frame: f, role: whole ? 'whole' : null });
   /** @type {(i: number) => Cell} */
   const place = (i) => {
     const [frame, k] = [Math.floor(i / per), i % per];
@@ -150,6 +151,56 @@ export function layoutBundles({ ones, tag = false }) {
     /** The bracket over the whole: down at both ends, the tag on its middle. */
     bracket: tag ? { l, r, y: chip.y + chip.h / 2, end: chip.y + chip.h / 2 + 0.35 } : null,
   };
+}
+
+/** The space between bridging ten's two frames: room for the hint's numbers, clear of the counters (design 7.2). */
+const BRIDGE_GAP = 0.5;
+/** A hint number's chip in bridging ten: one digit (each part of the second addend is 1 to 8). */
+const LABEL = { w: 0.8, h: 0.62 };
+
+/**
+ * Bridging ten (addsub.facts.bridge-add): two frames, the first addend's a counters in the first,
+ * the second addend's b in the second. counters(moved): where each counter is once `moved` of the
+ * second addend's went into the first frame's next cells (level 10; the rest close up from the
+ * left, R6), first addend first. The second addend's counters are the second known part, in the
+ * part's light shade wherever they are (design 3; owner decision 2026-10-15), so a full first
+ * frame reads 8 + 2 and the rest + 1. labels(moved): the hint's numbers (design 7.2), a chip per
+ * part of the second addend, none on a counter. Before the first frame is full: the counters that
+ * go to the ten (dashed rings, no outline) and the rest (an outline), each chip in the band between
+ * the frames over its group. Full: the ones that came, in that band under them, and the rest under
+ * its first row, over the second frame's empty cells.
+ * @param {{ a: number, b: number }} d
+ */
+export function layoutBridge({ a, b }) {
+  const L = layoutFrame({ frames: 2, rows: 2, tag: true, between: BRIDGE_GAP });
+  const range = (from, to) => Array.from({ length: Math.max(0, to - from) }, (_, k) => from + k);
+  /** @param {number} [moved] @returns {{ cell: number, second: boolean }[]} */
+  const counters = (moved = 0) => range(0, a + b).map((k) => (k < a ? { cell: k, second: false }
+    : { cell: k - a < moved ? k : 10 + k - a - moved, second: true }));
+  /** A chip centred over cells (one row), its middle at y. @type {(cells: number[], y: number) => Box} */
+  const chip = (cells, y) => {
+    const box = around(cells.map((i) => L.place(i)));
+    return { x: box.x + box.w / 2 - LABEL.w / 2, y: y - LABEL.h / 2, ...LABEL };
+  };
+  /** @param {number} [moved] @returns {{ n: number, cells: number[], line: boolean, box: Box }[]} */
+  const labels = (moved = 0) => {
+    const m = 10 - a - moved;
+    const rest = a + b - 10;
+    // The band between the frames: from the bottom of the first frame's lower discs to the top of
+    // the second frame's upper discs, or of the dashed rings (0.08 out) round those that go.
+    const top = L.place(5).y + 0.88;
+    if (m > 0) {
+      const [going, others] = [range(10, 10 + m), range(10 + m, 10 + m + rest)];
+      const y = (top + L.place(10).y + 0.04) / 2;
+      return [{ n: m, cells: going, line: false, box: chip(going, y) },
+        { n: rest, cells: others, line: true, box: chip(others.filter((i) => i < 15), y) }];
+    }
+    const [came, others] = [range(a, 10), range(10, 10 + rest)];
+    const open = others.filter((i) => i < 15 && !others.includes(i + 5));
+    return [{ n: 10 - a, cells: came, line: true, box: chip(came, (top + L.place(10).y + 0.12) / 2) },
+      { n: rest, cells: others, line: true, box: chip(open, L.place(10).y + 1.36) }];
+  };
+  return { ...L, counters, labels };
 }
 
 /**
@@ -490,22 +541,24 @@ export function drawBundles(host, d) {
 
 /**
  * Two frames for bridging ten (addsub.facts.bridge-add): the first addend in the first frame, the
- * second in the second; trays without a role (R6). Each counter carries a veil for the closing.
+ * second in the second, in the part's light shade (data-second, design 3); trays without a role
+ * (R6). The unknown is the whole, and no veil covers a counter, so both shades stay to the end
+ * (owner decision 2026-10-15, design 2, principle 3's exception): the revealed whole is a magenta
+ * outline round both frames (`whole`), drawn now and shown by the tour or the closing (game.css).
  * Room above the first frame holds its 10 label (L.tag), clear of the counters and of the hint.
  * @param {HTMLElement} host
  * @param {{ a: number, b: number }} d
  */
 export function drawBridge(host, d) {
-  const L = layoutFrame({ frames: 2, rows: 2, tag: true });
+  const L = layoutBridge(d);
   const trays = L.trays.map((t) => at(host, 'tf-tray is-frame', t));
   const cells = L.cells.map((c) => at(host, 'tf-cell', c));
-  const counter = (i, j) => {
-    const node = countable(at(host, 'tf-disc', disc(L.cells[i])));
+  const all = L.counters().map(({ cell, second }) => {
+    const node = countable(at(host, 'tf-disc is-counter', disc(L.cells[cell])));
     node.dataset.role = 'part';
-    node.append(unknown(el('span', 'tf-veil'), j, d.a + d.b));
+    node.toggleAttribute('data-second', second);
     return node;
-  };
-  const top = Array.from({ length: d.a }, (_, i) => counter(i, i));
-  const bottom = Array.from({ length: d.b }, (_, j) => counter(10 + j, d.a + j));
-  return { L, trays, cells, top, bottom };
+  });
+  const whole = outline(host, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-whole');
+  return { L, trays, cells, top: all.slice(0, d.a), bottom: all.slice(d.a), whole };
 }

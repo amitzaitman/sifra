@@ -2,10 +2,12 @@
 // what each round draws, and the rule formulas, including the pair cards of level 4.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as game from '../games/ten-frame/game.js';
-import { disc, domeOver, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
+import { disc, domeOver, grow, layoutBridge, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
 import { pictureOf } from '../games/ten-frame/picture.js';
 import { rng } from '../shell/rng.js';
+import { SKILLS } from '../data/skills.js';
 
 const SEEDS = 200;
 const level = (id) => game.levels.find((l) => l.id === id);
@@ -231,23 +233,52 @@ test('R8: the mixed levels write the unknown or the result left of = in a third 
   }
 });
 
-test('level 9 (14 = 10 + ?): the ones unknown, cards 4, 10, 14 and a slip, the ones covered in the help picture', () => {
+/** Level 9's three forms (owner decision 2026-10-15, "לערבב את שלוש הצורות"), by shape. */
+const TEEN_FORMS = {
+  'n = n + ?': { eqform: 'reversed', equation: (k) => ({ left: [10 + k], right: [10, '+', '?'] }) },
+  'n + ? = n': { eqform: 'standard', equation: (k) => ({ left: [10, '+', '?'], right: [10 + k] }) },
+  'n − n = ?': { eqform: 'standard', equation: (k) => ({ left: [10 + k, '−', 10], right: ['?'] }) },
+};
+
+test('level 9 mixes three forms: mostly 14 = 10 + ?, some 10 + ? = 14 and 14 − 10 = ?, one picture (owner decision 2026-10-15)', () => {
   const all = rounds('teen-symbols');
-  for (const r of all) {
-    const k = r.answer;
-    const where = JSON.stringify(r.equation);
-    assert.ok(Number.isInteger(k) && k >= 1 && k <= 9, where);
-    assert.equal(r.unknown, 'part');
-    assert.equal(r.eqform, 'reversed');
-    assert.deepEqual(r.equation, { left: [10 + k], right: [10, '+', '?'] });
-    const rules = Object.fromEntries(r.choices.map((c) => [c.rule ?? 'answer', c.value]));
-    assert.deepEqual(Object.keys(rules).sort(), ['answer', 'given.part', 'given.whole', 'slip.near'], where);
-    assert.deepEqual([rules.answer, rules['given.part'], rules['given.whole']], [k, 10, 10 + k], where);
-    assert.ok([k - 1, k + 1].includes(rules['slip.near']) && rules['slip.near'] !== 10, where);
-    assert.deepEqual(r.choices.map((c) => c.value), r.choices.map((c) => c.value).sort((x, y) => x - y));
-    assert.deepEqual(pictureOf(r), { kind: 'bundles-part', data: { ones: k, tag: 10 + k } });
+  const by = Object.fromEntries(Object.keys(TEEN_FORMS).map((f) => [f, all.filter((r) => shape(r) === f)]));
+  assert.equal(Object.values(by).flat().length, SEEDS, 'every round is one of the three forms');
+  assert.ok(by['n = n + ?'].length > SEEDS / 2, `mostly 14 = 10 + ?: ${by['n = n + ?'].length} of ${SEEDS}`);
+  for (const f of ['n + ? = n', 'n − n = ?']) assert.ok(by[f].length >= SEEDS / 8, `${f} appears: ${by[f].length} of ${SEEDS}`);
+  for (const [f, rs] of Object.entries(by)) {
+    for (const r of rs) {
+      const k = r.answer;
+      const where = `${f}: ${JSON.stringify(r.equation)}`;
+      assert.ok(Number.isInteger(k) && k >= 1 && k <= 9, where);
+      assert.equal(r.unknown, 'part');
+      assert.equal(r.eqform, TEEN_FORMS[f].eqform, where);
+      assert.deepEqual(r.equation, TEEN_FORMS[f].equation(k), where);
+      // The same picture in every form: the bundle, the ones under the cover, the whole a tag over both.
+      assert.deepEqual(pictureOf(r), { kind: 'bundles-part', data: { ones: k, tag: 10 + k } }, where);
+    }
   }
   assert.deepEqual([...new Set(all.map((r) => r.answer))].sort((x, y) => x - y), [1, 2, 3, 4, 5, 6, 7, 8, 9], 'every ones digit');
+});
+
+test('level 9: the same cards in each form, the answer, 10, 14 and a slip, and every rule keeps its value (R4)', () => {
+  const skill = SKILLS.find((s) => s.id === 'pv.teens.ten-and').rules.filter((id) => game.rules[id]);
+  for (const r of rounds('teen-symbols')) {
+    const k = r.answer;
+    const where = JSON.stringify(r.equation);
+    const cards = Object.fromEntries(r.choices.map((c) => [c.rule ?? 'answer', c.value]));
+    assert.deepEqual(Object.keys(cards).sort(), ['answer', 'given.part', 'given.whole', 'slip.near'], where);
+    assert.deepEqual([cards.answer, cards['given.part'], cards['given.whole']], [k, 10, 10 + k], where);
+    assert.ok([k - 1, k + 1].includes(cards['slip.near']) && cards['slip.near'] !== 10, where);
+    assert.deepEqual(r.choices.map((c) => c.value), r.choices.map((c) => c.value).sort((x, y) => x - y));
+    // Every rule of the skill gives the same value whichever form the exercise takes: given.whole the
+    // 14 that is written, given.part the 10, and none of the pv.* rules (a one-digit answer, errors 4.2).
+    for (const f of Object.values(TEEN_FORMS)) {
+      const other = { ...r, eqform: f.eqform, equation: f.equation(k) };
+      for (const id of skill) assert.deepEqual(game.rules[id](other), game.rules[id](r), `${id} in ${JSON.stringify(other.equation)}`);
+    }
+    assert.deepEqual(skill.map((id) => game.rules[id](r)), [null, null, null, 10 + k, 10, { oneOf: [k - 1, k + 1] }]);
+  }
   // Level 8 keeps the whole unknown, and its cards: nothing is given there.
   for (const r of rounds('teen-bundle')) assert.ok(r.choices.every((c) => !c.rule?.startsWith('given.')));
 });
@@ -303,4 +334,81 @@ test('doubles and 5 + 5: about one round in five, where given.part gives the ans
   }
   const zero = rounds('split-10').filter((r) => r.answer === 0).length;
   assert.ok(zero >= SEEDS * 0.05 && zero <= SEEDS * 0.16, `split-10 still covers nothing in about one round in ten: ${zero}`);
+});
+
+/** Whether a box comes within gap of a disc (the circle in its box). */
+const nearDisc = (box, d, gap) => {
+  const [cx, cy, r] = [d.x + d.w / 2, d.y + d.h / 2, d.w / 2];
+  const [nx, ny] = [Math.max(box.x, Math.min(cx, box.x + box.w)), Math.max(box.y, Math.min(cy, box.y + box.h))];
+  return Math.hypot(nx - cx, ny - cy) < r + gap;
+};
+
+// The layout data only: what shows on screen at every step, the tour's end and the closing included (no veil
+// covers a counter there, design 2), is the browser test's (e2e/ten-frame.spec.js).
+test('bridging ten: layoutBridge marks every counter of the second addend second (light) at rest, after each move, and in the tour\'s and the closing\'s order (owner decision 2026-10-15, "רק במעבר העשר")', () => {
+  for (const id of ['bridge-move', 'bridge-frames', 'bridge-symbols']) {
+    for (const r of rounds(id)) {
+      // The addends from the round's exercise: a + b = ? or ? = a + b.
+      const [a, , b] = r.unknown === 'result-left' ? r.equation.right : r.equation.left;
+      const where = `${id} ${a} + ${b}`;
+      const { kind, data } = pictureOf(r);
+      assert.equal(kind, 'bridge', where);
+      assert.deepEqual([data.a, data.b, data.move], [a, b, id === 'bridge-move'], where);
+      const L = layoutBridge(data);
+      const light = (moved) => L.counters(moved).filter((c) => c.second);
+      const inFirst = (list) => list.filter((c) => c.cell < 10);
+      // At rest (and in a thumb, and in the closing of a round solved before a move): the first frame
+      // holds the first addend in part yellow, the second frame the second addend in the light shade.
+      const rest = L.counters(0);
+      assert.equal(light(0).length, b, `${where}: at rest`);
+      assert.deepEqual(rest.map((c) => c.cell), [...Array(a).keys(), ...Array.from({ length: b }, (_, j) => 10 + j)], where);
+      assert.ok(rest.every((c, k) => c.second === (k >= a)), where);
+      // Level 10: a counter keeps its shade when it moves, so the full first frame reads a + (10 - a)
+      // and the rest + (a + b - 10), in two colours. The tour fills it too; fixed frames never move.
+      const full = 10 - a;
+      for (let moved = 0; data.move && moved <= full; moved++) {
+        assert.equal(light(moved).length, b, `${where}: ${moved} moved`);
+        assert.equal(inFirst(light(moved)).length, moved, `${where}: ${moved} moved`);
+        assert.equal(inFirst(L.counters(moved)).length, a + moved, `${where}: ${moved} moved`);
+      }
+      if (data.move) {
+        assert.deepEqual(light(full).filter((c) => c.cell >= 10).map((c) => c.cell), Array.from({ length: a + b - 10 }, (_, j) => 10 + j), where);
+      }
+      // The tour: the first ten counters make the 10, and it counts on over the rest, each one light.
+      // The closing changes nothing, so its counters are the tour's (or the rest's).
+      const end = data.move ? full : 0;
+      const counted = L.counters(end).slice(10);
+      assert.equal(counted.length, a + b - 10, where);
+      assert.ok(counted.every((c) => c.second), `${where}: counted on over light counters`);
+      assert.equal(light(end).length, b, `${where}: the tour's end and the closing`);
+      // The hint: its numbers make the second addend, each over light counters only, and no chip
+      // comes near a counter, an empty place of the first frame or the dashed ring round one that goes
+      // (design 7.2; it covered their top edge by about 1.3px at 320px).
+      for (const moved of data.move ? [0, full] : [0]) {
+        const groups = L.labels(moved);
+        assert.equal(groups.reduce((s, g) => s + g.n, 0), b, `${where}: the hint's numbers, ${moved} moved`);
+        const lightCells = new Set(light(moved).map((c) => c.cell));
+        for (const g of groups) assert.ok(g.cells.length === g.n && g.cells.every((i) => lightCells.has(i)), `${where}: a group of light counters`);
+        const going = moved < full ? groups[0].cells : [];
+        const things = [...L.counters(moved).map((c) => (going.includes(c.cell) ? grow(disc(L.place(c.cell)), 0.08) : disc(L.place(c.cell)))),
+          ...Array.from({ length: full - moved }, (_, j) => disc(L.place(a + moved + j)))];
+        for (const g of groups) {
+          for (const thing of things) assert.ok(!nearDisc(g.box, thing, 0.1), `${where}: the chip ${g.n} comes near ${JSON.stringify(thing)} (${moved} moved)`);
+          for (const h of groups.filter((x) => x !== g)) {
+            assert.ok(g.box.x + g.box.w <= h.box.x || h.box.x + h.box.w <= g.box.x || g.box.y + g.box.h <= h.box.y || h.box.y + h.box.h <= g.box.y, `${where}: two chips overlap`);
+          }
+        }
+      }
+    }
+  }
+  // R6: the light shade, with the part's edge, on a counter marked data-second.
+  const css = readFileSync(new URL('../games/ten-frame/game.css', import.meta.url), 'utf8');
+  assert.match(css, /\.tf-disc\[data-role="part"\]\[data-second\] \{ background-color: var\(--role-part-2\); \}/);
+});
+
+test('the bundle and its loose sticks stay part yellow: R6\'s written exception (owner decision 2026-10-15, "רק במעבר העשר")', () => {
+  const css = readFileSync(new URL('../games/ten-frame/game.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.tf-(bundle|stick)[^{]*\[data-second\]/);
+  const source = readFileSync(new URL('../games/ten-frame/draw.js', import.meta.url), 'utf8');
+  assert.equal(source.match(/'data-second'/g).length, 1, 'draw.js marks only the bridging counters');
 });

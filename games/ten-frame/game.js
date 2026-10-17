@@ -11,7 +11,7 @@ import { KINDS, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 2,
+  version: 3,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -41,7 +41,7 @@ export const levels = [
   { id: 'ten-cover', ...ten },
   { id: 'ten-symbols', ...ten, look: 'symbols', eqform: ['standard', 'reversed'] },
   { id: 'teen-bundle', ...teen, demo: true },
-  { id: 'teen-symbols', ...teenPart, eqform: 'reversed' },
+  { id: 'teen-symbols', ...teenPart, eqform: ['standard', 'reversed'] },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
   { id: 'bridge-symbols', ...bridge, look: 'symbols', unknown: ['result-right', 'result-left'] },
@@ -263,10 +263,14 @@ function tenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 - k, eqform);
 }
 
+/** Level 9's share of 14 = 10 + ?; the other rounds split evenly between 10 + ? = 14 and 14 − 10 = ?. */
+const TEEN_REVERSED = 0.6;
+
 /**
  * Ten and some more: 10 + k = ? (k is 0 in about one round in ten). With the part unknown (level 9,
- * pedagogy 6.2): 14 = 10 + ?, the whole a tag over the bundle and the ones under the cover; k is
- * never 0 there, where the whole and the ten would be one card.
+ * pedagogy 6.2): mostly 14 = 10 + ?, some 10 + ? = 14 and some 14 − 10 = ? (owner decision
+ * 2026-10-15), one picture for all three: the whole a tag over the bundle and the ones under the
+ * cover; k is never 0 there, where the whole and the ten would be one card.
  * @param {Level} level
  * @param {Rng} rng
  */
@@ -275,8 +279,10 @@ function teenRound(level, rng) {
     const k = rng.int(1, 9);
     const groups = [{ role: 'whole', count: 10 + k, shown: 'tag' }, { role: 'part', count: 10, shown: 'items' },
       { role: 'unknown', count: k, shown: 'covered' }];
-    const eqform = eqformOf(level, rng);
-    const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] } : { left: [10, '+', '?'], right: [10 + k] };
+    const roll = rng.next();
+    const eqform = roll < TEEN_REVERSED ? 'reversed' : 'standard';
+    const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] }
+      : roll < (1 + TEEN_REVERSED) / 2 ? { left: [10, '+', '?'], right: [10 + k] } : { left: [10 + k, '−', 10], right: ['?'] };
     return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), k, eqform);
   }
   const k = rng.next() < 0.1 ? 0 : rng.int(1, 9);

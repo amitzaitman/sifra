@@ -2,7 +2,7 @@
 // (step 1), the structure hint (step 2), the counting tour (step 3), the closing, and the demo's
 // steps. One object per kind of picture; game.js runs them in order and settles their motion.
 import { settle } from '../../lib/settle.js';
-import { around, at, boxPath, disc, el, grow, outline, put, runPath, segments, stagger } from './draw.js';
+import { around, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
 
 /**
  * A drawn picture: the drawing's elements (from draw.js), its size, and its state.
@@ -123,7 +123,7 @@ async function count(root, steps, signal) {
   }
 }
 
-/** The tour shows an unknown thing now, not in the closing's fill order. @param {HTMLElement} node */
+/** The tour shows an unknown thing now, not in the closing's fill order. @param {HTMLElement | SVGElement} node */
 const show = (node) => {
   node.style.setProperty('--d', '0ms');
   node.classList.add('is-shown');
@@ -570,8 +570,9 @@ export function move(pic, which) {
   pic.top.push(node);
   const moving = [node, ...pic.bottom.slice(i)];
   for (const m of moving) m.classList.add('is-moving');
-  put(node, slot(pic, pic.top.length - 1));
-  pic.bottom.forEach((m, j) => put(m, slot(pic, 10 + j)));
+  // A counter keeps its shade where it goes: the second addend's stay light (design 3).
+  const spots = pic.t.L.counters(pic.top.length - pic.d.a);
+  [...pic.top, ...pic.bottom].forEach((m, k) => put(m, slot(pic, spots[k].cell)));
   if (pic.top.length === 10) pic.full?.();
   if (pic.hint) BRIDGE.hint(pic, pic.hint);   // the hint follows the counters
   return moving;
@@ -612,7 +613,7 @@ export const BRIDGE = {
     if (display === 'count-up') {
       // The count stops at ten; the counters left over blink and stay ringed.
       const n = Math.min(value, counters.length);
-      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), 'on-disc');
+      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
       const left = counters.slice(value);
       left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part'));
       return blink(pic, left);
@@ -631,50 +632,30 @@ export const BRIDGE = {
   prep: () => [],
   /**
    * The second addend split as it goes into the frames (addsub-facts 4.7), each part with its
-   * number: the counters that make the ten, dashed like the empty cells they go to, and the rest
-   * in one outline, also when it wraps a row (one group, one label). Once the first frame is full
-   * (level 10), the counters that came and the rest.
+   * number (layoutBridge's labels): the counters that make the ten, dashed like the empty cells
+   * they go to, and the rest in one outline, also when it wraps a row (one group, one label). Once
+   * the first frame is full (level 10), the counters that came and the rest. No chip covers a
+   * counter, and the outlines go first, so none cuts a chip.
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
-    const { t, d } = pic;
-    const L = t.L;
-    const [top, bottom] = [pic.top, pic.bottom];
-    const m = 10 - top.length;
-    // A group's number on a white chip (0.72 high) centred over a box at y, by default on the top
-    // edge of the group's first row.
-    const label = (cells, n, box = segments(cells)[0], y = box.y - 0.2) => chipAt(root, { x: box.x, y: y - 0.3, w: box.w, h: 0.6 }, String(n));
-    const group = (cells, n) => {
-      if (!cells.length) return;
-      outline(root, L, [runPath(cells, 0.12, true)], 'tf-line-part');
-      label(cells, n);
-    };
+    const L = pic.t.L;
+    const groups = L.labels(pic.top.length - pic.d.a);
     root.replaceChildren();
-    if (m > 0) {
-      for (let i = top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
-      const going = bottom.slice(0, m).map((_, j) => L.place(10 + j));
-      for (const c of going) at(root, 'tf-place is-target', grow(disc(c), 0.08));
-      if (going.length) label(going, going.length);
-      group(bottom.slice(m).map((_, j) => L.place(10 + m + j)), bottom.length - m);
-    } else {
-      // The first frame full: the counters that came fill its second row, under its first, so
-      // each group's number goes below it: theirs in the gap between the frames, the rest's
-      // below its first row, over the second frame's empty cells. No chip covers a counter, and
-      // both outlines go first, so neither cuts a chip.
-      const came = [...Array(10 - d.a).keys()].map((j) => L.place(d.a + j));
-      const rest = bottom.map((_, j) => L.place(10 + j));
-      for (const cells of [came, rest]) outline(root, L, [runPath(cells, 0.12, true)], 'tf-line-part');
-      label(came, came.length, segments(came)[0], (L.place(5).y + 1 + L.place(10).y) / 2);
-      // Under the cells of its first row that have none below them, the chip's top on their bottom edge.
-      const open = rest.filter((c) => c.row === 0 && !rest.some((r) => r.row === 1 && r.col === c.col));
-      if (open.length) label(rest, rest.length, around(open), open[0].y + 1 + 0.36);
+    if (pic.top.length < 10) {
+      for (let i = pic.top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
+      for (const i of groups[0].cells) at(root, 'tf-place is-target', grow(disc(L.place(i)), 0.08));
     }
+    for (const g of groups) if (g.line) outline(root, L, [runPath(g.cells.map((i) => L.place(i)), 0.12, true)], 'tf-line-part');
+    for (const g of groups) at(root, 'tf-chip', g.box, String(g.n));
   },
   /**
    * Ten, then on over the rest (addsub-facts 4.7, R5). Level 10 first fills the first frame, so
    * the exercise reads 10 + the rest; in fixed frames (levels 11-12) nothing moves and the
    * child's exercise stays: the ten is the first frame's counters and the ones that would fill
    * it, shown where they are. Its 10 sits above the first frame, clear of the hint's numbers.
+   * No veil: the counters keep both shades (8 + 2, then + 3), each number on a white circle, and
+   * the whole's outline closes the count (design 2, principle 3's exception).
    * @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal
    */
   async tour(pic, root, signal) {
@@ -682,17 +663,19 @@ export const BRIDGE = {
     const L = t.L;
     if (d.move) await fill(pic, signal);
     if (signal.aborted) return;
-    const m = 10 - pic.top.length;
-    [...pic.top, ...pic.bottom.slice(0, m)].forEach((c, j) => {
-      veil(c).style.setProperty('--d', stagger(j, 10));
-      veil(c).classList.add('is-shown');
-    });
+    // The counters in layoutBridge's order: the first ten are the ten (the first frame and the
+    // ones that would fill it), the rest are counted on, every one of them the second addend's.
+    const rest = [...pic.top, ...pic.bottom].slice(10);
+    const spots = L.counters(pic.top.length - d.a);
     await count(root, [
       { box: L.tag, n: 10, cls: 'is-chip' },
-      ...pic.bottom.slice(m).map((c, j) => ({ box: slot(pic, 10 + m + j), n: 11 + j, cls: 'on-unknown', before: () => show(veil(c)) })),
+      ...rest.map((_, j) => ({ box: slot(pic, spots[10 + j].cell), n: 11 + j, cls: 'on-disc is-two' })),
     ], signal);
-    if (!signal.aborted) await settle(under(root, outline(root, L, [boxPath(around(L.trays), 0.12, 0.5)], 'tf-line-unknown tf-enter')), signal);
+    if (signal.aborted) return;
+    show(t.whole);
+    await settle(t.whole, signal);
   },
+  /** The closing: the whole's outline shows (game.css, .is-solved); the counters stay as they are. */
   solve: () => [],
   /**
    * Level 10: the hand moves counters into the first frame until it is full. Fixed frames: the
