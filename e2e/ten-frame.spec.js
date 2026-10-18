@@ -951,11 +951,15 @@ test('bundles at 320px: the digits above the sticks stay apart, above the outlin
  */
 async function partPixelsOf(page) {
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))));
+  // Then two frames: a layer that held a finishing animation (the veil's) is composited on its own until the
+  // frame after it ends, and a screenshot taken in that frame shows its edge snapped apart from the stick's
+  // (CI's Chromium, 68 px along a loose stick's two sides; not seen here in 117 viewport sizes).
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const boxes = await page.locator('[data-area="picture"] .tf-bundle, [data-area="picture"] .tf-stick').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
   const [l, t] = [Math.min(...boxes.map((b) => b.left)) - 2, Math.min(...boxes.map((b) => b.top)) - 2];
   const clip = { x: l, y: t, width: Math.max(...boxes.map((b) => b.right)) + 2 - l, height: Math.max(...boxes.map((b) => b.bottom)) + 2 - t };
   const png = (await page.screenshot({ clip })).toString('base64');
-  return page.evaluate(async (data) => {
+  return page.evaluate(async ({ data, clip }) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
     await img.decode();
@@ -981,13 +985,18 @@ async function partPixelsOf(page) {
         n += 1;
         const [x, y] = [(i / 4) % img.width, Math.floor(i / 4 / img.width)];
         lo[0] = Math.min(lo[0], x); lo[1] = Math.min(lo[1], y); hi[0] = Math.max(hi[0], x); hi[1] = Math.max(hi[1], y);
-        if (samples.length < 6) samples.push(`(${x},${y}) ${c.join(',')}`);
+        if (samples.length < 4) {
+          // What is drawn there (top three elements), by their classes, at the pixel's place on the page.
+          const k = img.width / clip.width;
+          const stack = document.elementsFromPoint(clip.x + (x + 0.5) / k, clip.y + (y + 0.5) / k).slice(0, 3).map((e) => `${e.tagName.toLowerCase()}.${String(e.getAttribute('class') ?? '').replace(/\s+/g, '.')}`);
+          samples.push(`(${x},${y}) ${c.join(',')} on ${stack.join(' > ')}`);
+        }
       }
     }
     // What the pixels are, for the failure message (CI only: a hairline is a line, a stray part is a block).
     const where = n ? ` [${n} px in x ${lo[0]}-${hi[0]}, y ${lo[1]}-${hi[1]} of ${img.width}x${img.height} device px: ${samples.join(' | ')}]` : '';
     return { n, where };
-  }, png);
+  }, { data: png, clip });
 }
 
 /**
