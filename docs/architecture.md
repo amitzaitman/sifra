@@ -652,6 +652,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 No question is open. The last one, the part's second shade outside the balance, was answered on 2026-10-15 ("רק במעבר
 העשר", the row "The part's second shade on the ten-frame" above; pedagogy §8.1 has it in Hebrew).
 
+On 2026-10-18 the owner answered the last two questions of the milestone's final review. The ten-frame's two-digit numbers
+on bridging counters stay as designed ("להשאיר כמו שזה": at 320px their white outline cuts part of the counter's edge; see
+decisions.md). The balance's tour numbers stay squeezed by one factor for all two-digit numbers, and fitting the squeeze to
+each number's own width is recorded as later work, not to be done now (design §7.3, `condense` in `games/balance/view.js`).
+
 Before the balance goes live, R4's [סקירה] looks at the judging cards' new formulas (depth §4.9: `5 + 2 = 3` for
 `op.other`, `5 = 5 + 2` for `equal.copy`, `5 = 7` for the new `equal.becomes`): would a child think this way?
 
