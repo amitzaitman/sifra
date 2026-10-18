@@ -191,7 +191,7 @@ const BRIDGE_MARGIN = 0.42;
  * The room over bridging ten's drawing: the first frame's label with the 3px ring the tour puts round it (0.09 units
  * at 32px), and a hair. The whole's line needs none there, it stands 0.34 units under the top. A room of 0.42 on all
  * four sides took 6% off the unit and left the hint's gaps at 320px (gold line to a dashed place, to the whole's
- * line, between two groups' lines) under 1px above their tests (design 6.7); this takes 1.5%.
+ * line, between two groups' lines) under 1px above their tests (design 6.7); this takes 1.5% where the height binds, up to 6% where the width binds.
  */
 const BRIDGE_TOP = 0.12;
 /** A hint number's chip in bridging ten: one digit (each part of the second addend is 1 to 8). */

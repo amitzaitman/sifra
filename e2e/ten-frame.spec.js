@@ -2467,7 +2467,7 @@ function hintLines() {
 // halo drawn after one cut it (by 1.4px of its 3px at 320 and 0.8px at 360, from the geometry), so every halo is drawn before every line.
 // The whole's line stands 0.36 units off the trays: past the gold lines, and inside the drawing, which keeps 0.42 units of
 // room left, right and under it (draw.js BRIDGE_MARGIN), so the panel's clip does not reach it. That room takes 1.5% off
-// the unit (cells of 32.2, 36.3, 48.6 and 52.8px at 320, 360, 390 and 412px; 32.7, 36.8, 49.4 and 53.7px before). Measured
+// the unit where the height binds, up to 6% where the width binds, in a viewport over 2.2 times as tall as wide (cells of 32.2, 36.3, 48.6 and 52.8px at 320, 360, 390 and 412px; 32.7, 36.8, 49.4 and 53.7px before). Measured
 // in Chromium at 320, 360, 390 and 412px, the least of each: the rim beside a border cell 4.2, 5.0, 5.7 and 6.9px (of
 // 4.5, 5.1, 6.8 and 7.4; 0, 0 and 0.8px at 320, 360 and 390 before the line moved off it, and half of it is asked); a
 // gold line's edge to the whole's line 3.1, 3.9, 6.2 and 7.0px (2 asked); a gold line's edge to a dashed place 2.1, 2.5,
