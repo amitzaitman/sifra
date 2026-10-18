@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
-import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, runsOf } from '../games/balance/stage.js';
+import { bridges, ghostSlots, layoutLine, layoutPan, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, rowsOfPan, runsOf } from '../games/balance/stage.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -114,10 +114,11 @@ test('the last tour number grows 1.3 in the CSS: font-size 1.3 times on a cube, 
 });
 
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {
-  // ? + 4 on a pan: the unknown first (3 places), then the four cubes.
+  // ? + 4 on a pan: the four cubes from the bottom, then the unknown's 3 places.
   const layout = layoutPan([{ role: 'unknown', count: 3, cover: true }, { role: 'part', count: 4 }]);
-  assert.deepEqual(ghostSlots(layout, 0, 5), [0, 1, 2, 7, 8]);
-  assert.deepEqual(ghostSlots(layout, 0, 2), [0, 1]);
+  assert.deepEqual(layout.spans[1].places, [0, 1, 2, 3]);
+  assert.deepEqual(ghostSlots(layout, 0, 5), [4, 5, 6, 7, 8]);
+  assert.deepEqual(ghostSlots(layout, 0, 2), [4, 5]);
   assert.deepEqual(ghostSlots(layoutPan([]), -1, 3), [0, 1, 2]);
   assert.equal(rowsFor(3), 2);
   assert.equal(rowsFor(16), 4);
@@ -261,4 +262,18 @@ test('design 10: the unknown and the cover keep a --halo where they meet cubes a
   assert.match(css, /\.bl-lid > \.cover \{[^}]*box-shadow: 0 0 0 3px var\(--halo\)/);
   for (const part of ['base', 'pole', 'beam', 'pivot']) assert.match(css, new RegExp(`\\.bl-${part} \\{[^}]*background: var\\(--frame\\)`));
   assert.doesNotMatch(css.match(/\.bl-(beam|bowl) \{[^}]*\}/g).join(''), /--role-/);
+});
+
+test('the fixed cover stands on the known cubes, the same size whatever is under it (design 6.6)', () => {
+  // 3 + ?: on the row above the three cubes; ? = 6 + 2: on the bowl; 11 + ?: on the third row.
+  assert.equal(layoutPan([{ role: 'part', count: 3 }, { role: 'unknown', count: 5, cover: true }]).lid, 1);
+  assert.equal(layoutPan([{ role: 'unknown', count: 8, cover: true }]).lid, 0);
+  assert.equal(layoutPan([{ role: 'part', count: 5 }, { role: 'unknown', count: 0, cover: true }]).lid, 1);
+  assert.equal(layoutPan([{ role: 'part', count: 11 }, { role: 'unknown', count: 2, cover: true }]).lid, 3);
+  assert.equal(layoutPan([{ role: 'part', count: 4 }]).lid, null);
+  // The pan's rows hold the dome (two rows) on the known cubes, and the places once it lifts.
+  assert.equal(rowsOfPan(layoutPan([{ role: 'unknown', count: 8, cover: true }])), 2);
+  assert.equal(rowsOfPan(layoutPan([{ role: 'part', count: 3 }, { role: 'unknown', count: 5, cover: true }])), 3);
+  assert.equal(rowsOfPan(layoutPan([{ role: 'part', count: 11 }, { role: 'unknown', count: 2, cover: true }])), 5);
+  assert.equal(rowsOfPan(layoutPan([{ role: 'part', count: 7 }])), 2);
 });

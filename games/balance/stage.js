@@ -13,7 +13,7 @@
 /** @typedef {{ group: number, role: string, second: boolean, slot: number, col: number, row: number }} CubeSpot a cube's place */
 /** @typedef {{ start: number, length: number }} Run consecutive places */
 /** @typedef {{ group: number, places: number[], runs: Run[] }} Span a group's places, and the same as runs */
-/** @typedef {{ cubes: CubeSpot[], spans: Span[], slots: number }} PanLayout slots: the places taken */
+/** @typedef {{ cubes: CubeSpot[], spans: Span[], slots: number, lid: number | null }} PanLayout slots: the places taken; lid: the fixed cover's row, null without one */
 /** @typedef {{ col: number, row: number, w: number, h: number }} Box */
 /** @typedef {{ from: number, to: number, row: number, across: boolean }} Bridge columns from-to, under row */
 /**
@@ -36,25 +36,35 @@ export const runsOf = (slots) => slots.reduce((out, slot) => {
 }, /** @type {Run[]} */ ([]));
 
 /**
- * A pan's places: rows of five from the bottom, each group following on from the one before it.
- * The colour, not a new row, keeps two known numbers apart, so the rows of five compare across
- * the pans (design 6.8). A covered group takes one place at least (a cover over nothing stands on
- * an empty place, design 6.6).
+ * A pan's places: rows of five from the bottom, each group following on from the one before it,
+ * the unknown last. The colour, not a new row, keeps two known numbers apart, so the rows of five
+ * compare across the pans (design 6.8). The known cubes stand from the bottom and the fixed cover
+ * stands on them, at the row above their last (design 6.6). Under the cover's outline (the hint)
+ * a covered group takes one place at least: a cover over nothing stands on an empty place.
  * @param {PanGroup[]} groups
  * @returns {PanLayout}
  */
 export function layoutPan(groups) {
   /** @type {PanLayout} */
-  const out = { cubes: [], spans: [], slots: 0 };
-  groups.forEach((g, group) => {
+  const out = { cubes: [], spans: [], slots: 0, lid: null };
+  const order = groups.map((_, i) => i).sort((i, j) => Number(groups[i].role === 'unknown') - Number(groups[j].role === 'unknown'));
+  for (const group of order) {
+    const g = groups[group];
+    if (g.cover) out.lid = Math.ceil(out.slots / 5);
     const run = { start: out.slots, length: g.cover ? Math.max(1, g.count) : g.count };
     out.slots += run.length;
     const places = Array.from({ length: run.length }, (_, k) => run.start + k);
     for (const slot of places.slice(0, g.count)) out.cubes.push({ group, role: g.role, second: Boolean(g.second), slot, ...at(slot) });
-    out.spans.push({ group, places, runs: [run] });
-  });
+    out.spans[group] = { group, places, runs: [run] };
+  }
   return out;
 }
+
+/** The fixed cover's height in rows: a dome as tall and wide as two cubes and their gap (design 6.6). */
+export const LID_ROWS = 2;
+
+/** @type {(layout: PanLayout) => number} the rows a pan needs: its places, and the fixed cover on its known cubes */
+export const rowsOfPan = (layout) => Math.max(rowsFor(layout.slots), layout.lid === null ? 0 : layout.lid + LID_ROWS);
 
 /**
  * Colours a quantity by its role (R6), and a second known part in the part's light shade.
@@ -289,11 +299,13 @@ export function drawBalance(host, data) {
         node.append(data.cover(mark));
         return node;
       };
+      // The fixed cover on the known cubes; the outline over the places shows with the hint (game.css).
       // A bridge across (the pieces share no column) runs over the places between them and goes
       // down into the lower piece by a tab where its dome is flat (game.css).
-      return [...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid' : 'bl-lid is-even', p, k ? '' : '?')),
-        ...bridges(pieces).flatMap((b) => [lid(`bl-lid bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''),
-          ...(b.across ? [lid('bl-lid bl-bridge is-tab', { col: b.to, row: b.row, w: 1 }, '')] : [])])];
+      return [lid('bl-lid is-fixed', { row: layout.lid }, '?'),
+        ...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid is-outline' : 'bl-lid is-outline is-even', p, k ? '' : '?')),
+        ...bridges(pieces).flatMap((b) => [lid(`bl-lid is-outline bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''),
+          ...(b.across ? [lid('bl-lid is-outline bl-bridge is-tab', { col: b.to, row: b.row, w: 1 }, '')] : [])])];
     });
     pans[name] = { el: node, stack, layout, cubes, lids };
   }

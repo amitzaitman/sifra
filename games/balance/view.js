@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, rowsOfPan, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -122,7 +122,7 @@ function balanceScene(host, round, solved, signal) {
   const data = sidesOf(round, solved);
   const restTilt = solved ? 'level' : tiltOf(weight(data.left), weight(data.right));
   /** @type {(a: import('./stage.js').PanLayout, b: import('./stage.js').PanLayout) => number} rows for both pans */
-  const rowsOf = (a, b) => Math.max(rowsFor(a.slots), rowsFor(b.slots));
+  const rowsOf = (a, b) => Math.max(rowsOfPan(a), rowsOfPan(b));
   const d = drawBalance(host, { ...data, tilt: restTilt, rows: rowsOf(layoutPan(data.left), layoutPan(data.right)), cover });
   /** The rows the pans need now (a judging card or a hint may change what lies on them). */
   const rowsNow = () => rowsOf(d.pans.left.layout, d.pans.right.layout);

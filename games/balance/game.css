@@ -74,6 +74,14 @@
 [data-game="balance"] .bl-lid { --cover-h: var(--cube); width: calc(var(--u) * var(--w) - 3px); height: var(--cube); }
 [data-game="balance"] .bl-lid > .cover { --cover-fs: calc(var(--cube) * .6); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-lid.is-back > .cover { animation: balance-drop var(--t-move) var(--ease); }
+/* The fixed cover (design 6.6): a dome as wide and tall as two cubes and their gap, in the middle of
+   the pan, on the known cubes; its size tells nothing. From the hint on, the outline over the
+   places shows instead. */
+[data-game="balance"] .bl-stack > .bl-lid.is-fixed { --cover-h: calc(var(--u) * 2 - 3px); left: calc(var(--u) * 1.5); width: var(--cover-h); height: var(--cover-h); }
+[data-game="balance"] .bl-lid.is-fixed > .cover { --cover-fs: calc(var(--cover-h) * .6); }
+[data-game="balance"] .bl-lid.is-outline { visibility: hidden; }
+[data-game="balance"] .bl-scene:has(> .bl-layer[data-hint]) .bl-lid.is-outline { visibility: visible; }
+[data-game="balance"] .bl-scene:has(> .bl-layer[data-hint]) .bl-lid.is-fixed { visibility: hidden; }
 /* Over the hint's dashed places, the '?' of a piece over an even number of places sits on the place
    right of its middle, not squeezed between two of them (design 7.3). */
 [data-game="balance"] .bl-scene:has([data-hint] .bl-dash) .bl-lid.is-even > .cover::after { translate: calc(var(--u) / 2) 0; }
