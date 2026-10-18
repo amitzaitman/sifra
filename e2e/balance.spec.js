@@ -1401,7 +1401,11 @@ async function coverAcross(page) {
   const all = [bar, ...pieces];
   const clip = { x: Math.min(...all.map((b) => b.left)) - 2, y: Math.min(...all.map((b) => b.top)) - 2 };
   Object.assign(clip, { width: Math.max(...all.map((b) => b.right)) + 2 - clip.x, height: Math.max(...all.map((b) => b.bottom)) + 2 - clip.y });
+  // The hint's dashed places lie over the pieces, and a seed below a '?' is on a dash's edge (WebKit
+  // blends it white): hidden for the read, so only the cover's shapes show.
+  const dashes = await page.addStyleTag({ content: '[data-hint] .bl-dash { visibility: hidden !important; }' });
   const png = (await page.screenshot({ clip })).toString('base64');
+  await dashes.evaluate((s) => s.remove());
   const apart = await page.evaluate(async ({ data, clip, pieces }) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
