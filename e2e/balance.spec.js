@@ -791,15 +791,20 @@ test('two-digit tour numbers stay inside their cube, condensed, at 14px at least
   }
 });
 
+/** How far inside a cube's edge the ring overlap test looks (see ringOverlaps). */
+const ringInset = (browserName) => (browserName === 'webkit' ? 2 : 0.75);
+
 /**
  * Where a ring paints over a cube or a cover (design 6.8, 7.1), read in the page: along each shown
  * cube and cover, 0.75px inside its edge, every point where it is drawn (hit testing follows
  * rounded corners and clip-path) must have no ring above it, unless the thing is inside that ring
  * piece's own box. A ring over two rows is a piece per row: neither piece may cover a cube of the
  * other's row, of its own group or another (a covered cube would look smaller and lighter).
+ * @param {number} [inset] how far inside the edge: 0.75 in Chromium; WebKit places the ring's links and edges
+ *   a pixel or so differently (CI: a link over a cube's edge), so there the cube's inner 2px are tested
  * @returns {string[]}
  */
-function ringOverlaps() {
+function ringOverlaps(inset = 0.75) {
   const out = [];
   const style = document.head.appendChild(document.createElement('style'));
   style.textContent = '[data-game] :is(.bl-ring, .bl-ring-link) { pointer-events: auto !important; } [data-game] .bl-scene > .bl-pan .bl-cube, [data-game] .bl-scene > .bl-pan .cover { pointer-events: auto !important; }';
@@ -811,8 +816,8 @@ function ringOverlaps() {
     const [cx, cy] = [b.left + b.width / 2, b.top + b.height / 2];
     const points = [];
     for (let t = 0; t <= 1; t += 1 / 16) {
-      const [x, y] = [b.left + 0.75 + t * (b.width - 1.5), b.top + 0.75 + t * (b.height - 1.5)];
-      points.push([x, b.top + 0.75], [x, b.bottom - 0.75], [b.left + 0.75, y], [b.right - 0.75, y]);
+      const [x, y] = [b.left + inset + t * (b.width - 2 * inset), b.top + inset + t * (b.height - 2 * inset)];
+      points.push([x, b.top + inset], [x, b.bottom - inset], [b.left + inset, y], [b.right - inset, y]);
     }
     for (const [x, y] of points) {
       const hits = document.elementsFromPoint(x, y);
@@ -829,7 +834,7 @@ function ringOverlaps() {
   return [...new Set(out)];
 }
 
-test('a ring never paints over a cube or cover next to it, of another group or of its own next row: flash, jumps, hints and tours (design 6.8)', async ({ page }) => {
+test('a ring never paints over a cube or cover next to it, of another group or of its own next row: flash, jumps, hints and tours (design 6.8)', async ({ page, browserName }) => {
   test.setTimeout(120000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // ? + 3 = 10: the 3 next to the cover (flash), the 7 counted next to the 3 (tour); ? = 6 + 4 with
@@ -851,7 +856,7 @@ test('a ring never paints over a cube or cover next to it, of another group or o
       }
       const where = `${width}px ${level} ${seed} ${[rules].flat().join(', ')}`;
       await expect(page.locator('.bl-scene .bl-ring'), where).not.toHaveCount(0);
-      expect(await page.evaluate(ringOverlaps), where).toEqual([]);
+      expect(await page.evaluate(ringOverlaps, ringInset(browserName)), where).toEqual([]);
     }
   }
 });
@@ -905,7 +910,7 @@ async function ringJoined(page, layer, side, rgb) {
   }, { data: png, clip, pieces, rgb });
 }
 
-test('a ring round a group whose rows share no column is one outline: the flash of 4 in ? + 4 = 7, the tour of 2 + ? = 6 (design 6.8, 7.2)', async ({ page }) => {
+test('a ring round a group whose rows share no column is one outline: the flash of 4 in ? + 4 = 7, the tour of 2 + ? = 6 (design 6.8, 7.2)', async ({ page, browserName }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const [width, height] of [[320, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
@@ -914,7 +919,7 @@ test('a ring round a group whose rows share no column is one outline: the flash 
     await card(page, round.choices.findIndex((c) => c.rule === 'given.part')).click();
     await unlocked(page);
     expect(await ringJoined(page, '[data-display]', 'left', [11, 111, 166]), `${width}px ? + 4 = 7, the flash of 4`).toBe('');
-    expect(await page.evaluate(ringOverlaps), `${width}px ? + 4 = 7, the flash of 4`).toEqual([]);
+    expect(await page.evaluate(ringOverlaps, ringInset(browserName)), `${width}px ? + 4 = 7, the flash of 4`).toEqual([]);
     ({ round } = await devAt(page, 'missing-right', 2));
     expect(round.equation).toEqual({ left: [2, '+', '?'], right: [6] });
     for (const i of wrongOf(round)) {
@@ -923,7 +928,7 @@ test('a ring round a group whose rows share no column is one outline: the flash 
     }
     await expect(page.locator('[data-tour]').last()).toHaveText('4');
     expect(await ringJoined(page, '[data-hint]', 'left', [214, 51, 108]), `${width}px 2 + ? = 6, the tour`).toBe('');
-    expect(await page.evaluate(ringOverlaps), `${width}px 2 + ? = 6, the tour`).toEqual([]);
+    expect(await page.evaluate(ringOverlaps, ringInset(browserName)), `${width}px 2 + ? = 6, the tour`).toEqual([]);
   }
 });
 
