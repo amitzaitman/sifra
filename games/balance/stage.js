@@ -67,6 +67,13 @@ export const LID_ROWS = 2;
 export const rowsOfPan = (layout) => Math.max(rowsFor(layout.slots), layout.lid === null ? 0 : layout.lid + LID_ROWS);
 
 /**
+ * The places the fixed cover lies over: it spans 1.5 to 3.5 places across from the pan's left
+ * (game.css), so columns 1 to 3 of its two rows. A ring next to it is cut back there (ringClip).
+ * @type {(row: number) => number[]}
+ */
+export const lidPlaces = (row) => Array.from({ length: LID_ROWS }, (_, r) => [1, 2, 3].map((col) => (row + r) * 5 + col)).flat();
+
+/**
  * Colours a quantity by its role (R6), and a second known part in the part's light shade.
  * @param {HTMLElement} node
  * @param {{ role: string, second?: boolean }} spot
@@ -143,9 +150,18 @@ export function ringClip({ col, row, w, h }, other, own = () => false) {
   const from = (j) => at(RING_OUT, j);
   /** @type {(j: number) => string} where column j's cube ends */
   const to = (j) => at(RING_OUT - PILE_GAP, j + 1);
-  const points = [[l, top]];
-  for (const [j0, j1, d] of spans(above)) points.push([from(j0), top], [from(j0), at(d)], [to(j1), at(d)], [to(j1), top]);
-  points.push([r, top], [r, bottom]);
+  // A cut that reaches the ring's first or last column runs on through its corner when something
+  // lies diagonally above it too (the fixed cover reaches past the cubes under it, design 6.6).
+  const [aboveLeft, aboveRight] = [other(col - 1, row + h), other(col + w, row + h)];
+  const tops = spans(above);
+  const points = [];
+  if (!(aboveLeft && tops[0]?.[0] === 0)) points.push([l, top]);
+  for (const [j0, j1, d] of tops) {
+    points.push(...(j0 === 0 && aboveLeft ? [[l, at(d)]] : [[from(j0), top], [from(j0), at(d)]]));
+    points.push(...(j1 === w - 1 && aboveRight ? [[r, at(d)]] : [[to(j1), at(d)], [to(j1), top]]));
+  }
+  if (!(aboveRight && tops.at(-1)?.[1] === w - 1)) points.push([r, top]);
+  points.push([r, bottom]);
   for (const [j0, j1, d] of spans(below).reverse()) {
     const inside = at(2 * RING_OUT - PILE_GAP - d, h);
     points.push([to(j1), bottom], [to(j1), inside], [from(j0), inside], [from(j0), bottom]);

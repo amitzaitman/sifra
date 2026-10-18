@@ -103,6 +103,16 @@ test('a ring is cut back 2px where another group\'s cube lies next to it, and on
   assert.equal(ringClip({ col: 0, row: 1, w: 3, h: 1 }, () => false, mine(0)),
     'polygon(0px 0px, calc(3 * var(--u) + 7px) 0px, calc(3 * var(--u) + 7px) calc(1 * var(--u) + 7px), calc(3 * var(--u) + 2px) calc(1 * var(--u) + 7px), ' +
     'calc(3 * var(--u) + 2px) calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 4px), 5px calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // ? + 3 = 10: the fixed cover over columns 1 to 3 of the row above the 3 reaches past the ring's
+  // last place, so the 2px notch runs on through the ring's top right corner (design 6.6).
+  const lid = (c, r) => r >= 1 && c >= 1 && c <= 3;
+  assert.equal(ringClip({ col: 0, row: 0, w: 3, h: 1 }, lid),
+    'polygon(0px 0px, calc(1 * var(--u) + 5px) 0px, calc(1 * var(--u) + 5px) 2px, calc(3 * var(--u) + 7px) 2px, ' +
+    'calc(3 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
+  // A cover above the first place and diagonally left of it: the notch starts at the ring's left edge.
+  assert.equal(ringClip({ col: 1, row: 0, w: 2, h: 1 }, (c, r) => r === 1 && c <= 1),
+    'polygon(0px 2px, calc(1 * var(--u) + 2px) 2px, calc(1 * var(--u) + 2px) 0px, calc(2 * var(--u) + 7px) 0px, ' +
+    'calc(2 * var(--u) + 7px) calc(1 * var(--u) + 7px), 0px calc(1 * var(--u) + 7px))');
 });
 
 test('the last tour number grows 1.3 in the CSS: font-size 1.3 times on a cube, height 1.3 times for two digits (design 7.3)', () => {

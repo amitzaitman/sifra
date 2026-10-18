@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, rowsOfPan, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, lidPlaces, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, rowsOfPan, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -142,6 +142,7 @@ function balanceScene(host, round, solved, signal) {
     scene.dataset.tilt = to;
     scene.style.setProperty('--rows', String(rows));
   };
+  let outlined = false; // the hint is drawn: the cover's outline shows instead of the fixed cover (game.css)
   /**
    * Rings over runs of places in a layer's pan, a box per row, each cut back where another group's
    * cube or cover lies next to it, and where its own group goes on in the next row (ringClip), so
@@ -153,8 +154,11 @@ function balanceScene(host, round, solved, signal) {
   const rings = (layer, side, runs, className) => {
     const own = new Set(runs.flatMap((r) => Array.from({ length: r.length }, (_, i) => r.start + i)));
     const { layout } = pans[side];
-    const covered = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
-    const taken = new Set([...layout.cubes.map((c) => c.slot), ...covered].filter((slot) => !own.has(slot)));
+    // Before the hint the cover is the fixed one: what lies under it is no neighbour, its places look empty.
+    const places = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
+    const covered = outlined ? places : data[side].some((g) => g.cover) ? lidPlaces(layout.lid ?? 0) : [];
+    const cubes = layout.cubes.map((c) => c.slot).filter((slot) => outlined || !places.includes(slot));
+    const taken = new Set([...cubes, ...covered].filter((slot) => !own.has(slot)));
     const on = (col, row) => col >= 0 && col < 5 && row >= 0;
     const other = (col, row) => on(col, row) && taken.has(row * 5 + col);
     return runs.flatMap((r) => {
@@ -293,6 +297,7 @@ function balanceScene(host, round, solved, signal) {
     hint() {
       const layer = panLayer(scene);
       layer.el.dataset.hint = '';
+      outlined = true;
       if (round.skill === 'eq.sign.same-as') {
         chip([all('left')], 'left', layer.el);
         chip(['?'], 'right', layer.el);

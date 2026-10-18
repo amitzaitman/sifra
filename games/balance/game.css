@@ -86,9 +86,8 @@
    right of its middle, not squeezed between two of them (design 7.3). */
 [data-game="balance"] .bl-scene:has([data-hint] .bl-dash) .bl-lid.is-even > .cover::after { translate: calc(var(--u) / 2) 0; }
 /* Bridges join the pieces (design 6.6): over the columns two pieces share, 4px over the 3px gap and
-   into both pieces; in a thumb, scaled by --k, a device pixel into each, so no pale seam shows. */
+   into both pieces. The outline shows only with the hint, so never in a thumb. */
 [data-game="balance"] .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3.5px); height: 4px; }
-[data-game="balance"] .is-thumb .bl-stack > .bl-bridge { bottom: calc(var(--u) * var(--r) - 3px - 1px / var(--k, 1)); height: calc(3px + 2px / var(--k, 1)); }
 /* Across (the pieces share no column), the bridge runs over the empty places after the run, 2px
    above the gap, so 2px of white stay over the cubes below it: from inside the upper piece to
    where the lower piece's dome is flat (half a cube in), and a tab goes down into that piece. */

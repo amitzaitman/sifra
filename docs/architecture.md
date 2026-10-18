@@ -657,6 +657,12 @@ on bridging counters stay as designed ("להשאיר כמו שזה": at 320px th
 decisions.md). The balance's tour numbers stay squeezed by one factor for all two-digit numbers, and fitting the squeeze to
 each number's own width is recorded as later work, not to be done now (design §7.3, `condense` in `games/balance/view.js`).
 
+Later on 2026-10-18, after the owner's iPhone check, the balance's cover became one dome of a fixed size at rest ("א",
+then "א" on the drawing; R6's written exception, design §6.6 and §6.8, decisions.md): the stretched cover drew the
+answer's shape, the same as the other pan and the card's dots. `layoutPan` lays the unknown last and gives the dome's row
+(`lid`); the outline over the places (`.bl-lid.is-outline`) shows from the hint, and `rings` cuts a ring under the dome
+(`lidPlaces`, `ringClip`'s corner).
+
 Before the balance goes live, R4's [סקירה] looks at the judging cards' new formulas (depth §4.9: `5 + 2 = 3` for
 `op.other`, `5 = 5 + 2` for `equal.copy`, `5 = 7` for the new `equal.becomes`): would a child think this way?
 
