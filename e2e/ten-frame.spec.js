@@ -959,7 +959,10 @@ async function partPixelsOf(page) {
   const [l, t] = [Math.min(...boxes.map((b) => b.left)) - 2, Math.min(...boxes.map((b) => b.top)) - 2];
   const clip = { x: l, y: t, width: Math.max(...boxes.map((b) => b.right)) + 2 - l, height: Math.max(...boxes.map((b) => b.bottom)) + 2 - t };
   const png = (await page.screenshot({ clip })).toString('base64');
-  return page.evaluate(async ({ data, clip }) => {
+  // The band round a bundle (and its white halo) is not a stick: where its grey meets the magenta or the
+  // halo, a pixel blends into the part's hues at some device-pixel phases (CI: 68 px on the band, none here).
+  const bands = await page.locator('[data-area="picture"] .tf-band').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  return page.evaluate(async ({ data, clip, bands }) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
     await img.decode();
@@ -982,8 +985,10 @@ async function partPixelsOf(page) {
     for (let i = 0; i < d.length; i += 4) {
       const c = [d[i], d[i + 1], d[i + 2]];
       if (c[1] > c[2] + 25 && c[0] > c[1] + 15 && off(c) > 25) {
-        n += 1;
         const [x, y] = [(i / 4) % img.width, Math.floor(i / 4 / img.width)];
+        const [px, py] = [clip.x + (x + 0.5) / (img.width / clip.width), clip.y + (y + 0.5) / (img.width / clip.width)];
+        if (bands.some((b) => px > b.left - 3 && px < b.right + 3 && py > b.top - 3 && py < b.bottom + 3)) continue;
+        n += 1;
         lo[0] = Math.min(lo[0], x); lo[1] = Math.min(lo[1], y); hi[0] = Math.max(hi[0], x); hi[1] = Math.max(hi[1], y);
         if (samples.length < 4) {
           // What is drawn there (top three elements), by their classes, at the pixel's place on the page.
@@ -996,7 +1001,7 @@ async function partPixelsOf(page) {
     // What the pixels are, for the failure message (CI only: a hairline is a line, a stray part is a block).
     const where = n ? ` [${n} px in x ${lo[0]}-${hi[0]}, y ${lo[1]}-${hi[1]} of ${img.width}x${img.height} device px: ${samples.join(' | ')}]` : '';
     return { n, where };
-  }, { data: png, clip });
+  }, { data: png, clip, bands });
 }
 
 /**
