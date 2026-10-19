@@ -1288,25 +1288,37 @@ test('the jumps: the digits of a two-digit mark are condensed inside its ring an
 
 test('R6: cubes in rows of five from the bottom, left to right; the cover is one dome on the known cubes, its size the same in every round; from the hint its outline is over the unknown\'s places, one piece per row', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  // The fixed cover (owner decision 2026-10-18): two cubes and their gap wide, as tall, in the middle
-  // of the pan, 3px over the known cubes or on the pan: ? + 4 = 7, 8 + ? = 8 (nothing under it),
-  // ? = 6 + 2, 4 + ? = 7.
-  for (const [level, seed] of [['missing-left', 11], ['missing-right', 3], ['missing-reversed', 145], ['missing-right', 11]]) {
+  // The fixed cover (owner decisions 2026-10-18 and 2026-10-19): two cubes and their gap wide, as
+  // tall; beside the top row's cubes while two places are left there, else on them in the middle,
+  // and in the middle of an empty pan; it stands on the pan or on cubes, never over nothing:
+  // ? + 4 = 7, 8 + ? = 8 (nothing under it), ? = 6 + 2, 4 + ? = 7, 1 + ? = 7, 2 + ? = 6.
+  for (const [level, seed] of [['missing-left', 11], ['missing-right', 3], ['missing-reversed', 145], ['missing-right', 11], ['missing-right', 6], ['missing-right', 2]]) {
     const { round } = await devAt(page, level, seed);
     const where = `${level} ${seed}`;
     const fixed = stack(page, 'left').locator('.bl-lid.is-fixed');
     await expect(fixed, where).toBeVisible();
     await expect(fixed.locator('.cover[data-mark="?"]'), where).toHaveCount(1);
-    const known = stack(page, 'left').locator('.bl-cube:not([data-role="unknown"])');
     const anyCubes = stack(page, 'right').locator('.bl-cube');
     const [dome, pile, c0, c1] = [await fixed.boundingBox(), await stack(page, 'left').boundingBox(), await anyCubes.nth(0).boundingBox(), await anyCubes.nth(1).boundingBox()];
     expect(Math.abs(dome.width - (c1.x - c0.x + c0.width)), `${where}: two cubes and their gap wide`).toBeLessThan(1);
     expect(Math.abs(dome.height - dome.width), `${where}: as tall as wide`).toBeLessThan(1);
-    expect(Math.abs(dome.x + dome.width / 2 - (pile.x + pile.width / 2)), `${where}: in the middle of the pan`).toBeLessThan(1);
-    const tops = await Promise.all((await known.all()).map(async (c) => (await c.boundingBox()).y));
-    const floor = tops.length ? Math.min(...tops) - 3 : pile.y + pile.height;
-    expect(Math.abs(dome.y + dome.height - floor), `${where}: on the known cubes, or on the pan`).toBeLessThan(1);
-    expect(round.picture.filter((g) => g.side === 'left' && g.role !== 'unknown').reduce((n, g) => n + g.count, 0)).toBe(tops.length);
+    const known = await Promise.all((await stack(page, 'left').locator('.bl-cube:not([data-role="unknown"])').all()).map((c) => c.boundingBox()));
+    expect(known.length).toBe(round.picture.filter((g) => g.side === 'left' && g.role !== 'unknown').reduce((n, g) => n + g.count, 0));
+    const bottom = dome.y + dome.height;
+    for (const c of known) {
+      const apart = c.x >= dome.x + dome.width - 0.5 || c.x + c.width <= dome.x + 0.5 || c.y >= bottom - 0.5 || c.y + c.height <= dome.y + 0.5;
+      expect(apart, `${where}: over a cube`).toBe(true);
+    }
+    // Both its ends stand on the pan, or on a cube 3px under it.
+    const onPan = Math.abs(bottom - (pile.y + pile.height)) < 1;
+    for (const x of [dome.x + 2, dome.x + dome.width - 2]) {
+      const under = known.some((c) => x >= c.x && x <= c.x + c.width && Math.abs(c.y - 3 - bottom) < 1);
+      expect(onPan || under, `${where}: its end at ${Math.round(x)} stands on nothing`).toBe(true);
+    }
+    // Beside its row's cubes, 3px off them; in the middle of the pan when none is in its row.
+    const row = known.filter((c) => Math.abs(c.y + c.height - bottom) < 1);
+    if (row.length) expect(Math.abs(dome.x - (Math.max(...row.map((c) => c.x + c.width)) + 3)), `${where}: beside its row's cubes`).toBeLessThan(1);
+    else expect(Math.abs(dome.x + dome.width / 2 - (pile.x + pile.width / 2)), `${where}: in the middle of the pan`).toBeLessThan(1);
   }
   // 4 + ? = 7: four cubes, the fixed cover on them; from the hint, the outline over places 5 to 7
   // (one on the first row, two on the second).
@@ -1337,6 +1349,16 @@ test('R6: cubes in rows of five from the bottom, left to right; the cover is one
   await expect(page.locator('.bl-pan[data-pan="right"] .bl-cube').first()).toHaveCSS('background-color', 'rgb(14, 58, 138)');
   // The balance's frame has no role colour (R6, design 6.8).
   await expect(page.locator('.bl-beam')).toHaveCSS('background-color', 'rgb(122, 111, 92)');
+});
+
+test('the cards\' dots: only on level 2, the balance\'s first with numbers; from level 3 the digits alone (cardDots, owner decision 2026-10-19)', async ({ page }) => {
+  // The pans show each number in rows of five; dots under the cards would let ? = 6 + 2 be answered
+  // by matching the right pan's shape to card 8's.
+  for (const [level, seed, dots] of [['missing-right', 1, true], ['missing-left', 1, false], ['missing-reversed', 145, false], ['both-sides', 1, false], ['turn', 1, false], ['relational', 1, false]]) {
+    const { round } = await devAt(page, level, seed);
+    await expect(page.locator('[data-choices] .card-dots'), level).toHaveCount(dots ? round.choices.length : 0);
+    await expect(page.locator('[data-choices] .card-number'), level).toHaveCount(round.choices.length);
+  }
 });
 
 test('two known numbers on a pan: one pile in rows of five, the second number in the part\'s light shade (owner decision 2026-10-14, "צבע שני")', async ({ page }) => {

@@ -142,7 +142,8 @@ dev-spec A.1 is the shape, with these precisions:
    runs the demo first when one is due (2.6).
 2. It builds the screen (3.2): the panel host `[data-area="picture"][data-game]`, the equation row (each `'?'` a cover
    over an `.eq-answer` with `aria-hidden`, so a screen reader hears the `?` and not the answer), the cards (`face`,
-   else the number, plus dots in rows of five when `look` is not `symbols` and every value is an integer 0-20), then
+   else the number, plus dots in rows of five when `look` is not `symbols`, the level's `cardDots` is not `false` and every
+   value is an integer 0-20), then
    `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
    `view.picture()` and logs `picture`.
 3. A correct tap (`deepEqual(value, answer)`, key order ignored) goes to step 5. A wrong tap: the shell retires the
@@ -662,6 +663,12 @@ then "א" on the drawing; R6's written exception, design §6.6 and §6.8, decisi
 answer's shape, the same as the other pan and the card's dots. `layoutPan` lays the unknown last and gives the dome's row
 (`lid`); the outline over the places (`.bl-lid.is-outline`) shows from the hint, and `rings` cuts a ring under the dome
 (`lidPlaces`, `ringClip`'s corner).
+
+On 2026-10-19, after a design critique of the balance screen, the owner chose "א" three times: the dome always stands on
+something (`lidAt`: beside the top row's cubes while that row has three or fewer, on them in the middle with four or
+five, in the middle of an empty pan; with one or two cubes it had floated over nothing); a new level parameter,
+`cardDots` (skills.md), leaves the dots off the cards, and the balance keeps them only on level 2; and the cubes stay in
+rows of five, not a pyramid or a random scatter (design §12).
 
 Before the balance goes live, R4's [סקירה] looks at the judging cards' new formulas (depth §4.9: `5 + 2 = 3` for
 `op.other`, `5 = 5 + 2` for `equal.copy`, `5 = 7` for the new `equal.becomes`): would a child think this way?
