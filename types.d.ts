@@ -28,6 +28,8 @@ interface Level {
   ask?: string | string[];
   max?: number;
   min?: number;
+  /** false: no dots under the cards' numbers (skills.md, design 6.5) */
+  cardDots?: boolean;
   [param: string]: any;
 }
 

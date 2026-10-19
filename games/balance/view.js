@@ -156,7 +156,7 @@ function balanceScene(host, round, solved, signal) {
     const { layout } = pans[side];
     // Before the hint the cover is the fixed one: what lies under it is no neighbour, its places look empty.
     const places = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
-    const covered = outlined ? places : data[side].some((g) => g.cover) ? lidPlaces(layout.lid ?? 0) : [];
+    const covered = outlined ? places : layout.lid ? lidPlaces(layout.lid) : [];
     const cubes = layout.cubes.map((c) => c.slot).filter((slot) => outlined || !places.includes(slot));
     const taken = new Set([...cubes, ...covered].filter((slot) => !own.has(slot)));
     const on = (col, row) => col >= 0 && col < 5 && row >= 0;

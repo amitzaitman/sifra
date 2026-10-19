@@ -6,8 +6,10 @@ import { drawFace, renderBalance } from './view.js';
 export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 3, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
+// No dots under the cards' numbers: the pans show each number in rows of five, and the dots would let
+// a card be picked by its shape (owner decision 2026-10-19). Level 2, the first with numbers, keeps them.
 const pans = {
-  structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false,
+  structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false, cardDots: false,
 };
 const missing = { ...pans, skill: 'eq.sign.missing', max: 10 };
 const symbols = {
@@ -17,7 +19,7 @@ const symbols = {
 /** The level table of pedagogy 6.3; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
   { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', max: 10, look: 'objects', options: 3, demo: true },
-  { id: 'missing-right', ...missing, unknown: 'right-part', demo: true },
+  { id: 'missing-right', ...missing, unknown: 'right-part', demo: true, cardDots: true },
   { id: 'missing-left', ...missing, unknown: 'left-part' },
   { id: 'missing-reversed', ...missing, unknown: ['right-part', 'result-left'], eqform: ['reversed', 'standard'] },
   { id: 'missing-symbols', ...symbols },

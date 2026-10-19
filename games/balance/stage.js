@@ -13,7 +13,8 @@
 /** @typedef {{ group: number, role: string, second: boolean, slot: number, col: number, row: number }} CubeSpot a cube's place */
 /** @typedef {{ start: number, length: number }} Run consecutive places */
 /** @typedef {{ group: number, places: number[], runs: Run[] }} Span a group's places, and the same as runs */
-/** @typedef {{ cubes: CubeSpot[], spans: Span[], slots: number, lid: number | null }} PanLayout slots: the places taken; lid: the fixed cover's row, null without one */
+/** @typedef {{ row: number, col: number }} LidSpot where the fixed cover stands, in places from the pan's bottom left */
+/** @typedef {{ cubes: CubeSpot[], spans: Span[], slots: number, lid: LidSpot | null }} PanLayout slots: the places taken; lid: the fixed cover, null without one */
 /** @typedef {{ col: number, row: number, w: number, h: number }} Box */
 /** @typedef {{ from: number, to: number, row: number, across: boolean }} Bridge columns from-to, under row */
 /**
@@ -39,7 +40,7 @@ export const runsOf = (slots) => slots.reduce((out, slot) => {
  * A pan's places: rows of five from the bottom, each group following on from the one before it,
  * the unknown last. The colour, not a new row, keeps two known numbers apart, so the rows of five
  * compare across the pans (design 6.8). The known cubes stand from the bottom and the fixed cover
- * stands on them, at the row above their last (design 6.6). Under the cover's outline (the hint)
+ * stands beside them or on them (lidAt, design 6.6). Under the cover's outline (the hint)
  * a covered group takes one place at least: a cover over nothing stands on an empty place.
  * @param {PanGroup[]} groups
  * @returns {PanLayout}
@@ -50,7 +51,7 @@ export function layoutPan(groups) {
   const order = groups.map((_, i) => i).sort((i, j) => Number(groups[i].role === 'unknown') - Number(groups[j].role === 'unknown'));
   for (const group of order) {
     const g = groups[group];
-    if (g.cover) out.lid = Math.ceil(out.slots / 5);
+    if (g.cover) out.lid = lidAt(out.slots);
     const run = { start: out.slots, length: g.cover ? Math.max(1, g.count) : g.count };
     out.slots += run.length;
     const places = Array.from({ length: run.length }, (_, k) => run.start + k);
@@ -63,15 +64,31 @@ export function layoutPan(groups) {
 /** The fixed cover's height in rows: a dome as tall and wide as two cubes and their gap (design 6.6). */
 export const LID_ROWS = 2;
 
-/** @type {(layout: PanLayout) => number} the rows a pan needs: its places, and the fixed cover on its known cubes */
-export const rowsOfPan = (layout) => Math.max(rowsFor(layout.slots), layout.lid === null ? 0 : layout.lid + LID_ROWS);
+/**
+ * Where the fixed cover stands, from the known cubes alone (design 6.6, 6.8): beside the top row's
+ * cubes while two places are left in that row, else on them in the middle of the pan, and in the
+ * middle of an empty pan. It always stands on the pan or on cubes, never over nothing.
+ * @type {(known: number) => LidSpot}
+ */
+export const lidAt = (known) => {
+  if (!known) return { row: 0, col: 1.5 };
+  const row = Math.floor((known - 1) / 5);
+  const top = known - 5 * row;
+  return top <= 3 ? { row, col: top } : { row: row + 1, col: 1.5 };
+};
+
+/** @type {(layout: PanLayout) => number} the rows a pan needs: its places, and the fixed cover */
+export const rowsOfPan = (layout) => Math.max(rowsFor(layout.slots), layout.lid === null ? 0 : layout.lid.row + LID_ROWS);
 
 /**
- * The places the fixed cover lies over: it spans 1.5 to 3.5 places across from the pan's left
- * (game.css), so columns 1 to 3 of its two rows. A ring next to it is cut back there (ringClip).
- * @type {(row: number) => number[]}
+ * The places the fixed cover lies over: the columns its two places' width touches (1 to 3 in the
+ * middle), in its two rows. A ring next to it is cut back there (ringClip).
+ * @type {(lid: LidSpot) => number[]}
  */
-export const lidPlaces = (row) => Array.from({ length: LID_ROWS }, (_, r) => [1, 2, 3].map((col) => (row + r) * 5 + col)).flat();
+export const lidPlaces = ({ row, col }) => {
+  const cols = Array.from({ length: Math.ceil(col + 2) - Math.floor(col) }, (_, j) => Math.floor(col) + j);
+  return Array.from({ length: LID_ROWS }, (_, r) => cols.map((c) => (row + r) * 5 + c)).flat();
+};
 
 /**
  * Colours a quantity by its role (R6), and a second known part in the part's light shade.
@@ -151,7 +168,7 @@ export function ringClip({ col, row, w, h }, other, own = () => false) {
   /** @type {(j: number) => string} where column j's cube ends */
   const to = (j) => at(RING_OUT - PILE_GAP, j + 1);
   // A cut that reaches the ring's first or last column runs on through its corner when something
-  // lies diagonally above it too (the fixed cover reaches past the cubes under it, design 6.6).
+  // lies diagonally above it too, so the ring's corner stays off it.
   const [aboveLeft, aboveRight] = [other(col - 1, row + h), other(col + w, row + h)];
   const tops = spans(above);
   const points = [];
@@ -318,7 +335,7 @@ export function drawBalance(host, data) {
       // The fixed cover on the known cubes; the outline over the places shows with the hint (game.css).
       // A bridge across (the pieces share no column) runs over the places between them and goes
       // down into the lower piece by a tab where its dome is flat (game.css).
-      return [lid('bl-lid is-fixed', { row: layout.lid }, '?'),
+      return [lid('bl-lid is-fixed', { ...layout.lid }, '?'),
         ...pieces.map((p, k) => lid(p.w % 2 ? 'bl-lid is-outline' : 'bl-lid is-outline is-even', p, k ? '' : '?')),
         ...bridges(pieces).flatMap((b) => [lid(`bl-lid is-outline bl-bridge${b.across ? ' is-across' : ''}`, { col: b.from, row: b.row, w: b.to - b.from }, ''),
           ...(b.across ? [lid('bl-lid is-outline bl-bridge is-tab', { col: b.to, row: b.row, w: 1 }, '')] : [])])];

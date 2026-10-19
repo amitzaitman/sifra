@@ -221,7 +221,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   const how = () => mode !== 'demo' && (ctl.abort(), onHow?.(solved));
   main.append(h('header', { class: 'bar' }, homeButton(), progress, control('hand', T.how, how, { 'data-how': true })), host, eqArea, cardsArea);
   const eq = drawEquation(eqArea, round.equation, round.answer, cover);
-  const dots = level.look !== 'symbols' && round.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
+  const dots = level.cardDots !== false && level.look !== 'symbols' && round.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
   const cards = drawCards(cardsArea, round.choices, { dots, face: game.face && ((el, v) => game.face(el, v, round)) }, signal);
   fitEquation(eq.row);
   // Locked while a display runs (R5); [data-locked] tells tests when a tap is taken again.
