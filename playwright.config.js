@@ -1,5 +1,6 @@
 // Playwright (architecture 4.5): Chromium as a Pixel 7 and WebKit as an iPhone 13. In this
-// container only Chromium is installed: npm run e2e -- --project=chromium.
+// container only Chromium is installed: npm run e2e -- --project=chromium. Where the installed
+// Chromium is not the one this Playwright pins, SIFRA_CHROMIUM names its binary.
 //
 // Each run starts its own server and never reuses one: a server already on the port may belong to
 // another worktree and serve its files. When the port is taken the run fails; pick another with
@@ -22,7 +23,13 @@ export default defineConfig({
     locale: 'he-IL',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Pixel 7'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Pixel 7'],
+        launchOptions: process.env.SIFRA_CHROMIUM ? { executablePath: process.env.SIFRA_CHROMIUM } : {},
+      },
+    },
     { name: 'webkit', use: { ...devices['iPhone 13'] } },
   ],
   webServer: {
