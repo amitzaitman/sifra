@@ -15,6 +15,19 @@
       "relational": "a28f25f7c7390896c9d2785f6affab53cc985d44fccbe424be1d064c7b54f39c"
     }
   },
+  "stories": {
+    "version": 1,
+    "levels": {
+      "add-5": "93d42269314e98dafc01caa908a742691c53e0e1b1b23329e9cfad34612b82d1",
+      "add-10": "149c011461acd9d60c477ae46ebe36cdde171e5e65ce7e882015be3ae71c7550",
+      "add-change": "7447f10dc4b25afdffc7edff3abffe3836b8cd989c8144e73c49c57b5dfa29ca",
+      "take-5": "cd72746a9a8c816bf9da3fb2c6c08ece7fe4b6fbc48de076d29c656533fda7f1",
+      "take-10": "376c7458138f89b39bb7b150b1b82bb976ad02239a6b103f65a42e20d7e388fa",
+      "whole-5": "030a916a1c8dd517b9f7b59dcd2cb74a6e93b738cc2497203c75f0c293288071",
+      "whole-10": "46eaeef4f611fbad0eadb242739e98016f74830ec1c71cf9d61ed2fe0c26be6a",
+      "mixed-10": "5ea7a39ac26cfd99f962dfa41c8285c22facb5bce41ac75323434240ea24a47d"
+    }
+  },
   "ten-frame": {
     "version": 3,
     "levels": {

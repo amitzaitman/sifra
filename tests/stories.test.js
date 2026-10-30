@@ -1,7 +1,7 @@
 // The stories' own tests (architecture 4.9): R6 [unit], the generator and its cards, the build order
 // of the equation row, the geometry of scene.js at every u of every listed screen and thumb, the
-// floors and rows, and the layout's tokens against app.css and design.md. Until the registry line
-// (step 3 of the build plan), the generic checks of tests/games.test.js run here too.
+// floors and rows, and the layout's tokens against app.css and design.md. The generic checks are
+// tests/games.test.js's, which runs every game of games/registry.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,6 @@ import { GLYPH, PX, ROLE_TOKEN, ROUND, THUMB, builtAt, layoutScene, len, lidAt, 
 import { RULES } from '../data/errors.js';
 import { rng } from '../shell/rng.js';
 import { variants } from '../scripts/lock-rounds.js';
-import { checkDeal, checkGame, checkRound, checkUndrawn } from './games.test.js';
 
 const level = (/** @type {string} */ id) => stories.levels.find((l) => l.id === id);
 /** @type {(id: string, s: number, k: number, eqform?: string, structure?: string) => any} the first round of a level with this story */
@@ -24,49 +23,6 @@ function roundOf(id, s, k, eqform = 'standard', structure = undefined) {
   throw new Error(`no ${id} round ${s}, ${k}, ${eqform}`);
 }
 const cards = (round) => round.choices.map((c) => c.value);
-
-// ---------- The generic checks (tests/games.test.js), until games/registry.js lists the game ----------
-
-/**
- * Runs fn with Math.random throwing (makeRound may use only the rng it is given).
- * @template T
- * @param {() => T} fn
- * @returns {T}
- */
-function withoutRandom(fn) {
-  const random = Math.random;
-  Math.random = () => {
-    throw new Error('Math.random called inside makeRound');
-  };
-  try {
-    return fn();
-  } finally {
-    Math.random = random;
-  }
-}
-
-test('stories: meta, levels and R3 (the generic checkGame)', () => {
-  assert.deepEqual(checkGame(stories), []);
-});
-
-stories.levels.forEach((base, index) => {
-  test(`stories level ${index + 1} (${base.id}): 200 seeds of the generic round checks, and the deal`, () => {
-    const problems = [];
-    for (const passed of variants(base)) {
-      let other = 0;
-      for (let seed = 1; seed <= 200; seed++) {
-        const round = withoutRandom(() => stories.makeRound(passed, rng(seed)));
-        if (!isDeepStrictEqual(round, withoutRandom(() => stories.makeRound(passed, rng(seed))))) problems.push(`seed ${seed}: not deterministic`);
-        if (!isDeepStrictEqual(round, structuredClone(round))) problems.push(`seed ${seed}: not plain data`);
-        problems.push(...checkRound(stories, passed, index, round).map((p) => `seed ${seed}: ${p}`));
-        if (round.eqform !== 'standard') other += 1;
-      }
-      if (passed.forms && other < 50) problems.push(`R8: ${other} of 200 rounds not standard`);
-    }
-    problems.push(...checkUndrawn(stories, base), ...checkDeal(stories, base));
-    assert.deepEqual([...new Set(problems)].slice(0, 10), []);
-  });
-});
 
 // ---------- R6 [unit] (rules.md R6, design 6.10) ----------
 
