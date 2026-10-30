@@ -26,6 +26,8 @@ export const rules = {
   'slip.near': (r) => ({ oneOf: [r.answer - 1, r.answer + 1] }),
 };
 const ORDER = ['given.whole', 'given.part', 'op.other', 'zero.counted-as-one', 'slip.near'];
+/** The displays of its rules (RULES), each drawn as a ghost row (kit.js). */
+export const displays = ['flash', 'overflow', 'empty-plate', 'count-up'];
 
 /**
  * @param {Level} level
@@ -63,5 +65,5 @@ export function makeRound(level, rng) {
  * @returns {RoundView}
  */
 export function render(host, round, ctx) {
-  return draw(host, round, ctx, meta.title);
+  return draw(host, round, ctx, meta.title, displays);
 }

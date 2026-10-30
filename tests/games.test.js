@@ -111,7 +111,8 @@ function typed(value, types) {
 /**
  * Whether a rule's value could be a card of this round (R4): of the rule's type, not the answer; a
  * number a whole number of at most 4 digits; a pair not one that makes the whole (architecture 6,
- * "Pair cards"); an exercise card false; and its display within the game's budget.
+ * "Pair cards"); an exercise card false; and its display one the game draws (displays, canShow) and
+ * within its budget.
  * @param {any} value
  * @param {string} rule
  * @param {Round} round
@@ -127,7 +128,22 @@ function offerable(value, rule, round, game) {
     const sum = (pair) => pair.reduce((a, b) => a + b, 0);
     ok = value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
   } else if (typed(value, ['card'])) ok = exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
-  return ok && !game.budget?.(round, { value, rule });
+  return ok && drawn(game, round, { value, rule }).length === 0 && !game.budget?.(round, { value, rule });
+}
+
+/**
+ * Why the game cannot draw a wrong choice's display (architecture 2.1), none when it can: the
+ * display is not in the game's `displays`, or `canShow`, where the game exports it, says no.
+ * @param {Game} game
+ * @param {Round} round
+ * @param {Choice} choice
+ * @returns {string[]}
+ */
+function drawn(game, round, { value, rule }) {
+  const display = RULES[rule]?.display;
+  if (!display) return [];
+  if (!Array.isArray(game.displays) || !game.displays.includes(display)) return [`${display} is not in the game's displays`];
+  return game.canShow && !game.canShow(round, { value, rule }) ? [`canShow says the picture cannot draw its ${display}`] : [];
 }
 
 /**
@@ -258,6 +274,14 @@ export function checkGame(game) {
   // No grade anywhere at run time: levels and progression are independent of school grade (owner decision 2026-10-14).
   if (Object.keys(meta ?? {}).some((k) => /grade/i.test(k))) fail('meta has no grade (architecture 2.1)');
   if (!Array.isArray(game.text) || typeof game.rules !== 'object') fail('text and rules must be exported');
+  // The displays it draws (architecture 2.1): ids of the §4.2 catalogue, each once.
+  const catalogue = new Set(Object.values(RULES).map((r) => r.display));
+  if (!Array.isArray(game.displays) || !game.displays.length) fail('displays must be exported: the display ids view.miss draws');
+  else {
+    game.displays.forEach((d, i) => game.displays.indexOf(d) !== i && fail(`displays: ${d} is listed twice`));
+    for (const d of game.displays) if (!catalogue.has(d)) fail(`displays: ${d} is no display of the §4.2 catalogue`);
+  }
+  if (game.canShow !== undefined && typeof game.canShow !== 'function') fail('canShow, where exported, is a function');
   const ids = levels.map((l) => l.id);
   ids.forEach((id, i) => ids.indexOf(id) !== i && fail(`level id ${id} is used twice`));
   levels.forEach((level, i) => {
@@ -400,6 +424,7 @@ export function checkRound(game, level, index, round) {
       continue;
     }
     if (!predicts(formula(round), value)) fail(`R4: ${rule} gives ${show(formula(round))}, the choice is ${show(value)}`);
+    for (const why of drawn(game, round, { value, rule })) fail(`R5: ${show(value)} (${rule}): ${why}`);
     const over = RULES[rule] && game.budget?.(round, { value, rule });
     if (over) fail(`budget: ${show(value)} (${rule}): ${over}`);
     const earlier = order.slice(0, order.indexOf(rule)).find((q) => game.rules[q] && predicts(game.rules[q](round), value));
@@ -514,6 +539,11 @@ test('the checks catch broken rounds and levels', () => {
   // A budget the game sets (architecture 4.2): a wrong choice whose display does not fit.
   const narrow = { ...parts, budget: (r, c) => (c.rule === 'op.other' ? 'too wide' : null) };
   assert.match(checkRound(narrow, level, 1, good).join('\n'), /budget: \d+ \(op\.other\): too wide/);
+  // The displays a game draws (architecture 2.1): a wrong card's display among them, and canShow's yes where exported.
+  assert.match(checkRound({ ...parts, displays: ['flash', 'empty-plate', 'count-up'] }, level, 1, good).join('\n'), /R5: \d+ \(op\.other\): overflow is not in the game's displays/);
+  assert.match(checkRound({ ...parts, canShow: (r, c) => c.rule !== 'given.part' }, level, 1, good).join('\n'), /R5: \d+ \(given\.part\): canShow says the picture cannot draw its flash/);
+  assert.match(checkGame({ ...parts, displays: undefined }).join('\n'), /displays must be exported/);
+  assert.match(checkGame({ ...parts, displays: ['flash', 'jump', 'flash'] }).join('\n'), /flash is listed twice[^]*jump is no display of the §4\.2 catalogue/);
 });
 
 test('the deal checks catch forms and answers that do not match the level', () => {

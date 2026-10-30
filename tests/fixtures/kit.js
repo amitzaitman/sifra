@@ -80,15 +80,17 @@ function drawGroups(host, groups, solved) {
 
 /**
  * The fixture's render: the picture (the help picture in symbols look, after view.picture()),
- * a ghost row per display, a ring as the hint (not awaited: it does not lock the cards, design
- * 7.2), and a tour on the unknown that ends in the answer. It checks that the host is in the page.
+ * a ghost row per display (one of the game's displays; any other throws, architecture 2.1), a
+ * ring as the hint (not awaited: it does not lock the cards, design 7.2), and a tour on the
+ * unknown that ends in the answer. It checks that the host is in the page.
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
  * @param {string} label
+ * @param {string[]} displays the game's
  * @returns {RoundView}
  */
-export function render(host, round, { signal, mode, solved }, label) {
+export function render(host, round, { signal, mode, solved }, label, displays) {
   if (!host.isConnected) throw new Error('render: the host is not in the page (architecture 2.4)');
   const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
   if (round.look !== 'symbols' || mode === 'thumb') drawGroups(host, groups, solved);
@@ -97,6 +99,7 @@ export function render(host, round, { signal, mode, solved }, label) {
     label,
     picture: () => drawGroups(host, groups, false),
     async miss({ value, display }, step) {
+      if (!displays.includes(display)) throw new Error(`fixture: no drawing for ${display}`);
       host.querySelector('[data-display]')?.remove();
       const shown = el('div', 'fx-display');
       shown.dataset.display = display;

@@ -3,11 +3,12 @@
 // draw.js, the help ladder's pictures in help.js.
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
+import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
 import { pictureOf } from './picture.js';
-import { KINDS, layer, move } from './help.js';
+import { KINDS, displayOf, draws, layer, move } from './help.js';
 
 export const meta = {
   id: 'ten-frame',
@@ -145,6 +146,27 @@ export const rules = {
   'count.start-included': (r) => (addends(r) ? r.answer - 1 : null),
 };
 
+/** The displays the ten-frame draws (architecture 2.1): every kind of picture's table in help.js. */
+export const displays = [...new Set(Object.values(KINDS).flatMap((k) => Object.keys(k.displays)))];
+
+/**
+ * Whether the round's picture can draw a wrong choice's display (architecture 2.1): its kind has a
+ * drawing for it (help.js), and the drawing has what it needs. Counting on from a bundle starts at
+ * its 10, so a value under 10 has no count-up; a frame's empty plate is its empty unknown (0).
+ * choose() deals no other choice.
+ * @param {Round} round
+ * @param {Choice} choice
+ * @returns {boolean}
+ */
+export function canShow(round, { value, rule }) {
+  const display = RULES[rule]?.display;
+  const { kind, data } = pictureOf(round);
+  if (!display || !draws(kind, display)) return false;
+  if (kind === 'bundles' && display === 'count-up') return value >= 10;
+  if (kind === 'frame' && display === 'empty-plate') return data.unknown === 0;
+  return true;
+}
+
 // ---------- Rounds ----------
 
 /** @type {(a: any, b: any) => boolean} */
@@ -154,7 +176,8 @@ const options = (v) => (v === null || v === undefined ? [] : v.oneOf ?? [v]);
 
 /**
  * The choices (R4): the answer, then one wrong value per rule in the skill's order (skills.md),
- * so a slip only comes when no known error is left; never a value an earlier rule predicts.
+ * so a slip only comes when no known error is left; never a value an earlier rule predicts, nor
+ * one whose display the round's picture cannot draw (canShow).
  * Numbers ascending, pairs by their first then second number (R4, R7: small to large, left to right).
  * @param {Round & { stage: Stage }} round
  * @param {Level} level
@@ -171,9 +194,7 @@ function choose(round, level, rng) {
   for (const [i, id] of order.entries()) {
     if (wrong.length === level.options - 1) break;
     const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
-    // Counting on from a bundle never counts down below it (the count-up display of the whole).
-    const drawable = (v) => !(round.model === 'bundles' && round.unknown === 'whole' && id === 'slip.near' && v < 10);
-    const fits = options(rules[id](round)).filter((v) => ok(v) && drawable(v) && !taken.some((t) => same(t, v)) && !earlier.some((e) => same(e, v)));
+    const fits = options(rules[id](round)).filter((v) => ok(v) && canShow(round, { value: v, rule: id }) && !taken.some((t) => same(t, v)) && !earlier.some((e) => same(e, v)));
     if (!fits.length) continue;
     const value = fits.length > 1 ? rng.pick(fits) : fits[0];
     taken.push(value);
@@ -492,6 +513,7 @@ export function render(host, round, ctx) {
     },
     async miss({ value, rule, display }, step) {
       if (!pic) draw();
+      const drawing = displayOf(pic.kind, display);   // throws, before any change, on a display this picture has none for
       misses += 1;
       locked = true;
       clear();
@@ -503,7 +525,7 @@ export function render(host, round, ctx) {
       const root = layer(pic, 'display', display);
       shown = root;
       if (!first) root.classList.add('is-leaving');
-      const targets = kind().display(pic, root, { value, rule, display });
+      const targets = drawing(pic, root, { value, rule, display });
       await Promise.all([settle(root, signal), ...targets.map((node) => settle(node, signal))]);
       if (signal.aborted) return;
       if (step >= 2 && pic.kind === 'frame' && pic.d.covered) pic.lidsUp = true;   // the hint lifts them for good

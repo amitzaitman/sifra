@@ -90,6 +90,10 @@ interface Game {
   render(host: HTMLElement, round: Round, ctx: RenderContext): RoundView;
   face?(host: HTMLElement, value: any, round: Round): boolean;
   classify?(round: Round, value: any): string;
+  /** the display ids (RULES[rule].display) that view.miss draws (architecture 2.1); it throws on any other */
+  displays: string[];
+  /** whether this round's picture can draw a wrong choice's display (architecture 2.1); makeRound deals no choice it says no to */
+  canShow?(round: Round, choice: Choice): boolean;
   /** why a wrong choice's display does not fit the picture (architecture 4.2), null when it does */
   budget?(round: Round, choice: Choice): string | null;
 }

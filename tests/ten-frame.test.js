@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import * as game from '../games/ten-frame/game.js';
 import { WHOLE_OFF, disc, domeOver, grow, layoutBridge, layoutBundles, layoutFrame, layoutTree, runPath, segments } from '../games/ten-frame/draw.js';
 import { pictureOf } from '../games/ten-frame/picture.js';
+import { displayOf } from '../games/ten-frame/help.js';
 import { rng } from '../shell/rng.js';
 import { SKILLS } from '../data/skills.js';
 
@@ -244,6 +245,30 @@ test('choices: real errors before slips, and pairs sorted by their first then se
   }
   assert.ok(rounds('teen-bundle').filter((r) => r.answer === 10).every((r) => r.choices.every((c) => c.rule !== 'slip.near' || c.value === 11)),
     'counting on from the bundle never counts down below it');
+});
+
+test('displays: a table per kind of picture, by display id; a display a kind has no drawing for throws, as does a drawing that lacks what it needs (architecture 2.1)', () => {
+  assert.deepEqual([...game.displays].sort(), ['build', 'count-up', 'empty-plate', 'flash', 'label-ten', 'overflow']);
+  assert.equal(typeof displayOf('frame', 'overflow'), 'function');
+  // Before, the bridge drew a jumps display as label-ten, and the bond an empty plate as overflow ghosts.
+  assert.throws(() => displayOf('bridge', 'jumps'), /the bridge picture has no jumps display/);
+  assert.throws(() => displayOf('tree', 'empty-plate'), /the tree picture has no empty-plate display/);
+  assert.throws(() => displayOf('frame', 'constructor'), /no constructor display/);
+  /** @type {(kind: string, display: string, pic: any, value: number) => any} */
+  const drawOn = (kind, display, pic, value) => displayOf(kind, display)(pic, null, { value, rule: 'slip.near', display });
+  // Counting on from the bundle starts at its 10: a value under it throws, before it touches the picture.
+  assert.throws(() => drawOn('bundles', 'count-up', {}, 9), /count-up from the bundle needs 10 or more, not 9/);
+  // A frame's empty plate is its empty unknown: a frame whose unknown holds counters has none.
+  assert.throws(() => drawOn('frame', 'empty-plate', { t: { empty: null }, d: { unknown: 3 } }, 1), /empty-plate needs an empty unknown, not 3/);
+  // canShow says the same of a round, and choose() deals what it says yes to.
+  const ten = rounds('teen-bundle').find((r) => r.answer === 10);
+  assert.equal(game.canShow(ten, { value: 9, rule: 'slip.near' }), false);
+  assert.equal(game.canShow(ten, { value: 11, rule: 'slip.near' }), true);
+  const bridge = rounds('bridge-frames', 1)[0];
+  assert.equal(game.canShow(bridge, { value: bridge.answer - 1, rule: 'count.start-included' }), false);
+  const split = rounds('split-10');
+  assert.equal(game.canShow(split.find((r) => r.answer === 0), { value: 1, rule: 'zero.counted-as-one' }), true);
+  assert.equal(game.canShow(split.find((r) => r.answer > 0), { value: 1, rule: 'zero.counted-as-one' }), false);
 });
 
 /** An equation as its shape: numbers as n (tests read forms this way, like the generic test's R2). */

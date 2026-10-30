@@ -1,6 +1,7 @@
 // What the ten-frame picture does after a choice (R5, design 7): the display of the rule chosen
 // (step 1), the structure hint (step 2), the counting tour (step 3), the closing, and the demo's
-// steps. One object per kind of picture; game.js runs them in order and settles their motion.
+// steps. One object per kind of picture, its displays a table by display id; game.js runs them in
+// order and settles their motion.
 import { settle } from '../../lib/settle.js';
 import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
 
@@ -12,6 +13,13 @@ import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, stagge
  */
 
 /** @typedef {import('./draw.js').Box} Box */
+
+/**
+ * A wrong choice's display drawn on a picture (R5 step 1) into its layer; it returns the
+ * picture's own elements it moves, which game.js settles with the layer. Each kind keys its
+ * drawings by display id in `displays`.
+ * @typedef {(pic: Pic, root: HTMLElement, choice: { value: any, rule: string, display: string }) => HTMLElement[]} Display
+ */
 
 /**
  * An overlay over the drawing: its own [data-math] row (R7), read left to right inside.
@@ -202,59 +210,79 @@ function hypothetical(pic, root, last, real) {
   resize(pic, L.dw, L.height(last + 1));
 }
 
+/**
+ * Hypothetical frames for a display's ghosts past the real cells (overflow, count-up), when it has any.
+ * @param {Pic} pic
+ * @param {HTMLElement} root
+ * @param {number} value the chosen value, from the unknown's first place
+ * @param {number} ghosts how many of its places hold a ghost
+ */
+function pastFrame(pic, root, value, ghosts) {
+  if (ghosts) hypothetical(pic, root, pic.d.part + Math.max(value, pic.d.unknown) - 1, frameAt(pic).cells.length);
+}
+
 export const FRAME = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, rule, display }) {
-    const { t, d } = pic;
-    const L = frameAt(pic);
-    const real = L.cells.length;
-    if (display === 'flash' && rule === 'given.whole') {
-      if (t.chip) return chipFlash(pic, t.chip);
-      // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
-      // whole; the small dome on that line stays over the ring (game.css). Round the tray alone it
-      // stands off in pixels (.is-around), its inner halo ending on the tray's edge, so the navy
-      // rim stays whole at any unit (design 7.1).
-      if (t.wrap) ring(root, grow(L.trays[0], 0.2), '', 'is-tray');
-      else ring(root, L.trays[0], '', 'is-tray is-around');
-      return blink(pic, [t.tray]);
-    }
-    if (display === 'flash') {
+  /** @type {Record<string, Display>} */
+  displays: {
+    flash(pic, root, { rule }) {
+      const { t } = pic;
+      const L = frameAt(pic);
+      if (rule === 'given.whole') {
+        if (t.chip) return chipFlash(pic, t.chip);
+        // Round a bracket the ring stands off further, so its inner halo leaves the bracket's line
+        // whole; the small dome on that line stays over the ring (game.css). Round the tray alone it
+        // stands off in pixels (.is-around), its inner halo ending on the tray's edge, so the navy
+        // rim stays whole at any unit (design 7.1).
+        if (t.wrap) ring(root, grow(L.trays[0], 0.2), '', 'is-tray');
+        else ring(root, L.trays[0], '', 'is-tray is-around');
+        return blink(pic, [t.tray]);
+      }
       t.parts.forEach((_, i) => ring(root, grow(disc(L.cells[i]), 0.1), '', 'is-round on-part in-cell'));
       return blink(pic, t.parts);
-    }
-    const lids = liftForDisplay(pic);
-    if (display === 'empty-plate') {
-      const box = disc(t.empty);
+    },
+    'empty-plate'(pic, root) {
+      // The empty plate is the unknown's empty place (0): a frame whose unknown holds counters has none (canShow).
+      if (!pic.t.empty) throw new Error(`ten-frame: empty-plate needs an empty unknown, not ${pic.d.unknown}`);
+      const lids = liftForDisplay(pic);
+      const box = disc(pic.t.empty);
       ring(root, box, '150ms', 'is-round is-zero is-inset');
       digit(root, box, '0', '150ms');
       return lids;
-    }
-    const whole = d.part + d.unknown;
-    const start = d.part;
-    const ghosts = display === 'overflow' ? value : Math.max(0, value - d.unknown);
-    if (ghosts) hypothetical(pic, root, start + Math.max(value, d.unknown) - 1, real);
-    if (display === 'overflow') {
+    },
+    overflow(pic, root, { value }) {
+      const { t, d } = pic;
+      const L = frameAt(pic);
+      const lids = liftForDisplay(pic);
+      const whole = d.part + d.unknown;
+      pastFrame(pic, root, value, value);
       // The chosen value as ghosts from the unknown's first place: what fits, then the excess
       // past the whole (ringed in the frame) and into hypothetical frames.
       for (let j = 0; j < value; j++) {
-        const i = start + j;
+        const i = d.part + j;
         const box = disc(L.place(i));
         ghost(root, box, stagger(j, value));
-        if (t.chip && i >= whole && i < real) ring(root, box, stagger(j, value), CELL_GHOST_RING);
+        if (t.chip && i >= whole && i < L.cells.length) ring(root, box, stagger(j, value), CELL_GHOST_RING);
       }
       return lids;
-    }
-    // count-up: digits 1..value on the unknown's places; one left without a digit is ringed,
-    // or the extra digit lands on a ghost after them.
-    for (let j = 0; j < value; j++) {
-      const i = start + j;
-      const delay = stagger(j, value, 120);
-      if (j >= d.unknown) ghost(root, disc(L.place(i)), delay);
-      digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
-    }
-    if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
-    else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), CELL_GHOST_RING);
-    return lids;
+    },
+    'count-up'(pic, root, { value }) {
+      const { d } = pic;
+      const L = frameAt(pic);
+      const lids = liftForDisplay(pic);
+      const start = d.part;
+      pastFrame(pic, root, value, Math.max(0, value - d.unknown));
+      // Digits 1..value on the unknown's places; one left without a digit is ringed, or the extra
+      // digit lands on a ghost after them.
+      for (let j = 0; j < value; j++) {
+        const i = start + j;
+        const delay = stagger(j, value, 120);
+        if (j >= d.unknown) ghost(root, disc(L.place(i)), delay);
+        digit(root, L.place(i), String(j + 1), delay, j >= d.unknown ? 'on-ghost' : '');
+      }
+      if (value < d.unknown) ring(root, L.place(start + value), stagger(value, value + 1, 120), 'is-cell');
+      else ring(root, disc(L.place(start + value - 1)), stagger(value - 1, value, 120), CELL_GHOST_RING);
+      return lids;
+    },
   },
 
   /** Before the hint: the cover lifts for good (R5 step 2), so the unknown's cells can be marked; a bracket stays. @param {Pic} pic */
@@ -422,17 +450,23 @@ async function treeCount(pic, root, side, signal) {
 }
 
 export const TREE = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, rule, display }) {
-    const { t, d } = pic;
-    if (display === 'flash') {
+  /** @type {Record<string, Display>} */
+  displays: {
+    flash(pic, root, { rule }) {
+      const { t } = pic;
       const circle = rule === 'given.whole' ? t.top : t.left.circle;
       // Round the circle, clear of its edge: it keeps its size; the dots stand clear of the ring.
       ring(root, rule === 'given.whole' ? t.L.top : t.L.left, '', 'is-round is-around');
       return blink(pic, [circle]);
-    }
-    treeGhosts(pic, root, [{ place: t.right.place, n: value }], d.unknown, display === 'count-up');
-    return [];
+    },
+    overflow(pic, root, { value }) {
+      treeGhosts(pic, root, [{ place: pic.t.right.place, n: value }], pic.d.unknown, false);
+      return [];
+    },
+    'count-up'(pic, root, { value }) {
+      treeGhosts(pic, root, [{ place: pic.t.right.place, n: value }], pic.d.unknown, true);
+      return [];
+    },
   },
   prep: () => [],
   /** The whole's outline, and the cover of the unknown ringed. @param {Pic} pic @param {HTMLElement} root */
@@ -454,16 +488,19 @@ export const TREE = {
   },
 };
 
+/** A pair card's ghosts under the two part circles, the left number then the right. @param {Pic} pic @param {HTMLElement} root @param {number[]} value @param {boolean} digits count-up */
+const pairGhosts = (pic, root, value, digits) =>
+  treeGhosts(pic, root, [{ place: pic.t.left.place, n: value[0] }, { place: pic.t.right.place, n: value[1] }], pic.d.whole, digits);
+
 export const PAIRS = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, display }) {
-    const { t, d } = pic;
-    if (display === 'flash') {
-      ring(root, t.L.top, '', 'is-round is-around');
-      return blink(pic, [t.top]);
-    }
-    if (display === 'empty-plate') {
-      const sides = [t.left, t.right].filter((s) => s.n === 0);
+  /** @type {Record<string, Display>} */
+  displays: {
+    flash(pic, root) {
+      ring(root, pic.t.L.top, '', 'is-round is-around');
+      return blink(pic, [pic.t.top]);
+    },
+    'empty-plate'(pic, root) {
+      const sides = [pic.t.left, pic.t.right].filter((s) => s.n === 0);
       const lids = liftForDisplay(pic, sides.flatMap((s) => s.covers));
       // The ring is the empty part's circle itself: a stem ends on its line, as on any circle.
       for (const s of sides) {
@@ -471,9 +508,15 @@ export const PAIRS = {
         digit(root, s.box, '0', '150ms', 'is-big');
       }
       return lids;
-    }
-    treeGhosts(pic, root, [{ place: t.left.place, n: value[0] }, { place: t.right.place, n: value[1] }], d.whole, display === 'count-up');
-    return [];
+    },
+    overflow(pic, root, { value }) {
+      pairGhosts(pic, root, value, false);
+      return [];
+    },
+    'count-up'(pic, root, { value }) {
+      pairGhosts(pic, root, value, true);
+      return [];
+    },
   },
   prep: () => [],
   /** @param {Pic} pic @param {HTMLElement} root */
@@ -511,16 +554,16 @@ const veil = (node) => node.querySelector('.tf-veil');
 const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
 
 export const BUNDLES = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, display }) {
-    const { t, d } = pic;
-    const L = t.L;
-    if (display === 'label-ten') {
+  /** @type {Record<string, Display>} */
+  displays: {
+    'label-ten'(pic, root) {
+      const L = pic.t.L;
       ring(root, banded(L.bundle), '', 'is-around');
       chipAt(root, L.bundle, '10', 'tf-blink-in');
-      return blink(pic, [t.bundle]);
-    }
-    if (display === 'build') {
+      return blink(pic, [pic.t.bundle]);
+    },
+    build(pic, root, { value }) {
+      const L = pic.t.L;
       // The chosen number built next to the real one, the same way: bundles and sticks.
       const row = L.row(Math.floor(value / 10), value % 10, L.below);
       resize(pic, row.right + 0.3, L.belowH);
@@ -528,20 +571,26 @@ export const BUNDLES = {
       all.forEach((box, j) => ghost(root, box, stagger(j, all.length), j < row.bundles.length ? 'is-bundle' : 'is-stick'));
       if (row.bundles.length) ring(root, around(row.bundles), '300ms', 'is-around');
       return [];
-    }
-    // count-up, counting on from the bundle: 10, then the loose sticks.
-    digit(root, L.above(L.bundle), '10', '', 'is-above');
-    const last = Math.max(d.ones, value - 10);
-    resize(pic, stickBox(pic, last).x + 1, L.dh);
-    for (let j = 0; j < value - 10; j++) {
-      const delay = stagger(j + 1, value - 9, 120);
-      if (j >= d.ones) ghost(root, stickBox(pic, j), delay, 'is-stick');
-      digit(root, L.above(stickBox(pic, j)), String(11 + j), delay, 'is-above');
-    }
-    const k = value - 10;
-    if (k < d.ones) ring(root, stickBox(pic, k), stagger(k + 1, k + 2, 120), 'is-around');
-    else ring(root, stickBox(pic, k - 1), stagger(k, k + 1, 120), 'is-around');
-    return [];
+    },
+    /** Counting on from the bundle: 10, then the loose sticks. */
+    'count-up'(pic, root, { value }) {
+      // The count starts at the bundle's 10: under it there is no stick to stop on (canShow keeps such a card out).
+      if (!(value >= 10)) throw new Error(`ten-frame: count-up from the bundle needs 10 or more, not ${value}`);
+      const { d } = pic;
+      const L = pic.t.L;
+      digit(root, L.above(L.bundle), '10', '', 'is-above');
+      const last = Math.max(d.ones, value - 10);
+      resize(pic, stickBox(pic, last).x + 1, L.dh);
+      for (let j = 0; j < value - 10; j++) {
+        const delay = stagger(j + 1, value - 9, 120);
+        if (j >= d.ones) ghost(root, stickBox(pic, j), delay, 'is-stick');
+        digit(root, L.above(stickBox(pic, j)), String(11 + j), delay, 'is-above');
+      }
+      const k = value - 10;
+      if (k < d.ones) ring(root, stickBox(pic, k), stagger(k + 1, k + 2, 120), 'is-around');
+      else ring(root, stickBox(pic, k - 1), stagger(k, k + 1, 120), 'is-around');
+      return [];
+    },
   },
   prep: () => [],
   /** The bundle gets a 10 label (place value: the ten is ten things tied). @param {Pic} pic @param {HTMLElement} root */
@@ -572,29 +621,34 @@ export const BUNDLES = {
 // ---------- Bundles with the ones unknown: 14 = 10 + ? (level 9) ----------
 
 export const BUNDLES_PART = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, rule, display }) {
-    const { t, d } = pic;
-    const L = t.L;
-    if (display === 'flash' && rule === 'given.whole') return chipFlash(pic, t.chip);
-    if (display === 'flash') {
-      ring(root, banded(L.bundle), '', 'is-around');
+  /** @type {Record<string, Display>} */
+  displays: {
+    flash(pic, root, { rule }) {
+      const { t } = pic;
+      if (rule === 'given.whole') return chipFlash(pic, t.chip);
+      ring(root, banded(t.L.bundle), '', 'is-around');
       return blink(pic, [t.bundle]);
-    }
-    // count-up from 1 on the ones' places (the unknown is a part): one place left without a digit
-    // is ringed, or the extra digit lands on a ghost stick after them.
-    const lids = liftForDisplay(pic);
-    const last = Math.max(d.ones, value);
-    resize(pic, L.stick(last - 1).x + 1, L.dh);
-    for (let j = 0; j < last; j++) {
-      const delay = stagger(j, last, 120);
-      if (j >= d.ones) ghost(root, L.stick(j), delay, 'is-stick');
-      else mark(root, 'tf-place is-stick tf-enter', L.stick(j), undefined, delay);
-      if (j < value) digit(root, L.above(L.stick(j)), String(j + 1), delay, 'is-above');
-    }
-    if (value < d.ones) ring(root, L.stick(value), stagger(value, last, 120), 'is-around');
-    else ring(root, L.stick(value - 1), stagger(value - 1, last, 120), 'is-around');
-    return lids;
+    },
+    /**
+     * From 1 on the ones' places (the unknown is a part): one place left without a digit is
+     * ringed, or the extra digit lands on a ghost stick after them.
+     */
+    'count-up'(pic, root, { value }) {
+      const { t, d } = pic;
+      const L = t.L;
+      const lids = liftForDisplay(pic);
+      const last = Math.max(d.ones, value);
+      resize(pic, L.stick(last - 1).x + 1, L.dh);
+      for (let j = 0; j < last; j++) {
+        const delay = stagger(j, last, 120);
+        if (j >= d.ones) ghost(root, L.stick(j), delay, 'is-stick');
+        else mark(root, 'tf-place is-stick tf-enter', L.stick(j), undefined, delay);
+        if (j < value) digit(root, L.above(L.stick(j)), String(j + 1), delay, 'is-above');
+      }
+      if (value < d.ones) ring(root, L.stick(value), stagger(value, last, 120), 'is-around');
+      else ring(root, L.stick(value - 1), stagger(value - 1, last, 120), 'is-around');
+      return lids;
+    },
   },
   prep: () => [],
   /** The bundle gets a 10 label, and the cover over the ones a ring (7.2). @param {Pic} pic @param {HTMLElement} root */
@@ -679,18 +733,25 @@ export async function fill(pic, signal, hand) {
  */
 const HINT_PAD = { out: 0.31, in: 0.07, rows: 2 };
 
+/**
+ * Where the two frames stand now (a display draws on them): the counters in order, their places,
+ * and the free places, the first frame's then on past the second's counters.
+ * @param {Pic} pic
+ */
+function bridgeNow(pic) {
+  const [top, bottom] = [pic.top, pic.bottom];
+  const boxes = [...top.map((_, i) => slot(pic, i)), ...bottom.map((_, j) => slot(pic, 10 + j))];
+  const free = [...Array(10 - top.length).keys()].map((i) => top.length + i)
+    .concat([...Array(40).keys()].map((j) => 10 + bottom.length + j));
+  return { top, bottom, counters: [...top, ...bottom], boxes, free };
+}
+
 export const BRIDGE = {
-  /** @param {Pic} pic @param {HTMLElement} root @param {{ value: any, rule: string, display: string }} choice */
-  display(pic, root, { value, display }) {
-    const { t } = pic;
-    const L = t.L;
-    const [top, bottom] = [pic.top, pic.bottom];
-    const counters = [...top, ...bottom];
-    const boxes = [...top.map((_, i) => slot(pic, i)), ...bottom.map((_, j) => slot(pic, 10 + j))];
-    const free = [...Array(10 - top.length).keys()].map((i) => top.length + i)
-      .concat([...Array(40).keys()].map((j) => 10 + bottom.length + j));
-    if (display === 'overflow') {
-      // Counted twice: the counters that filled the ten are counted again with the whole second addend.
+  /** @type {Record<string, Display>} */
+  displays: {
+    /** Counted twice: the counters that filled the ten are counted again with the whole second addend. */
+    overflow(pic, root, { value }) {
+      const { counters, free } = bridgeNow(pic);
       const extra = value - counters.length;
       const places = free.slice(0, extra);
       if (places.at(-1) >= 20) hypothetical(pic, root, places.at(-1), 20);
@@ -700,25 +761,30 @@ export const BRIDGE = {
         ring(root, slot(pic, i), stagger(j, extra), i < 20 ? CELL_GHOST_RING : GHOST_RING);
       });
       return [];
-    }
-    if (display === 'count-up') {
-      // The count stops at ten; the counters left over blink and stay ringed.
+    },
+    /** The count stops at ten; the counters left over blink and stay ringed. */
+    'count-up'(pic, root, { value }) {
+      const { counters, boxes } = bridgeNow(pic);
       const n = Math.min(value, counters.length);
       for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
       const left = counters.slice(value);
       left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part in-cell'));
       return blink(pic, left);
-    }
-    // label-ten: the full first frame is the ten that was forgotten.
-    const m = 10 - top.length;
-    free.slice(0, m).forEach((i, j) => ghost(root, slot(pic, i), stagger(j, m)));
-    bottom.slice(0, m).forEach((_, j) => {
-      const gone = mark(root, 'tf-gone tf-enter', boxes[top.length + j], undefined, stagger(j, m));
-      gone.dataset.role = 'removed';
-    });
-    ring(root, grow(L.trays[0], 0.1), '', 'is-tray');
-    chipAt(root, L.tag, '10', 'tf-blink-in');
-    return blink(pic, [t.trays[0]]);
+    },
+    /** The full first frame is the ten that was forgotten. */
+    'label-ten'(pic, root) {
+      const { top, bottom, boxes, free } = bridgeNow(pic);
+      const L = pic.t.L;
+      const m = 10 - top.length;
+      free.slice(0, m).forEach((i, j) => ghost(root, slot(pic, i), stagger(j, m)));
+      bottom.slice(0, m).forEach((_, j) => {
+        const gone = mark(root, 'tf-gone tf-enter', boxes[top.length + j], undefined, stagger(j, m));
+        gone.dataset.role = 'removed';
+      });
+      ring(root, grow(L.trays[0], 0.1), '', 'is-tray');
+      chipAt(root, L.tag, '10', 'tf-blink-in');
+      return blink(pic, [pic.t.trays[0]]);
+    },
   },
   prep: () => [],
   /**
@@ -794,3 +860,18 @@ export const BRIDGE = {
  */
 
 export const KINDS = { frame: FRAME, tree: TREE, pairs: PAIRS, bundles: BUNDLES, 'bundles-part': BUNDLES_PART, bridge: BRIDGE };
+
+/** @type {(kind: string, display: string) => boolean} whether a kind of picture has a drawing for a display */
+export const draws = (kind, display) => Object.hasOwn(KINDS[kind].displays, display);
+
+/**
+ * A kind's drawing of a display (architecture 2.1). One it has none for throws, so a display never
+ * falls through to another one's drawing.
+ * @param {string} kind
+ * @param {string} display
+ * @returns {Display}
+ */
+export function displayOf(kind, display) {
+  if (!draws(kind, display)) throw new Error(`ten-frame: the ${kind} picture has no ${display} display`);
+  return KINDS[kind].displays[display];
+}

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
 import { bridges, ghostRows, ghostSlots, layoutLine, layoutPan, lidPlaces, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, rowsOfPan, runsOf } from '../games/balance/stage.js';
-import { displayRows } from '../games/balance/view.js';
+import { displayRows, drawable } from '../games/balance/view.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -169,6 +169,18 @@ test('a display takes 8 rows on the pans at most (design 6.8): a wrong value tha
     }
   }
   assert.ok(left > 100, `${left} values left out`);
+});
+
+test('displays: the balance draws six, on every model, and says no to any other (architecture 2.1)', () => {
+  assert.deepEqual([...balance.displays].sort(), ['balance', 'count-up', 'empty-plate', 'flash', 'jumps', 'overflow']);
+  // The pans, a judging card and the turned rows: a judging card and the rows draw each of the six as ghosts.
+  for (const id of ['missing-reversed', 'true-false', 'turn']) {
+    const r = balance.makeRound(level(id), rng(1));
+    for (const display of ['flash', 'overflow', 'balance', 'count-up', 'empty-plate']) assert.equal(drawable(r, display), true, `${id}: ${display}`);
+    assert.equal(drawable(r, 'regroup'), false, `${id}: regroup`);
+    assert.equal(drawable(r, 'constructor'), false, `${id}: constructor`);
+  }
+  assert.match(balance.budget(balance.makeRound(level('turn'), rng(1)), { value: 2, rule: 'seq.decade-ten' }), /regroup has no drawing/);
 });
 
 test('R6: the turned rows go left to right, a group after the other, the second in the light shade', () => {

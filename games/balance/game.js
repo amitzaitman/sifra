@@ -3,7 +3,7 @@
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
 import { pickWeighted } from '../../lib/weights.js';
-import { displayRows, drawable, drawFace, renderBalance } from './view.js';
+import { DISPLAYS, displayRows, drawable, drawFace, renderBalance } from './view.js';
 
 export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 4, css: new URL('game.css', import.meta.url).href };
 
@@ -128,6 +128,9 @@ export const rules = {
     return fact ? { left: [fact[0]], right: [fact[0] + fact[1]] } : null;
   },
 };
+
+/** The displays the balance draws (architecture 2.1; view.js): show() throws on any other. */
+export const displays = DISPLAYS;
 
 /** @type {(side: 'left' | 'right', role: Group['role'], count: number) => Piece} */
 const piece = (side, role, count) => ({ side, role, count, shown: role === 'unknown' ? 'covered' : 'items' });

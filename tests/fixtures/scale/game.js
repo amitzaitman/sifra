@@ -35,6 +35,8 @@ const ORDER = {
   'eq.sign.same-as': ['given.part', 'op.other', 'slip.near'],
   'eq.sign.missing': ['given.whole', 'given.part', 'op.other', 'count.start-included'],
 };
+/** The displays of its rules (RULES), each drawn as a ghost row (kit.js). */
+export const displays = ['flash', 'overflow', 'jumps', 'count-up', 'balance'];
 
 /**
  * @param {Level} level
@@ -117,5 +119,5 @@ export function face(host, value) {
  * @returns {RoundView}
  */
 export function render(host, round, ctx) {
-  return draw(host, round, ctx, meta.title);
+  return draw(host, round, ctx, meta.title, displays);
 }

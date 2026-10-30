@@ -63,12 +63,25 @@ export const meta = {
 export const levels = [];                 // Level objects (2.2). Level n is levels[n - 1]
 export const text = [];                   // locked sentence templates (R1). round.text is '' or one of them
 export const rules = {};                  // ruleId: (round) => value, for every rule the game's choices use
+export const displays = [];               // the display ids it draws; miss throws on any other (below)
 export function makeRound(level, rng) {}  // pure; returns a Round (2.3)
 export function render(host, round, ctx) {}   // draws the picture into host; returns a RoundView (2.4)
 export function face(host, value, round) {}   // optional: draws a card face; returns false for the plain number
 export function classify(round, value) {}     // build and estimate rounds only (A.1); none in milestone 1
 export function budget(round, choice) {}      // optional: why a wrong choice's display does not fit, else null (4.2)
+export function canShow(round, choice) {}     // optional: can this round's picture draw a choice's display
 ```
+
+`displays` lists, each once, the ids of the §4.2 catalogue's displays that the game draws. Its `miss` (2.4) draws a
+display through a table keyed by these ids, and throws an Error on any other id before it changes the picture, so a
+display never falls through to another one's drawing. `canShow(round, { value, rule })` says whether this round's
+picture can draw that choice's display (`RULES[rule].display`): a game whose drawing depends on more than the id
+exports it, and its `makeRound` deals no wrong choice that `canShow` rejects. The ten-frame exports it: each kind of
+picture (frame, bond, pair cards, bundles, bundles with a cover, two frames) has its own table in help.js, a count-up
+from the bundle needs 10 or more, and a frame's empty plate needs an empty unknown; its drawings throw on the same
+cases. The balance has none: its view.js keeps a table per scene (the pans draw each display their own way, a judging
+card and the turned rows draw each as ghosts), and its `budget` already says no where the pans have no drawing
+(`drawable`) or not enough rows. The generic test checks both on every wrong card dealt (4.2).
 
 No grade anywhere: not in `meta`, not in a level, not in the shell. Levels and progression are independent of
 school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails a `meta` with a grade key (4.2).
@@ -166,8 +179,9 @@ dev-spec A.1 is the shape, with these precisions:
    locks the cards, calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
    `view.miss({ value, rule, display }, step)` (`display` from RULES), and unlocks. After step 3 only the answer card
    is left, ringed (design §6.5).
-4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`); from step 2
-   it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2; a 3-option level's first miss is
+4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`; an id not in
+   `displays` throws, 2.1); from step 2 it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2;
+   a 3-option level's first miss is
    step 2 and still a first miss: its display stays to the next tap, also with reduced motion, and the hint joins
    it); at step 3 the tour: one `[data-tour]`
    per digit, the last one the answer (from 1 on the unknown when it is a part, on from the known part when it is
@@ -240,6 +254,7 @@ export const levels = [{ id: 'split-5', skill: 'num.parts.split', demo: true, st
 export const text = [];
 const count = (round, role) => round.picture.find((g) => g.role === role).count;
 export const rules = { 'given.whole': (r) => count(r, 'whole'), 'given.part': (r) => count(r, 'part') };
+export const displays = ['flash'];   // both rules' display (RULES); drawDisplay throws on any other
 
 export function makeRound(level, rng) {
   let whole, part;
@@ -514,6 +529,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   next rule is `slip.near`; on level 6 there is none (section 6, "Open questions for the owner").
   e2e/balance.spec.js reads the rows each display draws (every cube's, ghost's and mark's `--r`) for the largest
   card of each display on each level, against the scene's `--rows` and 8.
+- Displays (2.1): `displays` is exported, non-empty, each id once and a display of the §4.2 catalogue. Every wrong
+  card dealt has its `RULES[rule].display` in `displays`, and `canShow(round, choice)` true where the game exports it.
+  Like a budget, a real error whose display the game cannot draw is not one "the round could offer" in R4's slip
+  check. tests/ten-frame.test.js checks that each kind's table throws on a display it has no drawing for (the two
+  frames' `jumps`, the bond's `empty-plate`), and the two guards.
 - The deal, a test of its own per level (one per value of a mixed structure or ask): over seeds 1 to 5000 every
   form in the level's `forms` is dealt, and its share is within 4 standard deviations of its weight (2.3 points at
   20%, 2.8 at 50%), read from the level and never from the code, so the balance's old drift (16.2% for 20% on

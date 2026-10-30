@@ -9,6 +9,8 @@ import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, 
 /** @typedef {[HTMLElement, number][]} Steps a tour: the element and its digit */
 /** @typedef {{ el: HTMLElement, left: HTMLElement, right: HTMLElement }} Layer an overlay with a stack per pan (panLayer) */
 /** @typedef {{ steps: Steps, pace: number, ring: () => HTMLElement[] }} Tour digits `pace` at a time, then the ring */
+/** @typedef {{ display: string, value: any, rule: string }} Shown a wrong choice and its display */
+/** @typedef {(layer: Layer, choice: Shown, lift: () => void) => void | Promise<void>} Show a display's drawing on the balance, in its layer */
 /**
  * What renderBalance asks of a picture: the balance (balanceScene) or the turned rows (rowsScene).
  * @typedef {object} Scene
@@ -116,18 +118,35 @@ const IN_PLACE = ['flash', 'empty-plate', 'jumps'];
  * (design 7.3): every cube weighs, so one cube short or over tips the beam.
  */
 const GHOSTS = ['overflow', 'balance', 'count-up'];
+/** Every display the balance draws (architecture 2.1): the pans each its own way, a judging card and the turned rows each as ghosts. */
+export const DISPLAYS = [...IN_PLACE, ...GHOSTS];
 
 /**
- * Whether show() can draw a display on this round (design 7.1, 7.3): a judging card and the turned
- * rows draw every display as ghosts; the pans draw IN_PLACE and GHOSTS, and the jumps count on over
- * the two numbers of the other pan (? = a + b), so they have no drawing where it holds one (a + ? = c).
+ * A scene's drawing of a display, from its table keyed by display id (architecture 2.1). One it
+ * has none for throws, so a display never falls through to another one's drawing.
+ * @template T
+ * @param {Record<string, T>} table
+ * @param {string} display
+ * @returns {T}
+ */
+function drawingOf(table, display) {
+  if (!Object.hasOwn(table, display)) throw new Error(`balance: no drawing for ${display}`);
+  return table[display];
+}
+/** @type {<T>(drawing: T) => Record<string, T>} one drawing for every display (a judging card, the turned rows) */
+const forEvery = (drawing) => Object.fromEntries(DISPLAYS.map((id) => [id, drawing]));
+
+/**
+ * Whether show() can draw a display on this round (design 7.1, 7.3): one of DISPLAYS, which a
+ * judging card and the turned rows draw as ghosts and the pans each its own way; the jumps count on
+ * over the two numbers of the other pan (? = a + b), so they have no drawing where it holds one (a + ? = c).
  * @param {Round} round
  * @param {string} display
  * @returns {boolean}
  */
 export function drawable(round, display) {
-  if (round.model !== 'balance') return true;
-  if (display !== 'jumps') return IN_PLACE.includes(display) || GHOSTS.includes(display);
+  if (!DISPLAYS.includes(display)) return false;
+  if (round.model !== 'balance' || display !== 'jumps') return true;
   const data = sidesOf(round, false);
   return data[data.left.some((g) => g.role === 'unknown') ? 'right' : 'left'].length === 2;
 }
@@ -262,6 +281,70 @@ function balanceScene(host, round, solved, signal) {
   };
   shift(0);
 
+  /** @type {Show} The card goes up on the balance as ghosts, each side in rows of five. */
+  const card = (layer, { display, value }) => {
+    const pile = (tokens) => Array.from({ length: total(tokens) }, (_, slot) => slot);
+    const [left, right] = [pile(value.left), pile(value.right)];
+    ghosts(layer.left, left);
+    ghosts(layer.right, right);
+    scene.classList.add('is-weighing');
+    tilt(tiltOf(total(value.left), total(value.right)), displayRows(round, display, value));
+  };
+  /** @type {Show} The number is on a pan already: it blinks once and keeps a ring. */
+  const flash = (layer, { rule }) => {
+    const target = [u, k].flatMap((side) => data[side].map((g, i) => ({ g, i, side })))
+      .find(({ g }) => g.role === (rule === 'given.whole' ? 'whole' : 'part'));
+    for (const cube of cubesOf(target.side, target.i)) cube.classList.add('is-flash');
+    rings(layer, target.side, pans[target.side].layout.spans[target.i].runs, 'is-wrong');
+  };
+  /** @type {Show} */
+  const emptyPlate = (layer, choice, lift) => {
+    lift();
+    put(layer[u], 'bl-zero is-wrong', at(span.places[0]), 0);
+  };
+  /**
+   * Counting on with the start counted (? = a + b): from a's last cube, one short; the places it
+   * missed keep a ring.
+   * @type {Show}
+   */
+  const jumps = (layer, { value }) => {
+    const { layout } = pans[k];
+    const first = data[k][0].count;
+    const path = [layout.spans[0].places.at(-1), ...layout.spans[1].places];
+    while (path.length <= value - first) path.push(layout.slots + path.length - layout.spans[1].places.length - 1);
+    const steps = path.slice(0, value - first + 1);
+    stagger(steps.map((slot, j) => {
+      if (slot === steps[j - 1] + 1 && slot % 5) put(layer[k], 'bl-arc', at(slot - 1));
+      if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
+      const mark = put(layer[k], 'bl-mark', at(slot), first + j);
+      // A mark is a white disc with a 2px edge, like a known cube: its digits get the same room, 3px each side.
+      if (first + j > 9) condense(mark, first + j, mark.offsetWidth - 6);
+      return mark;
+    }));
+    rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
+  };
+  /**
+   * overflow, balance, count-up: ghosts in the unknown's pan.
+   * @param {Layer} layer @param {Shown} choice @param {() => void} lift
+   */
+  const weigh = async (layer, { display, value, rule }, lift) => {
+    if (rule === 'equal.compensate-wrong' && moving) {
+      // The cube goes the wrong way: the second group is the choice.
+      shift(-moving.d);
+      tilt(restTilt);
+      await settle(pans[k].stack, signal);
+      if (signal.aborted) return;
+    } else scene.classList.add('is-weighing');
+    // Ghosts in the unknown's places, then on after the pan's last; every cube weighs.
+    lift();
+    const slots = ghostSlots(pans[u].layout, ui, value);
+    ghosts(layer[u], slots);
+    const mine = weight(data[u].filter((g) => g.role !== 'unknown')) + value;
+    tilt(u === 'left' ? tiltOf(mine, weight(data[k])) : tiltOf(weight(data[k]), mine), displayRows(round, display, value));
+  };
+  /** Each display's drawing (design 7.1, 7.3), by display id: on the pans each its own way; a judging card whatever its display. */
+  const shows = judging ? forEvery(card) : { flash, 'empty-plate': emptyPlate, jumps, ...Object.fromEntries(GHOSTS.map((id) => [id, weigh])) };
+
   return {
     stage: d.stage,
     scene,
@@ -275,65 +358,18 @@ function balanceScene(host, round, solved, signal) {
     close: () => judging && layCard(),
     intro: () => {},
     /**
-     * What a wrong choice says (design 7.1, 7.3), in a layer [data-display].
+     * What a wrong choice says (design 7.1, 7.3), in a layer [data-display]: its display's drawing,
+     * looked up before the layer is added (a display the scene has none for throws).
      * @param {string} display
      * @param {any} value
      * @param {string} rule
      * @param {() => void} lift
      */
     async show(display, value, rule, lift) {
+      const drawing = drawingOf(shows, display);
       const layer = panLayer(scene);
       layer.el.dataset.display = display;
-      if (judging) {
-        // The card goes up on the balance as ghosts, each side in rows of five.
-        const pile = (tokens) => Array.from({ length: total(tokens) }, (_, slot) => slot);
-        const [left, right] = [pile(value.left), pile(value.right)];
-        ghosts(layer.left, left);
-        ghosts(layer.right, right);
-        scene.classList.add('is-weighing');
-        tilt(tiltOf(total(value.left), total(value.right)), displayRows(round, display, value));
-      } else if (display === 'flash') {
-        // The number is on a pan already: it blinks once and keeps a ring.
-        const target = [u, k].flatMap((side) => data[side].map((g, i) => ({ g, i, side })))
-          .find(({ g }) => g.role === (rule === 'given.whole' ? 'whole' : 'part'));
-        for (const cube of cubesOf(target.side, target.i)) cube.classList.add('is-flash');
-        rings(layer, target.side, pans[target.side].layout.spans[target.i].runs, 'is-wrong');
-      } else if (display === 'empty-plate') {
-        lift();
-        put(layer[u], 'bl-zero is-wrong', at(span.places[0]), 0);
-      } else if (display === 'jumps') {
-        // Counting on with the start counted (? = a + b): from a's last cube, one short; the
-        // places it missed keep a ring.
-        const { layout } = pans[k];
-        const first = data[k][0].count;
-        const path = [layout.spans[0].places.at(-1), ...layout.spans[1].places];
-        while (path.length <= value - first) path.push(layout.slots + path.length - layout.spans[1].places.length - 1);
-        const steps = path.slice(0, value - first + 1);
-        stagger(steps.map((slot, j) => {
-          if (slot === steps[j - 1] + 1 && slot % 5) put(layer[k], 'bl-arc', at(slot - 1));
-          if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
-          const mark = put(layer[k], 'bl-mark', at(slot), first + j);
-          // A mark is a white disc with a 2px edge, like a known cube: its digits get the same room, 3px each side.
-          if (first + j > 9) condense(mark, first + j, mark.offsetWidth - 6);
-          return mark;
-        }));
-        rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
-      } else if (GHOSTS.includes(display)) {
-        // overflow, balance, count-up: ghosts in the unknown's pan.
-        if (rule === 'equal.compensate-wrong' && moving) {
-          // The cube goes the wrong way: the second group is the choice.
-          shift(-moving.d);
-          tilt(restTilt);
-          await settle(pans[k].stack, signal);
-          if (signal.aborted) return layer.el;
-        } else scene.classList.add('is-weighing');
-        // Ghosts in the unknown's places, then on after the pan's last; every cube weighs.
-        lift();
-        const slots = ghostSlots(pans[u].layout, ui, value);
-        ghosts(layer[u], slots);
-        const mine = weight(data[u].filter((g) => g.role !== 'unknown')) + value;
-        tilt(u === 'left' ? tiltOf(mine, weight(data[k])) : tiltOf(weight(data[k]), mine), displayRows(round, display, value));
-      } else throw new Error(`balance: no drawing for ${display} (drawable)`);
+      await drawing(layer, { display, value, rule }, lift);
       return layer.el;
     },
     /** Step 2: the skill's hint (depth 4.9), kept to the end of the round. */
@@ -445,6 +481,15 @@ function rowsScene(host, round, solved) {
     scene.style.setProperty('--len', String(len));
     scene.style.setProperty('--rows', String(rows));
   };
+  /** @type {(root: HTMLElement, choice: Shown, lift: () => void) => void} ghosts in the turned row, whatever the display */
+  const ghostRow = (root, { display, value }, lift) => {
+    lift();
+    stagger(Array.from({ length: value }, (_, j) => put(root, 'bl-dot bl-ghost', place(j))));
+    rings(root, Math.min(value, answer), Math.max(value, answer), 'is-wrong is-late');
+    const width = lines.right.layout.length - Math.min(5, answer) + Math.min(5, Math.max(value, answer));
+    size(Math.max(Number(restLen), width), displayRows(round, display, value));
+  };
+  const shows = forEvery(ghostRow);
   return {
     stage: d.stage,
     scene,
@@ -455,20 +500,17 @@ function rowsScene(host, round, solved) {
     /** On mount, in play and demo: the row turns once. */
     intro: () => turn(layer('bl-turning')),
     /**
-     * balance: ghosts in the turned row; what does not fit keeps a ring.
+     * Any display (one of DISPLAYS): ghosts in the turned row; what does not fit keeps a ring.
      * @param {string} display
      * @param {number} value
      * @param {string} rule
      * @param {() => void} lift
      */
     async show(display, value, rule, lift) {
+      const drawing = drawingOf(shows, display);
       const root = layer();
       root.dataset.display = display;
-      lift();
-      stagger(Array.from({ length: value }, (_, j) => put(root, 'bl-dot bl-ghost', place(j))));
-      rings(root, Math.min(value, answer), Math.max(value, answer), 'is-wrong is-late');
-      const width = lines.right.layout.length - Math.min(5, answer) + Math.min(5, Math.max(value, answer));
-      size(Math.max(Number(restLen), width), displayRows(round, display, value));
+      drawing(root, { display, value, rule }, lift);
       return root;
     },
     /** Step 2: the row turns again, slowly; the unknown and its twin keep a ring. */
