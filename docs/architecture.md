@@ -724,14 +724,15 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   true card's sum, the same on both sides); after the answer no `.cover` is shown on the screen and `[data-next]` is
   there. In `symbols` look the same round again, solved on the first tap, then the picture button past the tap
   window: its picture shows no cover (2.4). On the balance's pans two seeds with different answers show covers of
-  the same size at rest (design 6.6, the fixed dome); elsewhere a cover covers the unknown's places, so the clause
+  the same size at rest, measured in cubes (design 6.6, the fixed dome is two cubes and their gap; a pan with more
+  rows has smaller cubes, so the dome is a few pixels smaller with the whole picture); elsewhere a cover covers the unknown's places, so the clause
   is for the pans only. Level 9's turning row covers its places too: the owner's answer of 2026-10-18
   (decisions.md, "המכסה במאזניים מגלה את התשובה") fixed the dome on the pans and left that row as it was.
 - **With motion**, once per game: the same path on its first level with the most options (4 in every game today)
   at seed 1, so the waits chain on real animations.
-- **The loop in the page**, a test per game and size (320×568 and 1024×1366), the longest, so they come first: one
-  `page.evaluate()` imports the game, puts a host of the panel's size in the panel's place and, for every level (each
-  value of a mixed one) and seeds 1-50, freezes the round as the shell does, calls `render`, `picture()` in
+- **The loop in the page**, a test per game, level (each value of a mixed one) and size (320×568 and 1024×1366;
+  one test per game outran its timeout on WebKit), the longest, so they come first: one `page.evaluate()` imports
+  the game, puts a host of the panel's size in the panel's place and, for its level and seeds 1-50, freezes the round as the shell does, calls `render`, `picture()` in
   `symbols` look (the host must be empty before it), `view.miss()` for each wrong choice in order with the shell's
   `step` and `first`, then `solve()`; in `symbols` look also `solve()` then `picture()`; and the round as a thumb
   (unsolved at seed 1, as home draws it; solved at every seed, as the end screen does), on a signal of its own

@@ -41,21 +41,28 @@ const tourEnd = (answer) => String(Array.isArray(answer) ? answer.at(-1) : Array
 /**
  * In the page: the `.cover` elements under a root that a child sees (a box, and no display: none,
  * visibility: hidden or opacity 0 on it or above it; a lifted cover has opacity 0), as
- * "class w×h" with the size rounded to half a pixel.
+ * "class w×h" with the size rounded to half a pixel, or in a unit element's width to a half.
  * @param {import('@playwright/test').Page} page
  * @param {string} root
+ * @param {string} [unit] a selector under root whose width is the unit of the sizes (the balance's cube)
  * @returns {Promise<string[]>}
  */
-const shownCovers = (page, root) => page.locator(root).evaluate((el) => [...el.querySelectorAll('.cover')].flatMap((c) => {
-  const b = c.getBoundingClientRect();
-  if (!b.width || !b.height) return [];
-  for (let n = /** @type {Element | null} */ (c); n; n = n.parentElement) {
-    const s = getComputedStyle(n);
-    if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return [];
-  }
-  const half = (v) => Math.round(v * 2) / 2;
-  return [`${c.parentElement?.className} ${half(b.width)}×${half(b.height)}`];
-}));
+const shownCovers = (page, root, unit = '') => page.locator(root).evaluate((el, sel) => {
+  // With a unit selector, sizes are in that element's width, to a half (the balance's cube): the dome is
+  // two cubes and a 3px gap, 2.1 cubes at 28px and 2.25 only below 12px.
+  const u = sel ? el.querySelector(sel)?.getBoundingClientRect().width : 0;
+  return [...el.querySelectorAll('.cover')].flatMap((c) => {
+    const b = c.getBoundingClientRect();
+    if (!b.width || !b.height) return [];
+    for (let n = /** @type {Element | null} */ (c); n; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return [];
+    }
+    const half = (v) => Math.round(v * 2) / 2;
+    const size = u ? `${Math.round((b.width / u) * 2) / 2}×${Math.round((b.height / u) * 2) / 2}u` : `${half(b.width)}×${half(b.height)}`;
+    return [`${c.parentElement?.className} ${size}`];
+  });
+}, unit);
 
 /**
  * Opens a round on #/dev in the page already open (the same round again through the dev list),
@@ -94,7 +101,7 @@ async function shellPath(page, hash) {
     expect(drawn, where('symbols look: the panel holds only the picture button before picture()')).toEqual([]);
     await page.locator('[data-show-picture]').click();
   }
-  const covers = await shownCovers(page, 'main[data-screen="round"] [data-area="picture"]');
+  const covers = await shownCovers(page, 'main[data-screen="round"] [data-area="picture"]', '.bl-cube:not(.bl-ghost)');
   const wrong = round.choices.flatMap((c, i) => (c.rule ? [i] : []));
   for (const [m, i] of wrong.entries()) {
     const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
@@ -132,18 +139,23 @@ for (const { path, games } of SITES) {
   for (const game of games) {
     const id = game.meta.id;
     // Each value of a mixed level (R3), as the planner deals them.
-    const levels = game.levels.flatMap((l) => [l.structure].flat().flatMap((structure) => [l.ask].flat().map((ask) =>
-      ({ ...l, ...(structure !== undefined && { structure }), ...(ask !== undefined && { ask }) }))));
+    const levels = game.levels.flatMap((l) => [l.structure].flat().flatMap((structure) => [l.ask].flat().map((ask) => ({
+      level: { ...l, ...(structure !== undefined && { structure }), ...(ask !== undefined && { ask }) },
+      name: [l.id, Array.isArray(l.structure) && structure, Array.isArray(l.ask) && ask].filter(Boolean).join('/'),
+    }))));
+    // One test per level and size: a whole game in one test outran its timeout on WebKit in CI.
     for (const [width, height] of [[320, 568], [1024, 1366]]) {
-      test(`${id} at ${width}×${height}: render and miss over every level, seeds 1-${LOOP}, keep every box, digit and cover in place`, async ({ page }) => {
-        test.setTimeout(240000);
-        await page.setViewportSize({ width, height });
-        await page.clock.install({ time: NOW });
-        await page.goto(`${path}#/dev/${id}/1/1`);
-        await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
-        const url = new URL(path === INDEX ? `/games/${id}/game.js` : `/tests/fixtures/${id}/game.js`, page.url()).pathname;
-        expect(await page.evaluate(loop, { url, levels, seeds: LOOP })).toEqual([]);
-      });
+      for (const { level, name } of levels) {
+        test(`${id} ${name} at ${width}×${height}: render and miss, seeds 1-${LOOP}, keep every box, digit and cover in place`, async ({ page }) => {
+          test.setTimeout(240000);
+          await page.setViewportSize({ width, height });
+          await page.clock.install({ time: NOW });
+          await page.goto(`${path}#/dev/${id}/1/1`);
+          await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
+          const url = new URL(path === INDEX ? `/games/${id}/game.js` : `/tests/fixtures/${id}/game.js`, page.url()).pathname;
+          expect(await page.evaluate(loop, { url, levels: [level], seeds: LOOP })).toEqual([]);
+        });
+      }
     }
   }
 }
@@ -161,7 +173,9 @@ for (const { path, games } of SITES) {
         for (let seed = 1; seed <= SEEDS; seed++) rest.push({ seed, ...(await shellPath(page, `#/dev/${id}/${i + 1}/${seed}`)) });
         if (!fixedCover(game, level)) return;
         // Two rounds with different answers show the same covers at rest: the cover's size never
-        // tells what is under it (design 6.6, 6b76be4).
+        // tells what is under it (design 6.6, 6b76be4). Sizes are read in cubes, as the dome is two
+        // cubes and their gap: a pan with more rows has smaller cubes, so its dome is a few pixels
+        // smaller too (51 against 53px on WebKit's iPhone 13), with the whole picture.
         const sizes = (covers) => covers.map((c) => c.split(' ').at(-1)).sort();
         for (const r of rest) {
           if (JSON.stringify(r.answer) === JSON.stringify(rest[0].answer)) continue;
