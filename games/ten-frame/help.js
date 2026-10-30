@@ -109,7 +109,12 @@ function mark(parent, cls, box, text, delay) {
 }
 /** A display digit (design 7.1: --role-added-edge, written one by one). */
 const digit = (parent, box, text, delay, cls = '') => mark(parent, `tf-digit ${cls}`, box, text, delay);
-const ghost = (parent, box, delay, cls = '') => mark(parent, `tf-ghost tf-enter ${cls}`, box, undefined, delay);
+/**
+ * A ghost goes under every digit in its layer: at() puts a digit in reading order, not last, so a
+ * digit drawn after its ghost could land under it. Nothing else moves.
+ */
+const ghost = (parent, box, delay, cls = '') =>
+  parent.insertBefore(mark(parent, `tf-ghost tf-enter ${cls}`, box, undefined, delay), parent.querySelector(':scope > [data-ry]'));
 const ring = (parent, box, delay, cls = 'is-round') => mark(parent, `tf-ring tf-blink-in ${cls}`, box, undefined, delay);
 /** A chip with a number (design 7.2: numbers on white chips). @param {Element} parent @param {Box} box @param {string} text */
 const chipAt = (parent, box, text, cls = '') => at(parent, `tf-chip ${cls}`, { x: box.x + box.w / 2 - 0.55, y: box.y + box.h / 2 - 0.36, w: 1.1, h: 0.72 }, text);

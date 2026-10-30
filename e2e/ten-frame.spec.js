@@ -1635,6 +1635,52 @@ test('the bond\'s count-up at 320px: every digit outlined in white, 14px or more
   }
 });
 
+/**
+ * What is painted over a digit or a cover in the drawing: at the centre of each one shown, the topmost thing
+ * painted is it or inside it. The layers take no taps (game.css), so elementFromPoint would pass over them: while
+ * it looks, every node that paints takes hits, and a box that paints nothing (a layer, a lid's box, an SVG's
+ * frame; its paths take hits where they paint) or is hidden does not.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+const paintedOver = (page) => page.locator('[data-area="picture"] .tf-draw').evaluate((draw) => {
+  const hidden = (node) => {
+    for (let n = node; n && n !== draw; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return true;
+    }
+    return false;
+  };
+  const name = (n) => `${n?.getAttribute('class') ?? n?.tagName} "${n?.textContent ?? ''}"`;
+  const nodes = /** @type {(HTMLElement | SVGElement)[]} */ ([...draw.querySelectorAll('*')]);
+  const was = nodes.map((n) => n.style.getPropertyValue('pointer-events'));
+  for (const n of nodes) n.style.setProperty('pointer-events', n.matches('.tf-base, .tf-layer, .tf-lid, svg') || hidden(n) ? 'none' : 'auto', 'important');
+  const out = [];
+  for (const el of draw.querySelectorAll('.tf-digit, .cover')) {
+    const b = el.getBoundingClientRect();
+    if (hidden(el) || !b.width || !b.height) continue;
+    const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!el.contains(top)) out.push(`${name(el)} under ${name(top)}`);
+  }
+  nodes.forEach((n, i) => n.style.setProperty('pointer-events', was[i]));
+  return out;
+});
+
+test('pair cards\' count-up: every digit is painted over its ghost, and the covers over everything, also where the left part takes a second row (design 4, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  // 8 = ? + ?, card 6|1 (seed 5 today): the left part's sixth dot starts a second row, so the right part's
+  // first digit, 7, comes before 6 in reading order (R7) and stands on a ghost drawn after it.
+  const slip = (r) => r.choices.find((c) => c.rule === 'slip.near');
+  const { round } = await devAt(page, 'split-pairs', (r) => slip(r)?.value[0] > 5 && slip(r).value[1] > 0);
+  await card(page, round.choices.indexOf(slip(round))).click();
+  await unlocked(page);
+  const n = slip(round).value[0] + slip(round).value[1];
+  await expect(page.locator('[data-display="count-up"] .tf-digit')).toHaveCount(n);
+  await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)')).toHaveCount(2);
+  expect(await paintedOver(page)).toEqual([]);
+});
+
 test('home thumbs at 320 and 360px: a cover\'s halo leaves the whole tray\'s edge round it (design 6.6, 6.7)', async ({ page }) => {
   await seedStore(page, storeWith({ games: { [ID]: ladderAt('ten-cover') } }));
   await page.clock.install({ time: NOW });

@@ -594,6 +594,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   card left, the last `[data-tour]` is the answer, outcome `shown`. A 3-option level: hint, then tour.
 - Reduced motion: a tap is taken right after a miss. Demo levels run the demo; `symbols` levels log `picture`.
 - The game's own R6 [browser] (first dot left of the second, design §7.3 drawings), and a session to the end screen.
+- Paint order: in ten-frame, `at()` puts text in reading order (R7), not last, so a digit can land under a node drawn
+  before it; a ghost goes before the first text child of its layer, so no ghost covers a digit.
+  `paintedOver` in e2e/ten-frame.spec.js asks `elementFromPoint` at the centre of every shown digit and cover what is
+  topmost, and fails unless it is that digit or cover. The layers take no taps, so while it looks every node that
+  paints takes them, and a box that paints nothing (a layer, a lid's box, an SVG's frame) or is hidden does not; a
+  plain `elementFromPoint` returns `.tf-base` for every digit and checks nothing. Today it runs on the pair cards'
+  count-up where the left part takes a second row (8 = ? + ?, card 6|1).
 - fixtures.spec.js also checks the shell's record (3.9): an attempt solved on the first tap, then the picture button
   and a tap in each area, reads the same after the next round is saved; a stuck return in the same game (3.7) logs
   the level the child was moved to as `levelAfter`.
