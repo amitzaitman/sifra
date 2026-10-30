@@ -341,18 +341,28 @@ test('11. every table row in the .md files has as many cells as its header, spli
   const problems = [];
   let count = 0;
   for (const file of listFiles(['.md'])) {
-    for (const { line, header, delimiter, rows } of tables(proseLines(read(file)))) {
+    const lines = proseLines(read(file));
+    const inTable = new Set();
+    for (const { line, header, delimiter, rows } of tables(lines)) {
       count += 1;
+      inTable.add(line).add(line + 1);
       if (delimiter !== header) {
         problems.push(`${file}:${line + 2}: the delimiter row has ${delimiter} cells, the header ${header}: GitHub shows no table`);
       }
       for (const row of rows) {
+        inTable.add(row.line);
         if (row.cells === header) continue;
         const lazy = row.lazy ? ' (a line right after a table is its row: leave a blank line)' : '';
         const n = `${row.cells} cell${row.cells === 1 ? '' : 's'}`;
         problems.push(`${file}:${row.line + 1}: ${n}, the header has ${header}${lazy}`);
       }
     }
+    // A pipe line in no table: its delimiter row is missing or has a cell that is not dashes.
+    lines.forEach((text, i) => {
+      if (text.trimStart().startsWith('|') && !inTable.has(i)) {
+        problems.push(`${file}:${i + 1}: a row in no table (a missing or malformed delimiter row): GitHub shows it as text`);
+      }
+    });
   }
   t.diagnostic(`${count} tables`);
   if (!count) problems.push('no table found');

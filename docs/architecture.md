@@ -499,11 +499,13 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
 - `tests/docs.test.js` as today, importing its parsers from scripts/docs-parse.js, and every table row in the .md
   files has as many cells as its header, and every delimiter row too (GitHub shows no table otherwise), cells split
   as GitHub splits them (`splitRow`): a `\|` stays in its cell and any other pipe ends one, in a code span too, and
-  a line right after a table, up to a blank line or another block, is one of its rows; `tests/sync.test.js` regenerates
-  data/ in memory and compares byte for byte (and the videos.js URLs with the doc's); `tests/games.test.js` (4.2);
-  `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`, `tests/store.test.js`, `tests/taps.test.js`
-  (4.3); `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3 and 10: the colour tokens measured from
-  app.css, the role fills, `--role-removed` and the part's second shade apart, text and graphics contrast);
+  a line right after a table, up to a blank line or another block, is one of its rows; a line that starts with a pipe
+  and is in no table (its delimiter row is missing or malformed, so GitHub shows text) fails; `tests/sync.test.js`
+  regenerates data/ in memory and compares byte for byte (and the videos.js URLs with the doc's);
+  `tests/games.test.js` (4.2); `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`,
+  `tests/store.test.js`, `tests/taps.test.js` (4.3); `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3
+  and 10: the colour tokens measured from app.css, the role fills, `--role-removed` and the part's second shade
+  apart, text and graphics contrast);
   `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
 - `tests/lock.test.js`, the rounds lock: `tests/rounds.lock.json` holds, for each game of games/registry.js, the
   `version` of its `meta` and, per level id, a sha256 (node:crypto) of `JSON.stringify(makeRound(level, rng(seed)))`
@@ -779,7 +781,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   deploys nothing, so WebKit runs before the merge: agents often have Chromium only, and three WebKit-only failures
   (114e1b6, 4f84173, 0b1cf85) were first seen on main, where they blocked the deploy. A branch with an open pull
   request is checked twice, once per event. Nothing makes a merge wait for the branch's run: merges are made
-  locally, without a pull request, and requiring the check is a GitHub setting only the owner can make.
+  locally, without a pull request, and requiring the check is a GitHub setting only the owner can make. So it is a
+  working rule GitHub does not enforce: a branch is merged to main only after its run passes (section 7, "Done").
 - The Pages source must be "GitHub Actions" (Settings > Pages > Build and deployment > Source; only the owner can set
   it). With "Deploy from a branch", GitHub's own `pages-build-deployment` also publishes the raw branch through
   Jekyll on every push to main, within a minute and whatever the check's result. After a push to main, the Actions
@@ -806,7 +809,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | R2 ceiling | Per structure, a column of the §4.6 table (`start` in FORMS): 5 for the stories, the depth tables' level 1 for `equal-groups`, `array` and `share`, none for `equation` | Owner decision 2026-10-14: no grade can raise it, and a flat 5 contradicts §4.10 and §4.11 level 1 (6–12 cookies, half of 2–10). §6 starts `equation` at 10 (balance 1) and 20 (ten-frame 10); §4.9 orders it by form. One table keeps R2 reading one source |
 | "Or" formulas | `{ oneOf: [...] }` | One formula per rule (R4) must still give both neighbours of the answer |
 | Pair cards | An array of numbers satisfies a number rule. A pair reads as a known number and a missing part, in either order: a rule's pair keeps one number of the answer and puts the rule's number for the other in its place (`{ oneOf }` over both orders, `ten-frame/game.js`). A pair that makes the whole is never a rule's value; `given.part` has none (nothing is given) | §6.2 level 4 tags pairs with number rules; the catalogue has no pair type. One lift for every number rule, so each id keeps one formula (R4), with no new rule and no docs change |
-| First-load budget | 200 KiB of same-origin responses, gzipped as Pages serves them | Raw, the files home loads (the shell and the fonts, and each game with its game.css) are far over 200 KiB with two games, so two games cannot fit 200 KiB raw; a phone downloads the gzipped files (fonts are woff2 either way). The registry imports every game on home, so each game's gzipped files take a share of the budget, and what is left shrinks with every game. The budget test (e2e/site.spec.js, 200 * 1024 bytes) measures the total on every run; the figures are not copied here, as they go stale as games grow |
+| First-load budget | 200 KiB of same-origin responses, gzipped as Pages serves them | Raw, the files home loads (the shell and the fonts, and each game with its game.css) are far over 200 KiB with two games, so two games cannot fit 200 KiB raw; a phone downloads the gzipped files (fonts are woff2 either way). The registry imports every game on home, so each game's gzipped files take a share of the budget, and what is left shrinks with every game. The budget test (e2e/site.spec.js, 200 * 1024 bytes) measures the total on every run and prints it in KiB in the run's log, so the room left is read there; the figures are not copied here, as they go stale as games grow |
 | 3 options | The skill's first level in the game's list, or relation answers | R4's two cases, made checkable |
 | Level identity | A stable `id`; numbers from 1 for people | §6.2 plans an entry level before level 1; stored state must survive it |
 | What is logged | `params`, seed, `version`, `answer`; not the round | The storage cap; skills.md copies the params because a seed alone may not rebuild a round |

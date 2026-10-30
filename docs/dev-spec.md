@@ -188,7 +188,9 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   four outcomes).
 - The docs are checked by `npm test` (`tests/docs.test.js`): skill ids across skills.md, the map and
   the depth files, prerequisites and cycles, rule lists per depth section, the catalogue, displays,
-  models, meteg, and relative links.
+  models, the totals sentence, meteg, relative links, the [§4.6](depth/addsub-meaning.md) ceilings, and
+  table rows (each row and delimiter row has its header's cell count, split as GitHub splits them, and no
+  pipe line stands outside a table). [architecture.md](architecture.md) 4.1 lists them.
 
 ### א.4 Exporting the attempt log (owner decision 2026-10-14, §8.1 ח)
 

@@ -389,6 +389,8 @@ test('index.html: the first load of home is at most 200 KB of same-origin respon
   await open(page, INDEX);
   await page.waitForLoadState('networkidle');
   const total = (await Promise.all(sizes)).reduce((a, b) => a + b, 0);
+  // The run's log keeps the figure (architecture 6, "First-load budget"), so the room left is known before it runs out.
+  console.log(`first load of home: ${(total / 1024).toFixed(1)} KiB gzipped of 200`);
   expect(total).toBeLessThanOrEqual(200 * 1024);
 });
 
