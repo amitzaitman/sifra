@@ -1,6 +1,7 @@
 // Fixture game for the shell's tests (not in games/registry.js): equality on two pans, standing in
 // for balance. Small, but it keeps the whole contract of docs/architecture.md section 2, including
 // a judging level (2.3) whose answers are equation cards.
+import { pickForm } from '../../../lib/forms.js';
 import { choose, count, render as draw } from '../kit.js';
 
 export const meta = { id: 'scale', title: 'כַּפּוֹת', version: 1, css: new URL('game.css', import.meta.url).href };
@@ -8,10 +9,11 @@ export const meta = { id: 'scale', title: 'כַּפּוֹת', version: 1, css: n
 const pans = { structure: 'equation', model: 'balance', look: 'dots', terms: false, max: 10, options: 4, demo: false };
 /** @type {Level[]} */
 export const levels = [
-  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', look: 'objects', demo: true, options: 3 },
-  { id: 'right', ...pans, skill: 'eq.sign.missing', unknown: 'right-part', demo: true },
-  { id: 'left', ...pans, skill: 'eq.sign.missing', unknown: 'left-part' },
-  { id: 'either', ...pans, skill: 'eq.sign.missing', unknown: ['right-part', 'left-part'], look: 'symbols' },
+  // exclude (architecture 4.2): both numbers are 1 or more, and differ, and neither is twice the other.
+  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', look: 'objects', demo: true, options: 3, exclude: [0, 1, 2, 3] },
+  { id: 'right', ...pans, skill: 'eq.sign.missing', unknown: 'right-part', demo: true, exclude: [0, 10] },
+  { id: 'left', ...pans, skill: 'eq.sign.missing', unknown: 'left-part', exclude: [0, 10] },
+  { id: 'either', ...pans, skill: 'eq.sign.missing', unknown: ['right-part', 'left-part'], look: 'symbols', forms: [{ unknown: 'right-part', w: 1 }, { unknown: 'left-part', w: 1 }], exclude: [0, 10] },
   { id: 'judge', ...pans, skill: 'eq.sign.true-false', model: 'cards', demo: true },
 ];
 
@@ -41,7 +43,7 @@ const ORDER = {
  */
 export function makeRound(level, rng) {
   if (level.skill === 'eq.sign.true-false') return judge(level, rng);
-  const unknown = Array.isArray(level.unknown) ? rng.pick(level.unknown) : level.unknown;
+  const unknown = level.forms ? pickForm(level.forms, rng).form.unknown : level.unknown;
   let a;
   let b;
   do {

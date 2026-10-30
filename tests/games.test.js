@@ -1,7 +1,8 @@
 // The generic game test (architecture 4.2, dev-spec A.2, decisions.md condition 5): every
-// registered game and both fixtures, every level, seeds 1-200, in Node with no DOM and no
-// storage. A new game gets all of it without writing a test. Choice rounds only for now: the
-// build and estimate checks of A.2 come with the first game that has such rounds.
+// registered game and both fixtures, every level, seeds 1-200, and the deal over seeds 1-2000
+// (each form's share, every answer of the range), in Node with no DOM and no storage. A new game
+// gets all of it without writing a test. Choice rounds only for now: the build and estimate
+// checks of A.2 come with the first game that has such rounds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
@@ -16,6 +17,9 @@ import { SKILLS } from '../data/skills.js';
 import { SKILLS as SKILLS_MD, parseParams, read } from '../scripts/docs-parse.js';
 
 const SEEDS = 200;
+/** The deal: a form's share is within 4 points of its weight over this many seeds (about 3.5 sigma at 50%). */
+const DEAL = 2000;
+const SHARE_SLACK = 0.04;
 const PARAMS = parseParams(read(SKILLS_MD));
 const LOOKS = ['objects', 'dots', 'symbols'];
 const RELATIONS = ['<', '>', '=', 'left', 'right', 'level'];
@@ -104,21 +108,23 @@ function typed(value, types) {
 /**
  * Whether a rule's value could be a card of this round (R4): of the rule's type, not the answer; a
  * number a whole number of at most 4 digits; a pair not one that makes the whole (architecture 6,
- * "Pair cards"); an exercise card false.
+ * "Pair cards"); an exercise card false; and its display within the game's budget.
  * @param {any} value
- * @param {string[]} types
+ * @param {string} rule
  * @param {Round} round
+ * @param {Game} game
  */
-function offerable(value, types, round) {
+function offerable(value, rule, round, game) {
+  const types = RULES[rule].types;
   if (value === null || value === undefined || !typed(value, types) || isDeepStrictEqual(value, round.answer)) return false;
   const whole = (n) => Number.isInteger(n) && n >= 0;
-  if (typeof value === 'number') return whole(value) && String(value).length <= 4;
-  if (Array.isArray(value) && value.every((v) => typeof v === 'number')) {
+  let ok = true;
+  if (typeof value === 'number') ok = whole(value) && String(value).length <= 4;
+  else if (Array.isArray(value) && value.every((v) => typeof v === 'number')) {
     const sum = (pair) => pair.reduce((a, b) => a + b, 0);
-    return value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
-  }
-  if (typed(value, ['card'])) return exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
-  return true;
+    ok = value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
+  } else if (typed(value, ['card'])) ok = exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
+  return ok && !game.budget?.(round, { value, rule });
 }
 
 /**
@@ -137,6 +143,95 @@ function checkJudging(round) {
     } else if ((balance(value, []) === 0) !== (rule === null)) {
       problems.push(`R1: the card ${show(value)} is ${rule === null ? 'the answer but false' : `tagged ${rule} but true`}`);
     }
+  }
+  return problems;
+}
+
+/** @type {(level: Level, form: LevelForm) => string} a form's unknown and eqform, the level's where it sets none */
+const pairOf = (level, form) => `${form.unknown ?? level.unknown}/${form.eqform ?? 'standard'}`;
+
+/**
+ * A level's forms and exclude list (architecture 2.2, 4.2): an unknown that varies has forms, an
+ * eqform is one value (forms list the others); each form a listed unknown and a skills.md eqform,
+ * once, with a weight; every listed unknown in a form; R8's 25% not standard when a form is not.
+ * exclude: numbers of the level's range.
+ * @param {Level} level
+ * @returns {string[]}
+ */
+function checkForms(level) {
+  const problems = [];
+  const fail = (msg) => problems.push(msg);
+  if (Array.isArray(level.eqform)) fail('eqform is one value: a level that deals several lists them in forms');
+  if (Array.isArray(level.unknown) && !level.forms) fail('a mixed unknown needs forms, the share of each');
+  const unknowns = [level.unknown].flat();
+  const forms = level.forms ?? [];
+  if (level.forms && (!Array.isArray(forms) || forms.length < 2)) fail('forms: two or more');
+  for (const form of Array.isArray(forms) ? forms : []) {
+    const extra = Object.keys(form).filter((k) => !['unknown', 'eqform', 'w'].includes(k));
+    if (extra.length) fail(`forms: ${extra.join(', ')} is not unknown, eqform or w`);
+    if (!(typeof form.w === 'number' && form.w > 0 && Number.isFinite(form.w))) fail(`forms: w ${form.w} is not a positive number`);
+    if (form.unknown !== undefined && !unknowns.includes(form.unknown)) fail(`forms: unknown ${form.unknown} is not among the level's ${show(level.unknown)}`);
+    if (form.eqform !== undefined && !PARAMS.get('eqform').values.includes(form.eqform)) fail(`forms: eqform ${form.eqform} is not a skills.md value`);
+  }
+  const pairs = forms.map((f) => pairOf(level, f));
+  pairs.forEach((p, i) => pairs.indexOf(p) !== i && fail(`forms: ${p} is listed twice`));
+  if (level.forms) for (const u of unknowns) if (!forms.some((f) => (f.unknown ?? level.unknown) === u)) fail(`forms: unknown ${u} is in no form`);
+  const total = forms.reduce((n, f) => n + f.w, 0);
+  const other = forms.filter((f) => (f.eqform ?? 'standard') !== 'standard').reduce((n, f) => n + f.w, 0);
+  if (other && other / total < 0.25) fail(`R8: the forms give ${Math.round((100 * other) / total)}% not standard; 25% are needed`);
+  if (level.exclude !== undefined) {
+    const lo = level.min ?? 0;
+    const ok = Array.isArray(level.exclude) && typeof level.max === 'number'
+      && level.exclude.every((n, i) => Number.isInteger(n) && n >= lo && n <= level.max && level.exclude.indexOf(n) === i);
+    if (!ok) fail(`exclude ${show(level.exclude)}: whole numbers of the range ${lo}-${level.max}, each once`);
+  }
+  return problems;
+}
+
+/**
+ * The deal of a level over seeds 1-DEAL (architecture 4.2): each form's share is within 4 points of
+ * its weight in the level's forms, and every whole number of the level's range [min, max] is dealt
+ * as an answer (either number of a pair), or the level lists it in exclude, and no excluded number
+ * is dealt. A planner-picked structure or ask: per value for the shares, all together for answers.
+ * @param {Game} game
+ * @param {Level} base
+ * @returns {string[]}
+ */
+export function checkDeal(game, base) {
+  const problems = [];
+  /** @type {Set<number>} */
+  const answers = new Set();
+  let numbers = true;
+  for (const level of variants(base)) {
+    const where = level === base ? '' : ` (${level.structure ?? level.ask})`;
+    /** @type {Map<string, number>} */
+    const dealt = new Map();
+    for (let seed = 1; seed <= DEAL; seed++) {
+      const round = game.makeRound(level, rng(seed));
+      const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
+      dealt.set(pair, (dealt.get(pair) ?? 0) + 1);
+      const values = [round.answer].flat();
+      if (values.every((v) => typeof v === 'number')) values.forEach((v) => answers.add(v));
+      else numbers = false;
+    }
+    const forms = level.forms ?? [];
+    const total = forms.reduce((n, f) => n + f.w, 0);
+    for (const form of forms) {
+      const pair = pairOf(level, form);
+      const share = (dealt.get(pair) ?? 0) / DEAL;
+      if (Math.abs(share - form.w / total) > SHARE_SLACK) {
+        problems.push(`${pair} is ${(100 * share).toFixed(1)}% of ${DEAL} rounds${where}; its weight gives ${((100 * form.w) / total).toFixed(1)}%`);
+      }
+    }
+    for (const pair of dealt.keys()) if (forms.length && !forms.some((f) => pairOf(level, f) === pair)) problems.push(`${pair} is dealt${where} but is no form of the level`);
+  }
+  if (numbers && typeof base.max === 'number') {
+    const exclude = base.exclude ?? [];
+    const range = Array.from({ length: base.max - (base.min ?? 0) + 1 }, (_, i) => (base.min ?? 0) + i);
+    const never = range.filter((n) => !answers.has(n) && !exclude.includes(n));
+    if (never.length) problems.push(`${never.join(', ')} never dealt as an answer in ${DEAL} seeds: deal it, or list it in exclude with the reason`);
+    const stale = exclude.filter((n) => answers.has(n));
+    if (stale.length) problems.push(`exclude lists ${stale.join(', ')}, but it is dealt as an answer`);
   }
   return problems;
 }
@@ -164,7 +259,7 @@ export function checkGame(game) {
     if (!skillOf(level.skill)) fail(`${where}: skill ${level.skill} is not in skills.md`);
     if (![3, 4].includes(level.options)) fail(`${where}: options must be 3 or 4`);
     for (const [key, value] of Object.entries(level)) {
-      if (['id', 'skill', 'min'].includes(key)) continue;
+      if (['id', 'skill', 'min', 'forms', 'exclude'].includes(key)) continue;
       const param = PARAMS.get(key);
       if (!param) fail(`${where}: ${key} is not a skills.md parameter`);
       else {
@@ -179,6 +274,7 @@ export function checkGame(game) {
       const ok = ['addsub.multi.two-digit', 'addsub.multi.column'].includes(level.skill) && levels.slice(0, i).some((l) => l.skill === 'addsub.multi.estimate');
       if (!ok) fail(`${where}: helpEstimate needs a two-digit or column level after an estimate level`);
     }
+    problems.push(...checkForms(level).map((p) => `${meta.id}: ${where}: ${p}`));
     for (const key of ['structure', 'ask']) {
       if (!Array.isArray(level[key])) continue;
       if (level[key].length < 2) fail(`${where}: a mixed ${key} needs two values or more`);
@@ -215,10 +311,12 @@ export function checkRound(game, level, index, round) {
   const problems = [];
   const fail = (msg) => problems.push(msg);
   for (const key of ['skill', 'look', 'model']) if (round[key] !== level[key]) fail(`round.${key} ${round[key]} is not the level's ${level[key]}`);
-  for (const key of ['structure', 'unknown', 'eqform', 'ask']) {
+  for (const key of level.forms ? ['structure', 'ask'] : ['structure', 'unknown', 'eqform', 'ask']) {
     const allowed = level[key] === undefined ? [undefined, ...(key === 'eqform' ? ['standard'] : [])] : [level[key]].flat();
     if (!allowed.includes(round[key])) fail(`round.${key} ${round[key]} is not among the level's ${show(level[key])}`);
   }
+  const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
+  if (level.forms && !level.forms.some((f) => pairOf(level, f) === pair)) fail(`round's ${pair} is not one of the level's forms`);
   const { equation } = round;
   const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
   const judging = typed(round.answer, ['card']);
@@ -295,6 +393,8 @@ export function checkRound(game, level, index, round) {
       continue;
     }
     if (!predicts(formula(round), value)) fail(`R4: ${rule} gives ${show(formula(round))}, the choice is ${show(value)}`);
+    const over = RULES[rule] && game.budget?.(round, { value, rule });
+    if (over) fail(`budget: ${show(value)} (${rule}): ${over}`);
     const earlier = order.slice(0, order.indexOf(rule)).find((q) => game.rules[q] && predicts(game.rules[q](round), value));
     if (earlier) fail(`R4: ${show(value)} is tagged ${rule}, but ${earlier} comes first${reversed ? ' in a reversed form' : ' in the skill\'s list'} and gives it too`);
   }
@@ -307,7 +407,7 @@ export function checkRound(game, level, index, round) {
     const predicted = game.rules[id](round);
     const values = predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf) ? predicted.oneOf : [predicted];
     if (values.some((v) => choices.some((c) => isDeepStrictEqual(c.value, v)))) continue;
-    const free = values.find((v) => offerable(v, RULES[id].types, round));
+    const free = values.find((v) => offerable(v, id, round, game));
     if (free !== undefined) fail(`R4: ${slip.rule} is offered, but ${id} gives ${show(free)}, a real error not on a card`);
   }
   const values = choices.map((c) => c.value);
@@ -342,10 +442,15 @@ for (const game of GAMES) {
         for (const key of ['unknown', 'eqform']) {
           for (const value of [level[key] ?? []].flat()) if (!seen[key].has(value)) problems.push(`R2: ${key} ${value} never appears in ${SEEDS} seeds`);
         }
-        if (Array.isArray(level.eqform) && other < SEEDS / 4) problems.push(`R8: ${other} of ${SEEDS} rounds are not standard; 25% are needed`);
+        const mixed = level.forms?.some((f) => (f.eqform ?? 'standard') !== 'standard');
+        if (mixed && other < SEEDS / 4) problems.push(`R8: ${other} of ${SEEDS} rounds are not standard; 25% are needed`);
       }
       const unique = [...new Set(problems)];
       assert.ok(unique.length === 0, `${unique.length} problem(s), the first:\n  ${unique.slice(0, 15).join('\n  ')}`);
+    });
+    test(`${game.meta.id} level ${index + 1} (${base.id}): the deal over ${DEAL} seeds, forms and answers`, () => {
+      const problems = checkDeal(game, base);
+      assert.ok(problems.length === 0, problems.join('\n'));
     });
   });
 }
@@ -399,6 +504,30 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }, parts.levels[1]] }).join(), /model frame comes back after tree/);
   assert.match(checkGame({ ...parts, levels: [parts.levels[1], { ...parts.levels[1], id: 'x', look: 'objects' }] }).join(), /look objects comes back/);
   assert.match(checkGame({ ...parts, meta: { ...parts.meta, grades: [1] } }).join(), /meta has no grade/);
+  // A budget the game sets (architecture 4.2): a wrong choice whose display does not fit.
+  const narrow = { ...parts, budget: (r, c) => (c.rule === 'op.other' ? 'too wide' : null) };
+  assert.match(checkRound(narrow, level, 1, good).join('\n'), /budget: \d+ \(op\.other\): too wide/);
+});
+
+test('the deal checks catch forms and answers that do not match the level', () => {
+  const sym = parts.levels.findIndex((l) => l.id === 'split-sym');
+  const level = parts.levels[sym];
+  const withLevel = (change) => checkGame({ ...parts, levels: parts.levels.map((l, i) => (i === sym ? { ...l, ...change } : l)) }).join('\n');
+  assert.doesNotMatch(withLevel({}), /forms|exclude|R8/);
+  assert.match(withLevel({ forms: undefined, eqform: ['standard', 'reversed'] }), /eqform is one value/);
+  assert.match(withLevel({ forms: [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 9 }] }), /R8: the forms give 10% not standard/);
+  assert.match(withLevel({ forms: [{ unknown: 'whole', w: 1 }, { eqform: 'reversed', w: 1 }] }), /unknown whole is not among/);
+  assert.match(withLevel({ forms: [{ eqform: 'reversed', w: 1 }, { eqform: 'reversed', w: 1 }] }), /part\/reversed is listed twice/);
+  assert.match(withLevel({ exclude: [11] }), /exclude \[11\]/);
+  const either = scale.levels.find((l) => l.id === 'either');
+  assert.match(checkGame({ ...scale, levels: [{ ...either, forms: undefined }] }).join('\n'), /a mixed unknown needs forms/);
+  assert.deepEqual(checkDeal(parts, level), []);
+  // Shares from the level's weights, not the code's: a generator that keeps its own 1 in 2 is about 10 points off 40%.
+  const own = { ...parts, makeRound: (l, r) => parts.makeRound({ ...l, forms: [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 1 }] }, r) };
+  assert.match(checkDeal(own, level).join('\n'), /part\/reversed is \d+\.\d% of 2000 rounds; its weight gives 40\.0%/);
+  // Answers: every number of the range, or listed in exclude, and nothing listed that is dealt.
+  assert.match(checkDeal(parts, { ...level, exclude: [0] }).join('\n'), /^10 never dealt as an answer/m);
+  assert.match(checkDeal(parts, { ...level, exclude: [0, 10, 3] }).join('\n'), /exclude lists 3, but it is dealt/);
 });
 
 test('R2: the first level of a structure keeps the ceiling of its §4.6 row, not a grade', () => {

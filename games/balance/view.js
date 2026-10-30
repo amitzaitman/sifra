@@ -1,7 +1,7 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
-import { LINE, at, drawBalance, drawRows, el, ghostSlots, layoutPan, lidPlaces, paint, panLayer, ringClip, ringLinks, ringPieces, rowsFor, rowsOfPan, runsOf } from './stage.js';
+import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, lidPlaces, paint, panLayer, ringClip, ringLinks, ringPieces, rowsOfPan, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
 /** @typedef {import('./stage.js').PanGroup} PanGroup */
@@ -107,6 +107,42 @@ function sidesOf(round, solved) {
     }));
   };
   return { left: side('left'), right: side('right') };
+}
+
+/** The displays drawn on the picture's own places; every other one puts its ghosts up (show). */
+const IN_PLACE = ['flash', 'empty-plate', 'jumps'];
+
+/**
+ * Whether show() can draw a display on this round (design 7.1): the jumps count on over the two
+ * numbers of the other pan (? = a + b), so they have no drawing where it holds one number (a + ? = c).
+ * @param {Round} round
+ * @param {string} display
+ * @returns {boolean}
+ */
+export function drawable(round, display) {
+  if (display !== 'jumps' || round.model === 'set') return true;
+  const data = sidesOf(round, false);
+  return data[data.left.some((g) => g.role === 'unknown') ? 'right' : 'left'].length === 2;
+}
+
+/**
+ * The rows a wrong choice's display needs (design 6.8, 7.1): the start picture's, or more where its
+ * ghosts go on past a pan's last place, the value from the unknown's places on or a judging card's
+ * sides on the empty pans. The turned rows: the ghost dots' rows. show() sets the same.
+ * @param {Round} round
+ * @param {string} display
+ * @param {any} value
+ * @returns {number}
+ */
+export function displayRows(round, display, value) {
+  if (round.model === 'set') return Math.max(1, Math.ceil(value / 5));
+  const data = sidesOf(round, false);
+  const pans = { left: layoutPan(data.left), right: layoutPan(data.right) };
+  const rest = Math.max(rowsOfPan(pans.left), rowsOfPan(pans.right));
+  if (round.model === 'cards') return Math.max(rest, ghostRows(pans.left, -1, total(value.left)), ghostRows(pans.right, -1, total(value.right)));
+  if (IN_PLACE.includes(display)) return rest;
+  const u = data.left.some((g) => g.role === 'unknown') ? 'left' : 'right';
+  return Math.max(rest, ghostRows(pans[u], data[u].findIndex((g) => g.role === 'unknown'), value));
 }
 
 /**
@@ -248,7 +284,7 @@ function balanceScene(host, round, solved, signal) {
         ghosts(layer.left, left);
         ghosts(layer.right, right);
         scene.classList.add('is-weighing');
-        tilt(tiltOf(total(value.left), total(value.right)), Math.max(rowsNow(), rowsFor(Math.max(0, ...left, ...right) + 1)));
+        tilt(tiltOf(total(value.left), total(value.right)), displayRows(round, display, value));
       } else if (display === 'flash') {
         // The number is on a pan already: it blinks once and keeps a ring.
         const target = [u, k].flatMap((side) => data[side].map((g, i) => ({ g, i, side })))
@@ -289,7 +325,7 @@ function balanceScene(host, round, solved, signal) {
         const slots = ghostSlots(pans[u].layout, ui, value);
         ghosts(layer[u], slots);
         const mine = weight(data[u].filter((g) => g.role !== 'unknown')) + value;
-        tilt(u === 'left' ? tiltOf(mine, weight(data[k])) : tiltOf(weight(data[k]), mine), Math.max(rowsNow(), rowsFor(Math.max(0, ...slots) + 1)));
+        tilt(u === 'left' ? tiltOf(mine, weight(data[k])) : tiltOf(weight(data[k]), mine), displayRows(round, display, value));
       }
       return layer.el;
     },
@@ -425,7 +461,7 @@ function rowsScene(host, round, solved) {
       stagger(Array.from({ length: value }, (_, j) => put(root, 'bl-dot bl-ghost', place(j))));
       rings(root, Math.min(value, answer), Math.max(value, answer), 'is-wrong is-late');
       const width = lines.right.layout.length - Math.min(5, answer) + Math.min(5, Math.max(value, answer));
-      size(Math.max(Number(restLen), width), Math.max(1, Math.ceil(value / 5)));
+      size(Math.max(Number(restLen), width), displayRows(round, display, value));
       return root;
     },
     /** Step 2: the row turns again, slowly; the unknown and its twin keep a ring. */

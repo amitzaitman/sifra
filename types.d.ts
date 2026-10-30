@@ -13,6 +13,9 @@ interface Equation { left: Token[]; right: Token[] }
 interface Group { role: 'whole' | 'part' | 'unknown' | 'added' | 'removed'; count: number; shown: 'items' | 'tag' | 'covered' }
 interface Choice { value: any; rule: string | null }
 
+/** A form a level deals (architecture 2.2): its unknown and eqform, else the level's (eqform 'standard'), and its weight. */
+interface LevelForm { unknown?: string; eqform?: string; w: number }
+
 /** A level: complete, with a stable id (architecture 2.2). Other keys are skills.md parameters. */
 interface Level {
   id: string;
@@ -24,12 +27,16 @@ interface Level {
   terms: boolean;
   structure?: string | string[];
   unknown?: string | string[];
-  eqform?: string | string[];
+  eqform?: string;
   ask?: string | string[];
   max?: number;
   min?: number;
   /** false: no dots under the cards' numbers (skills.md, design 6.5) */
   cardDots?: boolean;
+  /** the forms makeRound deals, by weight (architecture 2.2); required when `unknown` is an array */
+  forms?: LevelForm[];
+  /** numbers in the level's range that are never an answer, each for a reason (architecture 4.2) */
+  exclude?: number[];
   [param: string]: any;
 }
 
@@ -83,6 +90,8 @@ interface Game {
   render(host: HTMLElement, round: Round, ctx: RenderContext): RoundView;
   face?(host: HTMLElement, value: any, round: Round): boolean;
   classify?(round: Round, value: any): string;
+  /** why a wrong choice's display does not fit the picture (architecture 4.2), null when it does */
+  budget?(round: Round, choice: Choice): string | null;
 }
 
 /** data/skills.js, in the learning order (architecture 3.6) */

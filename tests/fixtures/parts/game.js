@@ -1,5 +1,6 @@
 // Fixture game for the shell's tests (not in games/registry.js): the parts of a number, standing
 // in for ten-frame. Small, but it keeps the whole contract of docs/architecture.md section 2.
+import { pickForm } from '../../../lib/forms.js';
 import { choose, count, render as draw } from '../kit.js';
 
 export const meta = { id: 'parts', title: 'חֲלָקִים', version: 1, css: new URL('game.css', import.meta.url).href };
@@ -7,10 +8,12 @@ export const meta = { id: 'parts', title: 'חֲלָקִים', version: 1, css: n
 const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'part', model: 'frame', look: 'dots', terms: false };
 /** @type {Level[]} */
 export const levels = [
-  { id: 'split-5', ...split, demo: true, max: 5, options: 3 },
-  { id: 'split-10', ...split, demo: false, max: 10, options: 4 },
-  { id: 'split-sym', ...split, demo: false, max: 10, options: 4, look: 'symbols', eqform: ['standard', 'reversed'] },
-  { id: 'ten', ...split, skill: 'num.parts.make-ten', demo: true, max: 10, options: 3 },
+  // exclude (architecture 4.2): the known part is 1 or more and never the whole; make ten leaves 5 + 5 out.
+  { id: 'split-5', ...split, demo: true, max: 5, options: 3, exclude: [0, 5] },
+  { id: 'split-10', ...split, demo: false, max: 10, options: 4, exclude: [0, 10] },
+  // whole = part + ? in 40% of the rounds.
+  { id: 'split-sym', ...split, demo: false, max: 10, options: 4, look: 'symbols', forms: [{ eqform: 'reversed', w: 2 }, { eqform: 'standard', w: 3 }], exclude: [0, 10] },
+  { id: 'ten', ...split, skill: 'num.parts.make-ten', demo: true, max: 10, options: 3, exclude: [0, 5, 10] },
 ];
 
 export const text = [];
@@ -38,7 +41,7 @@ export function makeRound(level, rng) {
     part = rng.int(1, whole - 1);
   } while (part * 2 === whole);
   const answer = whole - part;
-  const eqform = Array.isArray(level.eqform) ? (rng.next() < 0.4 ? 'reversed' : 'standard') : level.eqform ?? 'standard';
+  const eqform = level.forms ? pickForm(level.forms, rng).form.eqform ?? 'standard' : level.eqform ?? 'standard';
   /** @type {Group[]} */
   const groups = [{ role: 'whole', count: whole, shown: 'tag' }, { role: 'part', count: part, shown: 'items' }, { role: 'unknown', count: answer, shown: 'covered' }];
   const sum = [part, '+', '?'];

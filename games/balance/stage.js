@@ -227,6 +227,9 @@ export function ghostSlots(layout, group, value) {
 /** @type {(slots: number) => number} two rows at least, so most rounds draw alike */
 export const rowsFor = (slots) => Math.max(2, Math.ceil(slots / 5));
 
+/** @type {(layout: PanLayout, group: number, value: number) => number} the rows a pan needs for value ghosts from a group's places on (ghostSlots) */
+export const ghostRows = (layout, group, value) => rowsFor(Math.max(0, ...ghostSlots(layout, group, value)) + 1);
+
 /** The gap between two groups of a row, and the second row's top, in cells. */
 export const GAP = 0.6;
 export const LINE = 1 + GAP;

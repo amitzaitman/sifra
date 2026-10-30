@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as balance from '../games/balance/game.js';
-import { bridges, ghostSlots, layoutLine, layoutPan, lidPlaces, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, rowsOfPan, runsOf } from '../games/balance/stage.js';
+import { bridges, ghostRows, ghostSlots, layoutLine, layoutPan, lidPlaces, ringClip, ringLinks, ringPieces, rowPieces, rowsFor, rowsOfPan, runsOf } from '../games/balance/stage.js';
+import { displayRows } from '../games/balance/view.js';
 import { rng } from '../shell/rng.js';
 
 const level = (id) => balance.levels.find((l) => l.id === id);
@@ -132,6 +133,37 @@ test('ghosts fill the unknown\'s places, then go on after the pan\'s last place'
   assert.deepEqual(ghostSlots(layoutPan([]), -1, 3), [0, 1, 2]);
   assert.equal(rowsFor(3), 2);
   assert.equal(rowsFor(16), 4);
+  assert.equal(ghostRows(layout, 0, 5), 2);
+  assert.equal(ghostRows(layout, 0, 12), 4);
+});
+
+test('a display takes 8 rows on the pans at most (design 6.8): a wrong value that needs more is left out, and the next rule takes its place', () => {
+  // 13 + ? = 14: the start picture's 4 rows (13 cubes, the dome beside the top row); 27 ghosts from the
+  // unknown's place reach place 39, the 8th row; 28 would need a 9th.
+  const piece = (side, role, count) => ({ side, role, count, shown: role === 'unknown' ? 'covered' : 'items' });
+  const round = { skill: 'eq.sign.missing', unknown: 'right-part', look: 'dots', model: 'balance', eqform: 'standard',
+    picture: [piece('left', 'part', 13), piece('left', 'unknown', 1), piece('right', 'whole', 14)], helpPicture: null,
+    equation: { left: [13, '+', '?'], right: [14] }, text: '', terms: [], answer: 1, choices: [] };
+  assert.equal(displayRows(round, 'flash', 14), 4);
+  assert.equal(displayRows(round, 'overflow', 27), 8);
+  assert.equal(displayRows(round, 'overflow', 28), 9);
+  assert.equal(balance.budget(round, { value: 27, rule: 'op.other' }), null);
+  assert.match(balance.budget(round, { value: 28, rule: 'op.other' }), /overflow needs 9 rows/);
+  // On the 20 levels op.other and equal.add-all reach 39; those cards are left out, and every card fits.
+  let left = 0;
+  for (const id of ['missing-symbols-20', 'both-sides-symbols']) {
+    for (let seed = 1; seed <= 2000; seed++) {
+      const r = balance.makeRound(level(id), rng(seed));
+      for (const rule of ['op.other', 'equal.add-all']) {
+        const value = balance.rules[rule](r);
+        if (typeof value !== 'number' || !balance.budget(r, { value, rule })) continue;
+        left += 1;
+        assert.ok(!r.choices.some((c) => c.value === value), `${id} seed ${seed}: ${value} is on a card`);
+      }
+      for (const c of r.choices) if (c.rule) assert.equal(balance.budget(r, c), null, `${id} seed ${seed}: ${c.value} (${c.rule})`);
+    }
+  }
+  assert.ok(left > 100, `${left} values left out`);
 });
 
 test('R6: the turned rows go left to right, a group after the other, the second in the light shade', () => {

@@ -4,6 +4,7 @@
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
 import { SKILLS } from '../../data/skills.js';
+import { pickForm } from '../../lib/forms.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
 import { pictureOf } from './picture.js';
 import { KINDS, layer, move } from './help.js';
@@ -18,7 +19,7 @@ export const meta = {
 /**
  * What levels of a skill share; each level is a complete object (architecture 2.2).
  * @typedef {{ skill: string, structure: string, unknown: string, max: number, min?: number, bridge?: string, model: string,
- *   look: 'objects' | 'dots' | 'symbols', options: number, demo: boolean, terms: boolean }} Base
+ *   look: 'objects' | 'dots' | 'symbols', options: number, demo: boolean, terms: boolean, exclude?: number[] }} Base
  */
 /** @type {Base} */
 const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'part', max: 10, model: 'frame', look: 'dots', options: 4, demo: false, terms: false };
@@ -28,23 +29,33 @@ const ten = { ...split, skill: 'num.parts.make-ten' };
 const teen = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'whole', min: 10, max: 20, model: 'bundles', look: 'dots', options: 4, demo: false, terms: false };
 /** Ten and a missing part (level 9): the answer is the ones, 1 to 9, so the level has no min. @type {Base} */
 const teenPart = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'part', max: 20, model: 'bundles', look: 'symbols', options: 4, demo: false, terms: false };
-/** @type {Base} */
-const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false };
+/** a and b are 9 at most, so the sum is 18 at most. @type {Base} */
+const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false, exclude: [19, 20] };
 
+/** whole = part + ? in a third of the rounds (R8: 25% at least), part + ? = whole in the rest. @type {LevelForm[]} */
+const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
+
+// exclude: the numbers of a level's range that are never an answer, and why (architecture 4.2). The
+// known part is 1 or more, so a missing part is under the whole; 0 only where the cover may stand on
+// an empty cell (level 2) or the frame is full (level 5).
 /** The level table of pedagogy 6.2; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
-  { id: 'split-5', ...split, max: 5, options: 3, demo: true },
-  { id: 'split-10', ...split },
-  { id: 'split-bond', ...split, model: 'tree', demo: true, eqform: ['standard', 'reversed'] },
+  { id: 'split-5', ...split, max: 5, options: 3, demo: true, exclude: [0, 5] },
+  { id: 'split-10', ...split, exclude: [10] },
+  { id: 'split-bond', ...split, model: 'tree', demo: true, forms: third, exclude: [0, 10] },
   { id: 'split-pairs', ...split, unknown: 'both', model: 'cards', demo: true },
-  { id: 'ten-empty', ...ten, demo: true },
-  { id: 'ten-cover', ...ten },
-  { id: 'ten-symbols', ...ten, look: 'symbols', eqform: ['standard', 'reversed'] },
-  { id: 'teen-bundle', ...teen, demo: true },
-  { id: 'teen-symbols', ...teenPart, eqform: ['standard', 'reversed'] },
+  { id: 'ten-empty', ...ten, demo: true, exclude: [10] },
+  { id: 'ten-cover', ...ten, exclude: [0, 10] },
+  { id: 'ten-symbols', ...ten, look: 'symbols', forms: third, exclude: [0, 10] },
+  // 10 + k, k 0 to 9.
+  { id: 'teen-bundle', ...teen, demo: true, exclude: [20] },
+  // 14 = 10 + ? in 60% of the rounds (owner decision 2026-10-15); the rest split evenly between 10 + ? = 14 and 14 − 10 = ?.
+  // The answer is the ones, 1 to 9.
+  { id: 'teen-symbols', ...teenPart, forms: [{ eqform: 'reversed', w: 3 }, { eqform: 'standard', w: 2 }], exclude: [0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
   { id: 'bridge-move', ...bridge, demo: true },
   { id: 'bridge-frames', ...bridge },
-  { id: 'bridge-symbols', ...bridge, look: 'symbols', unknown: ['result-right', 'result-left'] },
+  // ? = a + b in a third of the rounds.
+  { id: 'bridge-symbols', ...bridge, look: 'symbols', unknown: ['result-right', 'result-left'], forms: [{ unknown: 'result-left', w: 1 }, { unknown: 'result-right', w: 2 }] },
 ];
 
 /** What a level draws beyond its parameters, by level id: a five-frame, visible empty cells, counters that move. */
@@ -194,9 +205,8 @@ function roundOf(level, groups, equation, answer, eqform = 'standard') {
   };
 }
 
-/** @type {(level: Level, rng: Rng) => string} a mixed eqform: 'reversed' in a third of the rounds (R8: 25% at least) */
-const eqformOf = (level, rng) => (Array.isArray(level.eqform) ? (rng.next() < 1 / 3 ? 'reversed' : 'standard')
-  : level.eqform ?? 'standard');
+/** @type {(level: Level, rng: Rng) => string} the eqform, by the level's forms when it lists them (architecture 2.2) */
+const eqformOf = (level, rng) => (level.forms ? pickForm(level.forms, rng).form.eqform ?? 'standard' : level.eqform ?? 'standard');
 
 /** About one round in five is a double, or 5 + 5 in making ten (number sense 4.4; decisions.md 2026-10-14). */
 const DOUBLES = 0.2;
@@ -263,9 +273,6 @@ function tenRound(level, rng) {
   return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), 10 - k, eqform);
 }
 
-/** Level 9's share of 14 = 10 + ?; the other rounds split evenly between 10 + ? = 14 and 14 − 10 = ?. */
-const TEEN_REVERSED = 0.6;
-
 /**
  * Ten and some more: 10 + k = ? (k is 0 in about one round in ten). With the part unknown (level 9,
  * pedagogy 6.2): mostly 14 = 10 + ?, some 10 + ? = 14 and some 14 − 10 = ? (owner decision
@@ -279,10 +286,11 @@ function teenRound(level, rng) {
     const k = rng.int(1, 9);
     const groups = [{ role: 'whole', count: 10 + k, shown: 'tag' }, { role: 'part', count: 10, shown: 'items' },
       { role: 'unknown', count: k, shown: 'covered' }];
-    const roll = rng.next();
-    const eqform = roll < TEEN_REVERSED ? 'reversed' : 'standard';
+    // The standard rounds split evenly by where the form's draw fell, with no draw of their own.
+    const { form, at } = pickForm(level.forms, rng);
+    const eqform = form.eqform ?? 'standard';
     const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] }
-      : roll < (1 + TEEN_REVERSED) / 2 ? { left: [10, '+', '?'], right: [10 + k] } : { left: [10 + k, '−', 10], right: ['?'] };
+      : at < 0.5 ? { left: [10, '+', '?'], right: [10 + k] } : { left: [10 + k, '−', 10], right: ['?'] };
     return roundOf(level, /** @type {Group[]} */ (groups), /** @type {Equation} */ (equation), k, eqform);
   }
   const k = rng.next() < 0.1 ? 0 : rng.int(1, 9);
@@ -295,15 +303,15 @@ function teenRound(level, rng) {
 }
 
 /**
- * Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). A level that lists
- * result-left too writes ? = a + b in a third of the rounds (R8).
+ * Bridging ten: a + b = ?, a from 6, the sum 11 to 18 (addsub-facts 4.7). A level whose forms
+ * list result-left too writes ? = a + b in that form's share of the rounds (R8).
  * @param {Level} level
  * @param {Rng} rng
  */
 function bridgeRound(level, rng) {
   const a = rng.int(6, 9);
   const b = rng.int(11 - a, 9);
-  const left = Array.isArray(level.unknown) && rng.next() < 1 / 3;
+  const left = Boolean(level.forms) && pickForm(level.forms, rng).form.unknown === 'result-left';
   const groups = [{ role: 'part', count: a, shown: 'items' }, { role: 'part', count: b, shown: 'items' },
     { role: 'unknown', count: a + b, shown: 'items' }];
   const equation = left ? { left: ['?'], right: [a, '+', b] } : { left: [a, '+', b], right: ['?'] };

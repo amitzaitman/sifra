@@ -93,7 +93,7 @@ test('a first try: the pans stay level, the unknown shows in its colour, the ful
 
 // Every rule the game offers, in rounds that show it, with what its display draws (design 7.1, 7.3).
 const DISPLAYS = [
-  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 2], ['missing-reversed', 4],
+  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 129],
   ['both-sides', 1], ['turn', 1], ['true-false', 1], ['relational', 1],
 ];
 test('every wrong rule shows its display, and its card goes with its slot kept', async ({ page }) => {
@@ -717,8 +717,8 @@ test('the tour\'s last number: bigger than the one before it, clear of it and of
   // ends on 11 at the start of a row, a cube of 8 after it; 1 + ? = 13 counts to 12 at the end
   // of its pan; ? = 12 + 4 counts on to 16 at the start of a row. Known cubes (judging, a white
   // disc under each number): 6 + 4 = 10 and 1 + 8 = 9, on both pans.
-  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 52],
-    ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 3]];
+  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 1071],
+    ['missing-symbols-20', 360], ['missing-symbols-20', 545], ['true-false', 2], ['true-false', 3]];
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const [level, seed] of rounds) {
@@ -781,8 +781,8 @@ test('two-digit tour numbers stay inside their cube, condensed, at 14px at least
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // On the unknown: 6 + 11 = ? + 5 (10 to 12), 12 + 3 = ? + 2, ? + 2 = 14, 16 + 3 = ? + 8, 1 + ? = 13,
   // ? = 12 + 4 (13 to 16). On known cubes, 10 last: 6 + 4 = 10 and 3 + 7 = 10 (both pans), and same-as 3 + 7.
-  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 52],
-    ['missing-symbols-20', 3], ['missing-symbols-20', 10], ['true-false', 2], ['true-false', 4], ['same', 4]];
+  const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 1071],
+    ['missing-symbols-20', 360], ['missing-symbols-20', 545], ['true-false', 2], ['true-false', 4], ['same', 4]];
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const [level, seed] of rounds) {
@@ -849,10 +849,10 @@ test('a ring never paints over a cube or cover next to it, of another group or o
   // the other group, then the tour. Rings over two rows of one group: the tours of same, missing-left
   // and missing-symbols-20, and flashes of a whole and of a part of 6 to 9.
   const states = [['missing-left', 4, ['given.part']], ['missing-left', 4, ['given.part', 'given.whole', 'op.other']],
-    ['missing-reversed', 2, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
+    ['missing-reversed', 10, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
     ['relational', 1, ['equal.copy', 'equal.compensate-wrong', 'equal.add-to-equal']],
-    ['same', 1, 'tour'], ['missing-left', 1, 'tour'], ['missing-symbols-20', 3, 'tour'],
-    ['missing-right', 3, ['given.whole']], ['missing-symbols', 1, ['given.part']]];
+    ['same', 1, 'tour'], ['missing-left', 1, 'tour'], ['missing-symbols-20', 360, 'tour'],
+    ['missing-right', 3, ['given.whole']], ['missing-symbols', 235, ['given.part']]];
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const [level, seed, rules] of states) {
@@ -1076,7 +1076,7 @@ test('small part cubes stay yellow: where an overflow or balance display needs 6
   // 13 + ? = 14 with 27 (eight rows), 1 + 15 = ? + 8 with 24, 7 + 13 = ? + 5 with 25.
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
-    for (const [level, seed, value] of [['missing-symbols-20', 1, 27], ['both-sides-symbols', 1, 24], ['both-sides-symbols', 4, 25]]) {
+    for (const [level, seed, value] of [['missing-symbols-20', 4471, 27], ['both-sides-symbols', 1, 24], ['both-sides-symbols', 4, 25]]) {
       const { round } = await devAt(page, level, seed);
       await page.locator('[data-show-picture]').click();
       await card(page, round.choices.findIndex((c) => c.value === value)).click();
@@ -1144,7 +1144,7 @@ test('the hint\'s dashed outline of the missing cubes stays inside the cover\'s 
   // 6 + ? = 7 and 13 + ? = 14: a piece one place wide; 2 + ? = 6: a piece of one and a piece of three.
   for (const [width, height] of [[320, 568], [360, 640], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    for (const [level, seed] of [['missing-symbols', 1], ['missing-symbols-20', 1], ['missing-right', 2]]) {
+    for (const [level, seed] of [['missing-symbols', 235], ['missing-symbols-20', 4471], ['missing-right', 2]]) {
       const { round } = await devAt(page, level, seed);
       if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
       for (const i of wrongOf(round).slice(0, 2)) {
@@ -1162,7 +1162,7 @@ test('ghost cubes show their dashed edge on all four sides alike, also small (de
   // 24 ghosts of 1 + 8 + 4 + 9 (cube about 11px at 320) and 27 of op.other (about 9.5px), and full size.
   for (const [width, height] of [[320, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    for (const [level, seed, rule] of [['both-sides-symbols', 1, 'equal.add-all'], ['missing-symbols-20', 1, 'op.other'], ['missing-right', 1, 'op.other']]) {
+    for (const [level, seed, rule] of [['both-sides-symbols', 1, 'equal.add-all'], ['missing-symbols-20', 4471, 'op.other'], ['missing-right', 1, 'op.other']]) {
       const { round } = await devAt(page, level, seed);
       if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
       await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
@@ -1240,7 +1240,7 @@ test('the jumps: each arc hops from one mark\'s top to the next, drawn over the 
   // ? = 6 + 4 (one row), ? = 4 + 6 (an arc under the missed cube's ring), ? = 2 + 15 (three rows).
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
-    for (const [level, seed] of [['missing-reversed', 2], ['missing-reversed', 19], ['missing-symbols-20', 31]]) {
+    for (const [level, seed] of [['missing-reversed', 10], ['missing-reversed', 116], ['missing-symbols-20', 759]]) {
       const { round } = await devAt(page, level, seed);
       await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
       await unlocked(page);
@@ -1261,7 +1261,7 @@ test('the jumps: the digits of a two-digit mark are condensed inside its ring an
   for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
     // ? = 12 + 4: the marks 12 to 15; ? = 3 + 10: the marks 3 to 12, where only 10, 11 and 12 have two digits.
-    for (const [seed, two] of [[10, ['12', '13', '14', '15']], [30, ['10', '11', '12']]]) {
+    for (const [seed, two] of [[545, ['12', '13', '14', '15']], [1386, ['10', '11', '12']]]) {
       const { round } = await devAt(page, 'missing-symbols-20', seed);
       await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
       await unlocked(page);
@@ -1382,7 +1382,7 @@ test('two known numbers on a pan: one pile in rows of five, the second number in
   // on the left over the places of the sum, in the same rows of five (design 6.8: the pans compare
   // row by row).
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const { round } = await devAt(page, 'missing-reversed', 2);
+  const { round } = await devAt(page, 'missing-reversed', 10);
   expect(round.unknown).toBe('result-left');
   const [a, , b] = round.equation.right;
   const right = stack(page, 'right').locator('.bl-cube');
@@ -1501,7 +1501,7 @@ test('a cover has the dome\'s corners from its height: the fixed one, and each p
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // 3 + ? = 10: the fixed cover, then an outline piece over two places and one over five; ? = 6 + 4:
   // the fixed cover, then two pieces of five; the turned rows: one piece over four dots, at rest.
-  for (const [level, seed] of [['missing-right', 1], ['missing-reversed', 2], ['turn', 4]]) {
+  for (const [level, seed] of [['missing-right', 1], ['missing-reversed', 10], ['turn', 4]]) {
     const { round } = await devAt(page, level, seed);
     const turned = level === 'turn';
     /** @type {() => Promise<string[]>} the shown covers' corners, and the places under the shown outline */
