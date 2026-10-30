@@ -11,13 +11,15 @@
 /* The thumb's gap under the pans clears the 12 degree drop (about 15px here) and the 8px base. */
 [data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 30px; }
 
+/* The scene's own size is --scene-w and --scene-h, not --w and --h: those are a place's width and
+   height in cubes (stage.js el), and a length inherited from here would shadow a ring's var(--h, 1) fallback. */
 [data-game="balance"] .bl-scene {
   --t: 0; --gx: 84px; --gt: 12px; --gc: 68px;
   --cube: min(28px, calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 11px - 3px * var(--rows)) / (1.8 + var(--rows))));
-  --u: calc(var(--cube) + 3px); --w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 34px);
+  --u: calc(var(--cube) + 3px); --scene-w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 34px);
   --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 17px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 11px);
-  --h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 11px + 3px * var(--rows));
-  position: absolute; left: calc(50% - var(--w) / 2); top: calc(50% - var(--h) / 2); width: var(--w); height: var(--h); transition: --rows var(--t-move) var(--ease);
+  --scene-h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 11px + 3px * var(--rows));
+  position: absolute; left: calc(50% - var(--scene-w) / 2); top: calc(50% - var(--scene-h) / 2); width: var(--scene-w); height: var(--scene-h); transition: --rows var(--t-move) var(--ease);
 }
 /* A reset goes at once: this wins over every element's own transition (a cube's colour fade too). */
 [data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none !important; }
