@@ -4,7 +4,7 @@
 import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
 import { SKILLS } from '../../data/skills.js';
-import { pickForm } from '../../lib/forms.js';
+import { pickWeighted } from '../../lib/weights.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
 import { pictureOf } from './picture.js';
 import { KINDS, layer, move } from './help.js';
@@ -206,7 +206,7 @@ function roundOf(level, groups, equation, answer, eqform = 'standard') {
 }
 
 /** @type {(level: Level, rng: Rng) => string} the eqform, by the level's forms when it lists them (architecture 2.2) */
-const eqformOf = (level, rng) => (level.forms ? pickForm(level.forms, rng).form.eqform ?? 'standard' : level.eqform ?? 'standard');
+const eqformOf = (level, rng) => (level.forms ? pickWeighted(level.forms, rng).item.eqform ?? 'standard' : level.eqform ?? 'standard');
 
 /** About one round in five is a double, or 5 + 5 in making ten (number sense 4.4; decisions.md 2026-10-14). */
 const DOUBLES = 0.2;
@@ -287,7 +287,7 @@ function teenRound(level, rng) {
     const groups = [{ role: 'whole', count: 10 + k, shown: 'tag' }, { role: 'part', count: 10, shown: 'items' },
       { role: 'unknown', count: k, shown: 'covered' }];
     // The standard rounds split evenly by where the form's draw fell, with no draw of their own.
-    const { form, at } = pickForm(level.forms, rng);
+    const { item: form, at } = pickWeighted(level.forms, rng);
     const eqform = form.eqform ?? 'standard';
     const equation = eqform === 'reversed' ? { left: [10 + k], right: [10, '+', '?'] }
       : at < 0.5 ? { left: [10, '+', '?'], right: [10 + k] } : { left: [10 + k, '−', 10], right: ['?'] };
@@ -311,7 +311,7 @@ function teenRound(level, rng) {
 function bridgeRound(level, rng) {
   const a = rng.int(6, 9);
   const b = rng.int(11 - a, 9);
-  const left = Boolean(level.forms) && pickForm(level.forms, rng).form.unknown === 'result-left';
+  const left = Boolean(level.forms) && pickWeighted(level.forms, rng).item.unknown === 'result-left';
   const groups = [{ role: 'part', count: a, shown: 'items' }, { role: 'part', count: b, shown: 'items' },
     { role: 'unknown', count: a + b, shown: 'items' }];
   const equation = left ? { left: ['?'], right: [a, '+', b] } : { left: [a, '+', b], right: ['?'] };

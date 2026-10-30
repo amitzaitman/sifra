@@ -1,8 +1,8 @@
 // The generic game test (architecture 4.2, dev-spec A.2, decisions.md condition 5): every
-// registered game and both fixtures, every level, seeds 1-200, and the deal over seeds 1-2000
-// (each form's share, every answer of the range), in Node with no DOM and no storage. A new game
-// gets all of it without writing a test. Choice rounds only for now: the build and estimate
-// checks of A.2 come with the first game that has such rounds.
+// registered game and both fixtures, every level, seeds 1-200, and the deal (each form's share
+// over seeds 1-5000, every answer of the range over seeds 1-2000), in Node with no DOM and no
+// storage. A new game gets all of it without writing a test. Choice rounds only for now: the
+// build and estimate checks of A.2 come with the first game that has such rounds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
@@ -17,9 +17,12 @@ import { SKILLS } from '../data/skills.js';
 import { SKILLS as SKILLS_MD, parseParams, read } from '../scripts/docs-parse.js';
 
 const SEEDS = 200;
-/** The deal: a form's share is within 4 points of its weight over this many seeds (about 3.5 sigma at 50%). */
-const DEAL = 2000;
-const SHARE_SLACK = 0.04;
+/** The deal's seeds for the shares: the balance's old drift, 16% for 20% on level 5 (architecture 6), is 6 sigma out. */
+const DEAL = 5000;
+/** The seeds within which every answer of a level's range is dealt. */
+const COVER = 2000;
+/** @type {(p: number) => number} how far a form's share may be from its weight p: 4 standard deviations over DEAL seeds */
+const slack = (p) => 4 * Math.sqrt((p * (1 - p)) / DEAL);
 const PARAMS = parseParams(read(SKILLS_MD));
 const LOOKS = ['objects', 'dots', 'symbols'];
 const RELATIONS = ['<', '>', '=', 'left', 'right', 'level'];
@@ -189,10 +192,11 @@ function checkForms(level) {
 }
 
 /**
- * The deal of a level over seeds 1-DEAL (architecture 4.2): each form's share is within 4 points of
- * its weight in the level's forms, and every whole number of the level's range [min, max] is dealt
- * as an answer (either number of a pair), or the level lists it in exclude, and no excluded number
- * is dealt. A planner-picked structure or ask: per value for the shares, all together for answers.
+ * The deal of a level (architecture 4.2): over seeds 1-DEAL every form is dealt and its share is
+ * within slack() of its weight in the level's forms; over seeds 1-COVER every whole number of the
+ * level's range [min, max] is dealt as an answer (either number of a pair), or the level lists it
+ * in exclude, and no excluded number is dealt. A planner-picked structure or ask: per value for the
+ * shares, all together for answers.
  * @param {Game} game
  * @param {Level} base
  * @returns {string[]}
@@ -210,6 +214,7 @@ export function checkDeal(game, base) {
       const round = game.makeRound(level, rng(seed));
       const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
       dealt.set(pair, (dealt.get(pair) ?? 0) + 1);
+      if (seed > COVER) continue;
       const values = [round.answer].flat();
       if (values.every((v) => typeof v === 'number')) values.forEach((v) => answers.add(v));
       else numbers = false;
@@ -219,8 +224,10 @@ export function checkDeal(game, base) {
     for (const form of forms) {
       const pair = pairOf(level, form);
       const share = (dealt.get(pair) ?? 0) / DEAL;
-      if (Math.abs(share - form.w / total) > SHARE_SLACK) {
-        problems.push(`${pair} is ${(100 * share).toFixed(1)}% of ${DEAL} rounds${where}; its weight gives ${((100 * form.w) / total).toFixed(1)}%`);
+      const p = form.w / total;
+      if (!dealt.has(pair)) problems.push(`${pair} is never dealt in ${DEAL} rounds${where}`);
+      else if (Math.abs(share - p) > slack(p)) {
+        problems.push(`${pair} is ${(100 * share).toFixed(1)}% of ${DEAL} rounds${where}; its weight gives ${(100 * p).toFixed(1)}% (±${(100 * slack(p)).toFixed(1)})`);
       }
     }
     for (const pair of dealt.keys()) if (forms.length && !forms.some((f) => pairOf(level, f) === pair)) problems.push(`${pair} is dealt${where} but is no form of the level`);
@@ -229,7 +236,7 @@ export function checkDeal(game, base) {
     const exclude = base.exclude ?? [];
     const range = Array.from({ length: base.max - (base.min ?? 0) + 1 }, (_, i) => (base.min ?? 0) + i);
     const never = range.filter((n) => !answers.has(n) && !exclude.includes(n));
-    if (never.length) problems.push(`${never.join(', ')} never dealt as an answer in ${DEAL} seeds: deal it, or list it in exclude with the reason`);
+    if (never.length) problems.push(`${never.join(', ')} never dealt as an answer in ${COVER} seeds: deal it, or list it in exclude with the reason`);
     const stale = exclude.filter((n) => answers.has(n));
     if (stale.length) problems.push(`exclude lists ${stale.join(', ')}, but it is dealt as an answer`);
   }
@@ -448,7 +455,7 @@ for (const game of GAMES) {
       const unique = [...new Set(problems)];
       assert.ok(unique.length === 0, `${unique.length} problem(s), the first:\n  ${unique.slice(0, 15).join('\n  ')}`);
     });
-    test(`${game.meta.id} level ${index + 1} (${base.id}): the deal over ${DEAL} seeds, forms and answers`, () => {
+    test(`${game.meta.id} level ${index + 1} (${base.id}): the deal, forms over ${DEAL} seeds and answers over ${COVER}`, () => {
       const problems = checkDeal(game, base);
       assert.ok(problems.length === 0, problems.join('\n'));
     });
@@ -523,8 +530,11 @@ test('the deal checks catch forms and answers that do not match the level', () =
   assert.match(checkGame({ ...scale, levels: [{ ...either, forms: undefined }] }).join('\n'), /a mixed unknown needs forms/);
   assert.deepEqual(checkDeal(parts, level), []);
   // Shares from the level's weights, not the code's: a generator that keeps its own 1 in 2 is about 10 points off 40%.
-  const own = { ...parts, makeRound: (l, r) => parts.makeRound({ ...l, forms: [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 1 }] }, r) };
-  assert.match(checkDeal(own, level).join('\n'), /part\/reversed is \d+\.\d% of 2000 rounds; its weight gives 40\.0%/);
+  const own = (forms) => ({ ...parts, makeRound: (l, r) => parts.makeRound({ ...l, forms }, r) });
+  assert.match(checkDeal(own([{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 1 }]), level).join('\n'), /part\/reversed is \d+\.\d% of 5000 rounds; its weight gives 40\.0%/);
+  // The tolerance follows the weight: 3.6 points off, the balance's old drift at 20% (architecture 6), is caught at 40% too.
+  assert.match(checkDeal(own([{ eqform: 'reversed', w: 0.364 }, { eqform: 'standard', w: 0.636 }]), level).join('\n'), /part\/reversed is 3\d\.\d% of 5000 rounds; its weight gives 40\.0% \(±2\.8\)/);
+  assert.match(checkDeal(own([{ eqform: 'standard', w: 1 }]), level).join('\n'), /part\/reversed is never dealt/);
   // Answers: every number of the range, or listed in exclude, and nothing listed that is dealt.
   assert.match(checkDeal(parts, { ...level, exclude: [0] }).join('\n'), /^10 never dealt as an answer/m);
   assert.match(checkDeal(parts, { ...level, exclude: [0, 10, 3] }).join('\n'), /exclude lists 3, but it is dealt/);

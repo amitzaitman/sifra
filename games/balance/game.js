@@ -2,7 +2,7 @@
 // left to right (R7). A level per row of the 6.3 table.
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
-import { pickForm } from '../../lib/forms.js';
+import { pickWeighted } from '../../lib/weights.js';
 import { displayRows, drawable, drawFace, renderBalance } from './view.js';
 
 export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 4, css: new URL('game.css', import.meta.url).href };
@@ -194,7 +194,7 @@ function choose(round, level) {
  */
 function formOf(level, rng) {
   if (!level.forms) return { unknown: /** @type {string} */ (level.unknown), eqform: 'standard' };
-  const { form } = pickForm(level.forms, rng);
+  const { item: form } = pickWeighted(level.forms, rng);
   return { unknown: form.unknown ?? /** @type {string} */ (level.unknown), eqform: form.eqform ?? 'standard' };
 }
 

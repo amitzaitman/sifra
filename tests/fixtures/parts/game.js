@@ -1,6 +1,6 @@
 // Fixture game for the shell's tests (not in games/registry.js): the parts of a number, standing
 // in for ten-frame. Small, but it keeps the whole contract of docs/architecture.md section 2.
-import { pickForm } from '../../../lib/forms.js';
+import { pickWeighted } from '../../../lib/weights.js';
 import { choose, count, render as draw } from '../kit.js';
 
 export const meta = { id: 'parts', title: 'חֲלָקִים', version: 1, css: new URL('game.css', import.meta.url).href };
@@ -41,7 +41,7 @@ export function makeRound(level, rng) {
     part = rng.int(1, whole - 1);
   } while (part * 2 === whole);
   const answer = whole - part;
-  const eqform = level.forms ? pickForm(level.forms, rng).form.eqform ?? 'standard' : level.eqform ?? 'standard';
+  const eqform = level.forms ? pickWeighted(level.forms, rng).item.eqform ?? 'standard' : level.eqform ?? 'standard';
   /** @type {Group[]} */
   const groups = [{ role: 'whole', count: whole, shown: 'tag' }, { role: 'part', count: part, shown: 'items' }, { role: 'unknown', count: answer, shown: 'covered' }];
   const sum = [part, '+', '?'];

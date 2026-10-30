@@ -109,18 +109,25 @@ function sidesOf(round, solved) {
   return { left: side('left'), right: side('right') };
 }
 
-/** The displays drawn on the picture's own places; every other one puts its ghosts up (show). */
+/** The displays drawn on the picture's own places (show). */
 const IN_PLACE = ['flash', 'empty-plate', 'jumps'];
+/**
+ * The displays drawn as ghosts on the unknown's pan, the beam tipped (show). A slip's count-up too
+ * (design 7.3): every cube weighs, so one cube short or over tips the beam.
+ */
+const GHOSTS = ['overflow', 'balance', 'count-up'];
 
 /**
- * Whether show() can draw a display on this round (design 7.1): the jumps count on over the two
- * numbers of the other pan (? = a + b), so they have no drawing where it holds one number (a + ? = c).
+ * Whether show() can draw a display on this round (design 7.1, 7.3): a judging card and the turned
+ * rows draw every display as ghosts; the pans draw IN_PLACE and GHOSTS, and the jumps count on over
+ * the two numbers of the other pan (? = a + b), so they have no drawing where it holds one (a + ? = c).
  * @param {Round} round
  * @param {string} display
  * @returns {boolean}
  */
 export function drawable(round, display) {
-  if (display !== 'jumps' || round.model === 'set') return true;
+  if (round.model !== 'balance') return true;
+  if (display !== 'jumps') return IN_PLACE.includes(display) || GHOSTS.includes(display);
   const data = sidesOf(round, false);
   return data[data.left.some((g) => g.role === 'unknown') ? 'right' : 'left'].length === 2;
 }
@@ -311,8 +318,8 @@ function balanceScene(host, round, solved, signal) {
           return mark;
         }));
         rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
-      } else {
-        // overflow, balance: ghosts in the unknown's pan.
+      } else if (GHOSTS.includes(display)) {
+        // overflow, balance, count-up: ghosts in the unknown's pan.
         if (rule === 'equal.compensate-wrong' && moving) {
           // The cube goes the wrong way: the second group is the choice.
           shift(-moving.d);
@@ -326,7 +333,7 @@ function balanceScene(host, round, solved, signal) {
         ghosts(layer[u], slots);
         const mine = weight(data[u].filter((g) => g.role !== 'unknown')) + value;
         tilt(u === 'left' ? tiltOf(mine, weight(data[k])) : tiltOf(weight(data[k]), mine), displayRows(round, display, value));
-      }
+      } else throw new Error(`balance: no drawing for ${display} (drawable)`);
       return layer.el;
     },
     /** Step 2: the skill's hint (depth 4.9), kept to the end of the round. */

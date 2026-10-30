@@ -119,8 +119,10 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   equality) and include `answer`; for every wrong option `deepEqual(rules[rule](round), value)`
   and `value !== answer`; the value matches the rule's declared type; numbers fit the button
   (`String(value).length <= 4` at 64px, `<= 3` at 56px); option count is 4, or 3 in the allowed
-  cases; at least two non-`slip.*` rules when the skill lists them; `keyword.*` present in text
-  levels with inconsistent wording, absent in levels without text.
+  cases; at least two non-`slip.*` rules when the skill lists them; every wrong option's display fits the
+  picture (the game's `budget(round, choice)`, when it exports one; a real error that does not fit gives way to
+  the next rule in the skill's list, a slip among them; architecture 4.2); `keyword.*` present in text levels with
+  inconsistent wording, absent in levels without text.
 - **R4 [auto], build and estimate rounds:** for every rule in the skill's list that has a formula,
   `classify(round, rules[r](round)) === r`; `classify(round, answer) === 'correct'`. Clock wind
   rounds classify to `'correct'`, `clock.next-hour`, `clock.half-flip` or `build.other`. Shape

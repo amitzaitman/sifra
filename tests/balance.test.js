@@ -149,6 +149,11 @@ test('a display takes 8 rows on the pans at most (design 6.8): a wrong value tha
   assert.equal(displayRows(round, 'overflow', 28), 9);
   assert.equal(balance.budget(round, { value: 27, rule: 'op.other' }), null);
   assert.match(balance.budget(round, { value: 28, rule: 'op.other' }), /overflow needs 9 rows/);
+  // A slip's count-up is drawn as ghosts (design 7.3); the jumps need two numbers on the other pan,
+  // and a display the pans do not draw has no drawing at all.
+  assert.equal(balance.budget(round, { value: 2, rule: 'slip.near' }), null);
+  assert.match(balance.budget(round, { value: 2, rule: 'count.start-included' }), /jumps has no drawing/);
+  assert.match(balance.budget(round, { value: 2, rule: 'seq.decade-ten' }), /regroup has no drawing/);
   // On the 20 levels op.other and equal.add-all reach 39; those cards are left out, and every card fits.
   let left = 0;
   for (const id of ['missing-symbols-20', 'both-sides-symbols']) {

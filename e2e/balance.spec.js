@@ -92,9 +92,10 @@ test('a first try: the pans stay level, the unknown shows in its colour, the ful
 });
 
 // Every rule the game offers, in rounds that show it, with what its display draws (design 7.1, 7.3).
+// 13 + 5 = ? + 12 (both-sides-symbols 9): slip.near's 5, where equal.add-all's 30 needs 9 rows.
 const DISPLAYS = [
   ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 129],
-  ['both-sides', 1], ['turn', 1], ['true-false', 1], ['relational', 1],
+  ['both-sides', 1], ['both-sides-symbols', 9], ['turn', 1], ['true-false', 1], ['relational', 1],
 ];
 test('every wrong rule shows its display, and its card goes with its slot kept', async ({ page }) => {
   test.setTimeout(120000);
@@ -130,6 +131,8 @@ test('every wrong rule shows its display, and its card goes with its slot kept',
         await expect(root.locator('.bl-mark').last(), where).toHaveText(String(value));
         await expect(root.locator('.bl-ring'), where).not.toHaveCount(0);
       } else {
+        // overflow, balance, and a slip's count-up: ghosts on the unknown's pan, the beam tipped.
+        expect(['overflow', 'balance', 'count-up'], where).toContain(display);
         await expect(root.locator('.bl-ghost'), where).toHaveCount(value);
         await expect(scene, where).toHaveAttribute('data-tilt', tiltWith(round, value));
         if (rule === 'equal.compensate-wrong') {
@@ -141,7 +144,7 @@ test('every wrong rule shows its display, and its card goes with its slot kept',
       await unlocked(page);
     }
   }
-  expect([...seen].sort()).toEqual(Object.keys(balance.rules).filter((r) => !['slip.near'].includes(r)).sort());
+  expect([...seen].sort()).toEqual(Object.keys(balance.rules).sort());
 });
 
 test('a display stays until the next tap, which removes it; a minute changes nothing', async ({ page }) => {
@@ -1090,6 +1093,38 @@ test('small part cubes stay yellow: where an overflow or balance display needs 6
       expect(shares.length).toBeGreaterThan(0);
       for (const { what, share } of shares) expect(share, `${width}px ${level} ${seed} with ${value}: a part cube ${what}`).toBeGreaterThanOrEqual(0.4);
     }
+  }
+});
+
+test('a display draws within the rows it gives the scene, 8 at most (design 6.8): the largest card of each display on each level', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Per level and display, the seed of 1-200 with the largest wrong card (a judging card: its larger
+  // side), from the rounds alone; the rows are read from what the page drew (each cube's, ghost's
+  // and mark's --r), not from displayRows.
+  const size = (v) => (typeof v === 'number' ? v : Math.max(total(v.left), total(v.right)));
+  /** @type {Map<string, [string, number, any]>} */
+  const largest = new Map();
+  for (const level of balance.levels.filter((l) => l.model !== 'set')) {
+    for (let seed = 1; seed <= 200; seed++) {
+      for (const { value, rule } of balance.makeRound(level, rng(seed)).choices) {
+        const key = `${level.id} ${rule && RULES[rule].display}`;
+        if (rule && !(largest.has(key) && size(largest.get(key)[2]) >= size(value))) largest.set(key, [level.id, seed, value]);
+      }
+    }
+  }
+  expect(largest.size).toBeGreaterThan(20);
+  for (const [key, [level, seed, value]] of largest) {
+    const { round } = await devAt(page, level, seed);
+    await card(page, round.choices.findIndex((c) => JSON.stringify(c.value) === JSON.stringify(value))).click();
+    await unlocked(page);
+    const { rows, drawn } = await page.locator('.bl-scene').evaluate((scene) => ({
+      rows: Number(scene.style.getPropertyValue('--rows')),
+      drawn: Math.max(...[...scene.querySelectorAll('.bl-cube, .bl-mark')].map((n) => Number(n.style.getPropertyValue('--r')) + 1)),
+    }));
+    const where = `${key}, seed ${seed}, ${JSON.stringify(value)}`;
+    expect(drawn, where).toBeLessThanOrEqual(rows);
+    expect(rows, where).toBeLessThanOrEqual(8);
   }
 });
 

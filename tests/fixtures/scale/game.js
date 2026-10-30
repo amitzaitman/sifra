@@ -1,7 +1,7 @@
 // Fixture game for the shell's tests (not in games/registry.js): equality on two pans, standing in
 // for balance. Small, but it keeps the whole contract of docs/architecture.md section 2, including
 // a judging level (2.3) whose answers are equation cards.
-import { pickForm } from '../../../lib/forms.js';
+import { pickWeighted } from '../../../lib/weights.js';
 import { choose, count, render as draw } from '../kit.js';
 
 export const meta = { id: 'scale', title: 'כַּפּוֹת', version: 1, css: new URL('game.css', import.meta.url).href };
@@ -43,7 +43,7 @@ const ORDER = {
  */
 export function makeRound(level, rng) {
   if (level.skill === 'eq.sign.true-false') return judge(level, rng);
-  const unknown = level.forms ? pickForm(level.forms, rng).form.unknown : level.unknown;
+  const unknown = level.forms ? pickWeighted(level.forms, rng).item.unknown : level.unknown;
   let a;
   let b;
   do {
