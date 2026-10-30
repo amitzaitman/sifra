@@ -263,18 +263,20 @@ const phasesOf = (round) => {
 };
 
 /**
- * Opens a page of fixture.html?story on a screen that does not move (the game's stylesheet loads
- * there, so the round's event has its animations), holds every event, then goes to a hash.
+ * Cold-loads fixture.html?story at a hash with every event held (HOLD is in the page before its
+ * scripts run). The shell's first route waits for the games' stylesheets (3.1), so the round's
+ * event finds its animations even on a cold load: without that wait it would run every phase at once.
  * @param {import('@playwright/test').Page} page
- * @param {string} first a hash with no round
  * @param {string} hash
  */
-async function holdStory(page, first, hash) {
+async function holdStory(page, hash) {
   await page.clock.install({ time: NOW });
-  await page.goto(`${STORY}${first}`);
-  await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => l.getAttribute('href')?.endsWith('/story/game.css') && l.sheet));
-  await page.addStyleTag({ content: HOLD });
-  await page.evaluate((h) => { location.hash = h; }, hash);
+  await page.addInitScript((css) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    document.adoptedStyleSheets = [sheet];
+  }, HOLD);
+  await page.goto(`${STORY}${hash}`);
   await expect(page.locator('main[data-screen="round"][data-game="story"], main[data-screen="demo"][data-game="story"]')).toBeVisible();
   await look(page);
   return roundOf(page);
@@ -282,7 +284,7 @@ async function holdStory(page, first, hash) {
 
 for (const seed of [1, 2]) {
   test(`story, seed ${seed}: the event builds the equation row in place, aria-busy until every token shows`, async ({ page }) => {
-    const { round } = await holdStory(page, '#/dev', `#/dev/story/1/${seed}`);
+    const { round } = await holdStory(page, `#/dev/story/1/${seed}`);
     expect(round.eqform).toBe(seed === 1 ? 'standard' : 'reversed');
     const phases = phasesOf(round);
     const first = await rowNow(page);
@@ -302,7 +304,7 @@ for (const seed of [1, 2]) {
 
 test('story: a right tap during the event is taken; the row shows every token and leaves aria-busy before the cover lifts', async ({ page }) => {
   await seedStore(page, storeWith({ games: { story: ladderAt('event') } }));
-  const { round, answerAt } = await holdStory(page, '#/', '#/play/story');
+  const { round, answerAt } = await holdStory(page, '#/play/story');
   expect((await rowNow(page)).busy).toBe('true');
   await page.locator('[data-area="equation"]').evaluate((area) => {
     const log = [];
@@ -323,6 +325,9 @@ test('story: a right tap during the event is taken; the row shows every token an
   expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
   await expect(page.locator('[data-event]')).toHaveCount(0);
   await expect(page.locator('[data-next]')).toBeVisible();
+  // A late build after the solve, as an event chain resuming after the tap would send, does nothing (2.4).
+  await page.evaluate(() => /** @type {any} */ (window).storyBuild([0]));
+  expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
   // [data-solved] shows a token even if something marked it unbuilt after the solve (app.css).
   const late = await page.locator('[data-area="equation"] .eq > *').nth(1).evaluate((t) => {
     t.classList.add('is-unbuilt');
@@ -339,7 +344,7 @@ test('story: a right tap during the event is taken; the row shows every token an
 });
 
 test('story: a wrong tap during the event finishes it, gets its display, and setEquation draws the row whole', async ({ page }) => {
-  const { round, answerAt } = await holdStory(page, '#/dev', '#/dev/story/1/1');
+  const { round, answerAt } = await holdStory(page, '#/dev/story/1/1');
   await page.locator('[data-area="equation"] .eq').evaluate((row) => row.setAttribute('data-before', ''));
   const wrong = answerAt === 0 ? 1 : 0;
   await card(page, wrong).click();
@@ -355,11 +360,22 @@ test('story: a wrong tap during the event finishes it, gets its display, and set
 });
 
 test('story: "show me how" during the event: the demo builds its own row and waits for its event; then the round starts again', async ({ page }) => {
-  const { round } = await holdStory(page, '#/dev', '#/dev/story/1/1');
+  const { round } = await holdStory(page, '#/dev/story/1/1');
+  // The round's build and row, kept for a late build after the abort.
+  await page.evaluate(() => Object.assign(window, { lateBuild: /** @type {any} */ (window).storyBuild, oldRow: document.querySelector('[data-area="equation"] .eq') }));
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   const demo = await roundOf(page);
-  expect(await rowNow(page)).toMatchObject({ busy: 'true', shown: phasesOf(demo.round)[0] });
+  const demoRow = await rowNow(page);
+  expect(demoRow).toMatchObject({ busy: 'true', shown: phasesOf(demo.round)[0] });
+  // After the abort the round's build does nothing: no throw, its old row as it was, the demo's row unchanged (2.4).
+  const old = await page.evaluate(() => {
+    const w = /** @type {any} */ (window);
+    w.lateBuild([]);
+    return { busy: w.oldRow.getAttribute('aria-busy'), unbuilt: w.oldRow.querySelectorAll('.is-unbuilt').length };
+  });
+  expect(old).toEqual({ busy: 'true', unbuilt: 4 });
+  expect(await rowNow(page)).toEqual(demoRow);
   // The demo waits for the event: the hand has not moved, and nothing is solved.
   await expect(page.locator('[data-hand]')).not.toHaveAttribute('style');
   await step(page);
@@ -385,6 +401,16 @@ test('story: with reduced motion the event is at its end at once; thumbs draw th
   await expect(page.locator('main[data-screen="round"][data-game="story"]')).toBeVisible();
   expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
   await expect(page.locator('[data-event]')).toHaveCount(0);
+});
+
+test('a game stylesheet that fails to load does not hold the first route (3.1)', async ({ page, errors }) => {
+  errors.allow(/story\/game\.css/);
+  await page.route((url) => url.pathname.endsWith('/tests/fixtures/story/game.css'), (route) => route.abort());
+  await page.clock.install({ time: NOW });
+  await page.goto(`${STORY}#/dev/story/1/1`);
+  await expect(page.locator('main[data-screen="round"][data-game="story"]')).toBeVisible();
+  // With no CSS the event finds no animation: it is at its end at once.
+  expect(await rowNow(page)).toMatchObject({ busy: null, unbuilt: 0 });
 });
 
 test('buildEquation: by index in [...left, "=", ...right]; [] hides every token, null shows them all; an index that is no token throws', async ({ page }) => {

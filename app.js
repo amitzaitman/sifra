@@ -443,7 +443,16 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, newId, { t: S.now().toISOString(), day: today() });
   navigator.storage?.persist?.().catch(() => null);
-  for (const g of ordered) if (g.meta.css) document.head.append(h('link', { rel: 'stylesheet', href: g.meta.css }));
-  addEventListener('hashchange', route);
-  route();
+  // The first route waits for every game's stylesheet (load or error, no timer): drawn before it, a
+  // story's event finds no animation to settle on and a render measures an unstyled host (3.1).
+  const links = ordered.filter((g) => g.meta.css).map((g) => h('link', { rel: 'stylesheet', href: g.meta.css }));
+  document.head.append(...links);
+  const loaded = (/** @type {HTMLElement} */ link) => new Promise((done) => {
+    link.addEventListener('load', done, { once: true });
+    link.addEventListener('error', done, { once: true });
+  });
+  Promise.all(links.map(loaded)).then(() => {
+    addEventListener('hashchange', route);
+    route();
+  });
 }

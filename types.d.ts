@@ -86,6 +86,7 @@ interface RoundView {
 
 interface RenderContext {
   signal: AbortSignal;
+  /** In 'thumb' render draws before it returns: the shell catches only a synchronous throw (architecture 2.4, 3.9). */
   mode: 'play' | 'demo' | 'thumb';
   solved: boolean;
   setEquation(equation: Equation): void;

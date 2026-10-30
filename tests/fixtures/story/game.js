@@ -28,7 +28,9 @@ const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)'
  * unknown with its operator and '?', then the rest of the row. A tap finishes it first: every
  * animation under [data-event] ends, then a miss rewrites the row with setEquation (which shows every
  * token, 2.4) and a solve finds it shown by the shell. The demo waits for its end. Thumbs, reduced
- * motion: the end at once.
+ * motion: the end at once, before render returns (a thumb's catch sees only a synchronous throw, 2.4).
+ * Test hook: globalThis.storyBuild is the build of the last round or demo drawn, so a test can send a
+ * late build after the solve or the abort, as a chain that resumes after a tap would.
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
@@ -40,6 +42,7 @@ export function render(host, round, ctx) {
   const row = /** @type {HTMLElement} */ (host.querySelector('.fx-row'));
   // The sum's first token in [...left, '=', ...right]: 0 in part + ? = whole, 2 in whole = part + ?.
   const at = round.equation.left.length > 1 ? 0 : 2;
+  if (mode !== 'thumb') /** @type {any} */ (globalThis).storyBuild = ctx.build;
   let ended = mode === 'thumb' || reduced();
   /** @param {(() => void)} after */
   const finish = (after) => {
@@ -49,8 +52,8 @@ export function render(host, round, ctx) {
     row.removeAttribute('data-event');
     after();
   };
-  const story = (async () => {
-    if (ended) return ctx.build(null);
+  if (ended) ctx.build(null);
+  const story = ended ? Promise.resolve() : (async () => {
     for (const [i, tokens] of [[at], [at, at + 1, at + 2]].entries()) {
       ctx.build(tokens);
       row.dataset.event = String(i + 1);
