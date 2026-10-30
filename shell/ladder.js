@@ -10,7 +10,7 @@ export const startLadder = (levels, id = levels[0].id) =>
  * @type {(state: Ladder, id: string, again?: boolean) => Ladder}
  */
 export const moveTo = (state, id, again = false) =>
-  ({ ...state, level: id, fast: null, streak: 0, window: [], demoDue: again ? id : state.demoDue, hold: again ? id : state.hold ?? null });
+  ({ ...state, level: id, fast: null, streak: 0, window: [], demoDue: again ? id : state.demoDue, hold: again ? id : state.hold });
 
 /** @type {(levels: Level[], id: string) => number} the index of a level id (0 when it is gone) */
 export const indexOf = (levels, id) => Math.max(0, levels.findIndex((l) => l.id === id));

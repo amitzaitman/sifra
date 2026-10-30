@@ -287,6 +287,42 @@ test('an uncaught error shows the error screen with a home button, not a white p
   await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
 });
 
+test('a broken stored record is mended on load: home opens, the next step plays, and one repair event names what was lost (3.9)', async ({ page }) => {
+  // A ladder without `passed` made the next step throw on home, and the error screen's reload threw again.
+  await seedStore(page, storeWith({
+    sessions: 'x', games: { parts: { level: 'split-5' }, scale: { level: 3, passed: ['same'] } }, skills: { 'num.parts.split': { last: YESTERDAY } },
+  }));
+  await open(page, FIXTURE);
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await expect(page.locator('a.next-step [data-thumb] > *')).not.toHaveCount(0);
+  await expect(page.locator('[data-card] [data-thumb] > *')).not.toHaveCount(0);
+  await look(page);
+  await page.locator('a.next-step').click();
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '1');
+  const { child } = await stored(page);
+  expect(child.games).toEqual({ parts: { ...ladderAt('split-5'), hold: null } });
+  expect(child.skills).toEqual({ 'num.parts.split': skillState({ last: YESTERDAY }) });
+  expect(child.sessions).toBe(1);
+  expect(child.events).toEqual([{ type: 'repair', day: TODAY, lost: ['sessions', 'games/scale'] }]);
+});
+
+test('a game whose render throws leaves its home card with the title only, and home still opens (3.9)', async ({ page }) => {
+  // The scale fixture, served with a render that throws; the module itself loads from ?real.
+  await page.route((url) => url.pathname.endsWith('/tests/fixtures/scale/game.js') && !url.search, (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "export * from './game.js?real';\nexport function render() { throw new Error('a broken game'); }\n",
+  }));
+  const logged = [];
+  page.on('console', (m) => { if (m.type() === 'error') logged.push(m.text()); });
+  await open(page, FIXTURE);
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await expect(page.locator('[data-card]')).toHaveCount(2);
+  await expect(page.locator('[data-card]').nth(1)).toHaveText(scale.meta.title);
+  await expect(page.locator('[data-card] [data-thumb][data-game="scale"]')).toBeEmpty();
+  await expect(page.locator('[data-card] [data-thumb][data-game="parts"] > *')).not.toHaveCount(0);
+  expect(logged.some((text) => text.includes('a broken game')), 'the error is logged').toBe(true);
+});
+
 test('#/dev/export: one button downloads the stored value as is, named by the local day', async ({ page }) => {
   const value = storeWith({ sessions: 3 });
   await seedStore(page, value);

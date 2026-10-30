@@ -12,15 +12,15 @@ and report. Section 6 lists the gaps in the docs that this file closes. Read wit
 ```text
 index.html            <html lang="he" dir="rtl">, viewport (design §10), font preloads, app.css, and an inline module
                       that imports games/registry.js and calls start()
-app.js                the shell (428 lines): routes, screens, round runner, demo, error screen
+app.js                the shell (434 lines): routes, screens, round runner, demo, error screen
 app.css               the design.md §3 block verbatim, then the shell's components
 types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
 shell/                the shell's own modules: only app.js (and the tests) import them (owner decision 2026-10-14).
                       Each imports only lib/, data/ and shell/, and no game imports shell/ or app.js (an engineering
-                      decision the owner may reverse, section 6). 602 lines
+                      decision the owner may reverse, section 6). 668 lines
   cards.js 88  equation.js 77                 answer cards (AlefBet answer-choices.js), equation row (design §6.4)
-  ladder.js 89  planner.js 193  store.js 77   levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
+  ladder.js 89  planner.js 193  store.js 143  levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
   rng.js 36                                   seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
   taps.js 42                                  the double-tap window (3.2)
 lib/                  code the games share: a game imports each module; each imports nothing; under 600 lines together
@@ -410,8 +410,15 @@ an integer with both ends included, an element, a new array). makeRound uses not
   lastReviewFirst } }, attempts, events }`. The child id is `c` plus 8 hex digits from crypto.
 - Storage is read only inside start and route handlers (the export reads when opened), always in try/catch; when it
   throws or is missing, the shell plays from memory. `migrate(raw)`: a schema newer than the code, whatever its
-  shape, is checked first: play from memory, never write; then missing, unparsable or broken gives a new value;
-  schema 1 stays; each new schema adds a step.
+  shape, is checked first: play from memory, never write; then missing, unparsable or broken (no current child
+  object) gives a new value; schema 1 stays; each new schema adds a step. Then every stored child is brought to
+  `SHAPE` (store.js, pinned to the schema by tests/store.test.js, so changing a key of a child, a ladder or a skill
+  state needs a schema step): a missing or wrong-typed value takes its default (a ladder's `fast` null), a ladder
+  whose `level` is not a string and a skill state that is not an object are dropped, keys outside the shape stay,
+  and whatever was replaced or dropped is named in one `{ type: 'repair', day, lost }` event, so no progress goes
+  silently; should a record still make the planner throw, home opens without the next-step card and `#/next` goes
+  home, and a thumb that throws is left empty (the error goes to the console), so the error screen's way home
+  always opens.
 - Written after each solved round, each demo start and each jump. Caps: 4000 attempts and 500 events, oldest first
   out; on a quota error drop the oldest half of the attempts and retry once. `navigator.storage.persist()` runs once
   per start.
@@ -503,7 +510,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   every offered skill is passed; each opens only after its offered prerequisites, in SKILLS order. The same walk
   over games/registry.js: each game's levels open in list order (pedagogy §6.2, §6.3).
 - store: importing with a storage that throws on any access does not throw; migrate cases, a newer schema of another
-  shape included; caps; quota retry; export named by the local day.
+  shape included; a broken child mended so the planner runs (a ladder without `passed`, a child with only
+  `created`, wrong-typed values, dropped records and the one `repair` event naming them), while what the shell
+  writes stays as it is; the keys of `newChild`, `startLadder` and a new skill state equal `SHAPE`, and `SHAPE`
+  equals the test's row for `SCHEMA`; caps; quota retry; export named by the local day.
 
 ### 4.4 Code scans
 
@@ -555,7 +565,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   tap of a double tap has one time, on every project: on the right card with reduced motion ("הַבָּא" stays), on
   "הַבָּא" in a session and in `#/dev` (the next round, unanswered: a later wrong tap is its only miss), at the
   window's edge (a tap on "הַבָּא" and on the next round's card at 299 ms dropped, at 300 ms taken), and on the end
-  screen's home button (home stays).
+  screen's home button (home stays); a broken stored record (3.9) opens home, plays the next step and logs one
+  `repair` event; a game whose render throws (its module replaced by a Playwright route) leaves its home card with the title
+  only.
 - On index.html, looping over the registry (both games, ten-frame and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KiB of same-origin

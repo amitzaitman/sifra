@@ -51,6 +51,8 @@ const still = (game, i) => {
   return built(game, { index: i, structure: [structure].flat()[0], ask: [ask].flat()[0] });
 };
 const ladderIndex = (game) => indexOf(game.levels, child().games[game.meta.id]?.level ?? game.levels[0].id);
+/** The next step, or null when the planner throws on a record migrate could not mend: home and #/next still open (3.9). */
+const nextOrNull = () => { try { return nextStep(child(), S.games, SKILLS); } catch (err) { console.error(err); return null; } };
 
 /** An element: attributes, `class`, `html`, and on<event> listeners bound to the current screen (call screen() first). */
 function h(tag, props = {}, ...kids) {
@@ -87,27 +89,31 @@ function screen(name, title, attrs = {}) {
 /**
  * A still picture of a round (home, the end screen); app.css stops motion under [data-thumb].
  * It is drawn by drawThumbs() once the host is in the page, so render can measure it as in a round.
+ * A thumb that throws is left empty, so one broken game or record never takes the screen down (3.9).
+ * @param {() => Level} level built when the thumb is drawn
  */
 function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
   const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, onAttempt() {} };
-  S.thumbs.push(() => game.render(host, game.makeRound(level, rng(seed)), ctx));
+  S.thumbs.push(() => {
+    try { game.render(host, game.makeRound(level(), rng(seed)), ctx); } catch (err) { host.replaceChildren(); console.error(err); }
+  });
   return host;
 }
 const drawThumbs = () => S.thumbs.splice(0).forEach((draw) => draw());
 
 function home() {
   const main = screen('home', T.brand);
-  const next = nextStep(child(), S.games, SKILLS);
+  const next = nextOrNull();
   main.append(h('header', { class: 'brand', 'aria-hidden': 'true' }, h('span', { class: 'brand-dots' }, h('i'), h('i'), h('i')), T.brand));
   if (next) {
     const head = h('span', { class: 'next-step-head' }, h('span', {}, T.step), h('span', { class: 'next-step-go', html: svg('next') }));
-    const body = h('span', { class: 'next-step-body' }, thumb(next.game, still(next.game, next.index)),
+    const body = h('span', { class: 'next-step-body' }, thumb(next.game, () => still(next.game, next.index)),
       h('span', { class: 'next-step-game' }, next.game.meta.title));
     main.append(h('a', { class: 'next-step btn btn-action', href: '#/next', 'data-control': true }, head, body));
   }
   const card = (g) => h('a', { class: 'game-card btn', href: `#/play/${g.meta.id}`, 'data-card': true },
-    thumb(g, still(g, ladderIndex(g))), h('span', {}, g.meta.title));
+    thumb(g, () => still(g, ladderIndex(g))), h('span', {}, g.meta.title));
   if (S.games.length) main.append(h('h2', { class: 'all' }, T.all), h('nav', { class: 'games' }, S.games.map(card)));
   if (VERIFIED) main.append(h('a', { class: 'parents-link', href: '#/parents', 'data-parents': true }, T.parents));
   drawThumbs();
@@ -115,7 +121,7 @@ function home() {
 
 /** #/next: follows the next step (a jump moves the game's level, 3.6), then plays that game. */
 function goNext() {
-  const next = nextStep(child(), S.games, SKILLS);
+  const next = nextOrNull();
   if (!next) return location.replace('#/');
   const { game, index } = next;
   const [id, ladder, to] = [game.meta.id, child().games[game.meta.id], game.levels[index]];
@@ -332,7 +338,7 @@ function demo(game, spec, then, done = 0) {
 
 function end(session) {
   const main = screen('end', session.game.meta.title);
-  const thumbs = session.done.map((spec) => thumb(S.byId.get(spec.game), built(S.byId.get(spec.game), spec), spec.seed, true));
+  const thumbs = session.done.map((spec) => thumb(S.byId.get(spec.game), () => built(S.byId.get(spec.game), spec), spec.seed, true));
   const home = h('div', { class: 'end-home' }, homeButton({ class: 'next btn btn-action' }));
   main.append(h('div', { class: 'end-thumbs' }, thumbs), home);
   drawThumbs();
