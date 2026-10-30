@@ -597,10 +597,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - Paint order: in ten-frame, `at()` puts text in reading order (R7), not last, so a digit can land under a node drawn
   before it; a ghost goes before the first text child of its layer, so no ghost covers a digit.
   `paintedOver` in e2e/ten-frame.spec.js asks `elementFromPoint` at the centre of every shown digit and cover what is
-  topmost, and fails unless it is that digit or cover. The layers take no taps, so while it looks every node that
-  paints takes them, and a box that paints nothing (a layer, a lid's box, an SVG's frame) or is hidden does not; a
-  plain `elementFromPoint` returns `.tf-base` for every digit and checks nothing. Today it runs on the pair cards'
-  count-up where the left part takes a second row (8 = ? + ?, card 6|1).
+  topmost, and fails unless it is that digit or cover. The layers take no taps, so while it looks every box with a
+  fill or text of its own takes them, and so do an SVG's paths where they paint; a plain `elementFromPoint` returns
+  `.tf-base` for every digit and checks nothing. A box takes hits over all of it, painted or not, so a box with no
+  fill and no text (a layer, a lid's box, a ring, a target place, the hint's halo) takes none while it looks, nor
+  does a hidden node: a ring drawn round a cover after it would otherwise read as painted over it. A hollow box's
+  edge is not checked here (the ring tests check rings). Today it runs on the pair cards' count-up where the left
+  part takes a second row (8 = ? + ?, card 6|1) and on make ten's flash ring round the tray (`given.whole`).
 - fixtures.spec.js also checks the shell's record (3.9): an attempt solved on the first tap, then the picture button
   and a tap in each area, reads the same after the next round is saved; a stuck return in the same game (3.7) logs
   the level the child was moved to as `levelAfter`.

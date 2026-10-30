@@ -1638,8 +1638,9 @@ test('the bond\'s count-up at 320px: every digit outlined in white, 14px or more
 /**
  * What is painted over a digit or a cover in the drawing: at the centre of each one shown, the topmost thing
  * painted is it or inside it. The layers take no taps (game.css), so elementFromPoint would pass over them: while
- * it looks, every node that paints takes hits, and a box that paints nothing (a layer, a lid's box, an SVG's
- * frame; its paths take hits where they paint) or is hidden does not.
+ * it looks, every box with a fill or text of its own takes hits, and so do an SVG's paths, where they paint. A box
+ * takes hits over all of it, so one with no fill and no text (a layer, a lid's box, a ring, a target place, the
+ * hint's halo) takes none: its middle shows what is under it, and its edge is not checked here. Nor is a hidden node.
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<string[]>}
  */
@@ -1651,10 +1652,16 @@ const paintedOver = (page) => page.locator('[data-area="picture"] .tf-draw').eva
     }
     return false;
   };
+  const hollow = (n) => {
+    if (!(n instanceof HTMLElement)) return n.matches('svg');
+    const s = getComputedStyle(n);
+    return /^(transparent|rgba\(.*,\s*0\))$/.test(s.backgroundColor) && s.backgroundImage === 'none'
+      && ![...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
+  };
   const name = (n) => `${n?.getAttribute('class') ?? n?.tagName} "${n?.textContent ?? ''}"`;
   const nodes = /** @type {(HTMLElement | SVGElement)[]} */ ([...draw.querySelectorAll('*')]);
   const was = nodes.map((n) => n.style.getPropertyValue('pointer-events'));
-  for (const n of nodes) n.style.setProperty('pointer-events', n.matches('.tf-base, .tf-layer, .tf-lid, svg') || hidden(n) ? 'none' : 'auto', 'important');
+  for (const n of nodes) n.style.setProperty('pointer-events', hollow(n) || hidden(n) ? 'none' : 'auto', 'important');
   const out = [];
   for (const el of draw.querySelectorAll('.tf-digit, .cover')) {
     const b = el.getBoundingClientRect();
@@ -1678,6 +1685,18 @@ test('pair cards\' count-up: every digit is painted over its ghost, and the cove
   const n = slip(round).value[0] + slip(round).value[1];
   await expect(page.locator('[data-display="count-up"] .tf-digit')).toHaveCount(n);
   await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)')).toHaveCount(2);
+  expect(await paintedOver(page)).toEqual([]);
+});
+
+test('make ten\'s flash ring round the tray: its covers stay on top, seen through the ring\'s empty middle (design 6.6, 7.1)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 568 });
+  // The ring is drawn after the covers and round them; its middle is empty, so they show through it.
+  const { round } = await devAt(page, 'ten-cover', (r) => r.choices.some((c) => c.rule === 'given.whole'));
+  await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
+  await unlocked(page);
+  await expect(page.locator('[data-display="flash"] .tf-ring.is-tray')).toBeVisible();
+  await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)').first()).toBeVisible();
   expect(await paintedOver(page)).toEqual([]);
 });
 
