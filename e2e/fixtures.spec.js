@@ -128,6 +128,47 @@ test('a symbols level shows the picture on request and logs picture', async ({ p
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', help: ['picture'], wrong: [] });
 });
 
+test('a saved attempt does not change after the solve', async ({ page }) => {
+  // Solved on the first tap; then the picture button and a tap in each area. None of it is the round's.
+  const first = await playAt(page, 'parts', 'split-sym');
+  await card(page, first.answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const saved = await lastAttempt(page);
+  expect(saved).toMatchObject({ outcome: 'first', wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 } });
+  await look(page);
+  await page.locator('[data-show-picture]').click();
+  await expect(page.locator('[data-area="picture"] [data-role="part"]').first()).toBeVisible();
+  for (const area of ['[data-area="picture"]', '[data-area="equation"]', '.progress']) {
+    const box = await page.locator(area).boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { attempts } = (await stored(page)).child;
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]).toEqual(saved);
+});
+
+test('a stuck return in the same game: levelAfter is the level the child was moved to (3.7)', async ({ page }) => {
+  // The tenth round at split-10, in a second session, under half first tries: stuck. No game
+  // offers count.set.how-many, so the return is to split-5 in parts itself.
+  const at = { 'split-10': { n: 9, first: 0, sessions: 1, lastSession: 1 } };
+  await seedStore(page, storeWith({ sessions: 1, games: { parts: ladderAt('split-10', { passed: ['split-5'], at }) } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '2');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { child } = await stored(page);
+  expect(child.events.at(-1)).toMatchObject({ type: 'stuck', game: 'parts', level: 2, to: { game: 'parts', level: 1 } });
+  expect(child.games.parts.level).toBe('split-5');
+  expect(child.attempts.at(-1)).toMatchObject({ levelId: 'split-10', outcome: 'first', levelBefore: 2, levelAfter: 1 });
+});
+
 test('"show me how" on a symbols level draws the help picture in the demo', async ({ page }) => {
   await page.clock.install({ time: NOW });
   await page.goto(`${FIXTURE}#/dev/parts/3/1`);

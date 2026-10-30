@@ -185,13 +185,6 @@ function finish(session, spec, level, round, outcome) {
     ({ state: c.games[id], passed, stuck } = step(before, game.levels, { outcome, kind: spec.kind, session: session.n }));
   }
   schedule(c.skills, level.skill, { day, kind: spec.kind, outcome, passed: passed !== null });
-  const number = (ladder) => (ladder ? indexOf(game.levels, ladder.level) + 1 : null);
-  capped(c.attempts, {
-    t: S.now().toISOString(), day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id,
-    skill: level.skill, seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome,
-    wrong: rec.wrong, firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: rec.help, demo: spec.demo ?? [], taps: rec.taps,
-    options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]), sinceDays: last ? daysBetween(last, day) : null,
-  }, CAPS.attempts);
   if (stuck) {
     const to = stuckTarget(c, S.games, game, spec.index, SKILLS);
     const [tid, target] = [to.game.meta.id, to.game.levels[to.index]];
@@ -200,6 +193,16 @@ function finish(session, spec, level, round, outcome) {
     event({ type: 'stuck', game: id, level: spec.index + 1, skill: level.skill, to: at, missing: to.missing });
     session.game = to.game;
   }
+  // After the stuck return, so levelAfter is where the game's ladder now stands. Copies: the
+  // saved attempt never changes after the solve.
+  const number = (ladder) => (ladder ? indexOf(game.levels, ladder.level) + 1 : null);
+  capped(c.attempts, {
+    t: S.now().toISOString(), day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id,
+    skill: level.skill, seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome,
+    wrong: [...rec.wrong], firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: [...rec.help], demo: [...(spec.demo ?? [])],
+    taps: { ...rec.taps }, options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]),
+    sinceDays: last ? daysBetween(last, day) : null,
+  }, CAPS.attempts);
   persist();
 }
 
@@ -240,15 +243,16 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     if (shown) return;
     shown = true;
     host.querySelector('[data-show-picture]')?.remove();
-    if (asked) help('picture');
+    if (asked && !solved) help('picture');   // after the solve the button still draws, but the record is closed
     view.picture?.();
     label();
   };
   if (!shown) host.append(control('picture', T.picture, () => picture(true), { 'data-show-picture': true }));
   if (mode === 'demo') picture(false);   // a demo draws the help picture from the start (2.6)
   label();
-  // Off-target taps: not a button, a link or a [data-target]; counted by area (pedagogy 5.7).
+  // Off-target taps: not a button, a link or a [data-target]; counted by area until the solve (pedagogy 5.7).
   main.addEventListener('pointerdown', (e) => {
+    if (solved) return;
     const t = e.target instanceof Element ? e.target : null;
     const area = t?.closest('[data-area]')?.getAttribute('data-area');
     if (t && !t.closest('button, a, [data-target]')) rec.taps[area === 'picture' || area === 'equation' ? area : 'other'] += 1;

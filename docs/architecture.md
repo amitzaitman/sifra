@@ -145,7 +145,7 @@ dev-spec A.1 is the shape, with these precisions:
    else the number, plus dots in rows of five when `look` is not `symbols`, the level's `cardDots` is not `false` and every
    value is an integer 0-20), then
    `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
-   `view.picture()` and logs `picture`.
+   `view.picture()` and logs `picture`; after the solve it stays and still draws, and logs nothing.
 3. A correct tap (`deepEqual(value, answer)`, key order ignored) goes to step 5. A wrong tap: the shell retires the
    card (design §6.5), counts the miss, sets `step` to `min(3, misses)` with 4 options or `min(3, misses + 1)` with 3,
    locks the cards, calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
@@ -159,10 +159,10 @@ dev-spec A.1 is the shape, with these precisions:
    the whole; R5). It resolves when the display has ended and, at step 3, the tour; it does not wait for the
    hint's pulse, which goes on after the cards unlock (design §7.1-§7.2: the cards lock only while a display runs,
    the hint does not lock). At once with reduced motion, and on abort.
-5. Correct: the shell applies the ladder (3.4) and writes the attempt (3.9), marks the card, sets `data-solved` on
-   the screen (app.css then shows `[data-role="unknown"]` and `.eq-answer`), lifts the equation cover (it leaves the
-   accessibility tree, and each answer comes back as a new node, so the polite live region says the solved
-   equation, design §6.4), awaits
+5. Correct: the shell applies the ladder (3.4) and any stuck return (3.7), then writes the attempt (3.9), marks the
+   card, sets `data-solved` on the screen (app.css then shows `[data-role="unknown"]` and `.eq-answer`), lifts the
+   equation cover (it leaves the accessibility tree, and each answer comes back as a new node, so the polite live
+   region says the solved equation, design §6.4), awaits
    `view.solve()`, then puts "הַבָּא" in the cards' place and focuses it (design §6.9). On "הַבָּא" it aborts
    `signal`, empties the host and starts the next round.
 
@@ -418,8 +418,11 @@ an integer with both ends included, an element, a new array). makeRound uses not
   `help` after any miss, `picture` or `how`; else `first`), `wrong` (rules in tap order), `firstMs` and `ms` (from
   the mount to the first tap and to the correct tap), `help` (`hint`, `tour`, `picture`, `how` in arrival order),
   `demo` (the demos shown before the correct tap, in order: `auto` on entry, `how` for the hand; `[]` for none),
-  `taps` (off-target, by area), `options`, `levelBefore`, `levelAfter`, `sinceDays`.
-  The round itself is not stored: seed, `version`, `params` and `answer` rebuild it.
+  `taps` (off-target, by area), `options`, `levelBefore`, `levelAfter` (the game's level once the round is applied,
+  a stuck return that moved this game included), `sinceDays`.
+  The round itself is not stored: seed, `version`, `params` and `answer` rebuild it. The attempt is written once, at
+  the solve, from copies of the round's record, and never changes after it: an off-target tap or the picture button
+  after the solve is not logged.
 - Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`, `<day>` the local day like every
   day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time and `data` the
   stored value as is.
@@ -569,6 +572,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   card left, the last `[data-tour]` is the answer, outcome `shown`. A 3-option level: hint, then tour.
 - Reduced motion: a tap is taken right after a miss. Demo levels run the demo; `symbols` levels log `picture`.
 - The game's own R6 [browser] (first dot left of the second, design §7.3 drawings), and a session to the end screen.
+- fixtures.spec.js also checks the shell's record (3.9): an attempt solved on the first tap, then the picture button
+  and a tap in each area, reads the same after the next round is saved; a stuck return in the same game (3.7) logs
+  the level the child was moved to as `levelAfter`.
 
 ## 5. npm, tsconfig and CI
 
