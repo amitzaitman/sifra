@@ -109,26 +109,36 @@ function typed(value, types) {
 }
 
 /**
- * Whether a rule's value could be a card of this round (R4): of the rule's type, not the answer; a
- * number a whole number of at most 4 digits; a pair not one that makes the whole (architecture 6,
- * "Pair cards"); an exercise card false; and its display one the game draws (displays, canShow) and
- * within its budget.
+ * Whether a rule's value is a wrong card at all (R4): of the rule's type, not the answer; a number
+ * a whole number of at most 4 digits; a pair not one that makes the whole (architecture 6, "Pair
+ * cards"); an exercise card false.
+ * @param {any} value
+ * @param {string} rule
+ * @param {Round} round
+ */
+function cardable(value, rule, round) {
+  const types = RULES[rule].types;
+  if (value === null || value === undefined || !typed(value, types) || isDeepStrictEqual(value, round.answer)) return false;
+  const whole = (n) => Number.isInteger(n) && n >= 0;
+  if (typeof value === 'number') return whole(value) && String(value).length <= 4;
+  if (Array.isArray(value) && value.every((v) => typeof v === 'number')) {
+    const sum = (pair) => pair.reduce((a, b) => a + b, 0);
+    return value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
+  }
+  if (typed(value, ['card'])) return exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
+  return true;
+}
+
+/**
+ * Whether a rule's value could be a card of this round (R4): a wrong card, its display one the game
+ * draws (displays, canShow) and within its budget.
  * @param {any} value
  * @param {string} rule
  * @param {Round} round
  * @param {Game} game
  */
 function offerable(value, rule, round, game) {
-  const types = RULES[rule].types;
-  if (value === null || value === undefined || !typed(value, types) || isDeepStrictEqual(value, round.answer)) return false;
-  const whole = (n) => Number.isInteger(n) && n >= 0;
-  let ok = true;
-  if (typeof value === 'number') ok = whole(value) && String(value).length <= 4;
-  else if (Array.isArray(value) && value.every((v) => typeof v === 'number')) {
-    const sum = (pair) => pair.reduce((a, b) => a + b, 0);
-    ok = value.every(whole) && value.join('').length <= 4 && !(Array.isArray(round.answer) && sum(value) === sum(round.answer));
-  } else if (typed(value, ['card'])) ok = exercise(value.left) && exercise(value.right) && balance(value, []) !== 0;
-  return ok && drawn(game, round, { value, rule }).length === 0 && !game.budget?.(round, { value, rule });
+  return cardable(value, rule, round) && drawn(game, round, { value, rule }).length === 0 && !game.budget?.(round, { value, rule });
 }
 
 /**
@@ -260,6 +270,38 @@ export function checkDeal(game, base) {
 }
 
 /**
+ * The rules a level cannot draw (architecture 2.2, 4.2): a rule of the skill's list that the game
+ * has, and that gives a wrong card (R4) on some round of seeds 1-SEEDS none of whose values the
+ * picture can draw (displays, canShow), is one makeRound skips there without a word. The level
+ * lists each such rule in `undrawn`, with the reason; a listed rule that every round draws fails too.
+ * @param {Game} game
+ * @param {Level} base
+ * @returns {string[]}
+ */
+export function checkUndrawn(game, base) {
+  const listed = (skillOf(base.skill)?.rules ?? []).filter((id) => game.rules[id] && RULES[id]);
+  /** @type {Set<string>} */
+  const found = new Set();
+  for (const level of variants(base)) {
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const round = game.makeRound(level, rng(seed));
+      for (const id of listed) {
+        if (found.has(id)) continue;
+        const predicted = game.rules[id](round);
+        const values = (predicted?.oneOf ?? [predicted]).filter((v) => cardable(v, id, round));
+        if (values.length && values.every((value) => drawn(game, round, { value, rule: id }).length)) found.add(id);
+      }
+    }
+  }
+  const declared = base.undrawn ?? [];
+  return [
+    ...listed.filter((id) => found.has(id) && !declared.includes(id))
+      .map((id) => `${id} has a card whose ${RULES[id].display} the picture cannot draw, so it is skipped in silence: draw it, or list it in undrawn with the reason`),
+    ...declared.filter((id) => !found.has(id)).map((id) => `undrawn lists ${id}, but every round draws it`),
+  ];
+}
+
+/**
  * The once-per-game checks: meta, level objects, and R3.
  * @param {Game} game
  * @returns {string[]}
@@ -289,8 +331,13 @@ export function checkGame(game) {
     for (const [key, type] of Object.entries(REQUIRED)) if (typeof level[key] !== type) fail(`${where}: ${key} must be a ${type}`);
     if (!skillOf(level.skill)) fail(`${where}: skill ${level.skill} is not in skills.md`);
     if (![3, 4].includes(level.options)) fail(`${where}: options must be 3 or 4`);
+    if (level.undrawn !== undefined) {
+      const listed = skillOf(level.skill)?.rules ?? [];
+      const ok = Array.isArray(level.undrawn) && level.undrawn.every((id, j) => listed.includes(id) && level.undrawn.indexOf(id) === j);
+      if (!ok) fail(`${where}: undrawn ${show(level.undrawn)}: rules of ${level.skill}'s list, each once`);
+    }
     for (const [key, value] of Object.entries(level)) {
-      if (['id', 'skill', 'min', 'forms', 'exclude'].includes(key)) continue;
+      if (['id', 'skill', 'min', 'forms', 'exclude', 'undrawn'].includes(key)) continue;
       const param = PARAMS.get(key);
       if (!param) fail(`${where}: ${key} is not a skills.md parameter`);
       else {
@@ -477,6 +524,7 @@ for (const game of GAMES) {
         const mixed = level.forms?.some((f) => (f.eqform ?? 'standard') !== 'standard');
         if (mixed && other < SEEDS / 4) problems.push(`R8: ${other} of ${SEEDS} rounds are not standard; 25% are needed`);
       }
+      problems.push(...checkUndrawn(game, base));
       const unique = [...new Set(problems)];
       assert.ok(unique.length === 0, `${unique.length} problem(s), the first:\n  ${unique.slice(0, 15).join('\n  ')}`);
     });
@@ -544,6 +592,27 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkRound({ ...parts, canShow: (r, c) => c.rule !== 'given.part' }, level, 1, good).join('\n'), /R5: \d+ \(given\.part\): canShow says the picture cannot draw its flash/);
   assert.match(checkGame({ ...parts, displays: undefined }).join('\n'), /displays must be exported/);
   assert.match(checkGame({ ...parts, displays: ['flash', 'jump', 'flash'] }).join('\n'), /flash is listed twice[^]*jump is no display of the §4\.2 catalogue/);
+});
+
+test('the undrawn checks catch a rule the picture cannot draw that the level does not name, and a stale one (architecture 2.2)', () => {
+  const level = parts.levels[1];
+  assert.deepEqual(checkUndrawn(parts, level), []);
+  // A rule whose display the game does not draw, or that canShow says no to, is skipped in silence: the level names it.
+  const flat = { ...parts, displays: ['flash', 'empty-plate', 'count-up'] };
+  assert.match(checkUndrawn(flat, level).join('\n'), /^op\.other has a card whose overflow the picture cannot draw/m);
+  assert.deepEqual(checkUndrawn(flat, { ...level, undrawn: ['op.other'] }), []);
+  const noPart = { ...parts, canShow: (r, c) => c.rule !== 'given.part' };
+  assert.match(checkUndrawn(noPart, level).join('\n'), /^given\.part has a card whose flash/m);
+  assert.match(checkUndrawn(parts, { ...level, undrawn: ['op.other'] }).join('\n'), /undrawn lists op\.other, but every round draws it/);
+  // On some rounds is enough: a count-up that gives 9 on the bundle's 10 (B6; teen-bundle deals 10 to 19).
+  const tenFrame = GAMES.find((g) => g.meta.id === 'ten-frame');
+  const down = { ...tenFrame, rules: { ...tenFrame.rules, 'slip.near': (r) => r.answer - 1 } };
+  assert.match(checkUndrawn(down, tenFrame.levels.find((l) => l.id === 'teen-bundle')).join('\n'), /^slip\.near has a card whose count-up/m);
+  // The list itself: rules of the skill's list, each once.
+  const listing = (undrawn) => checkGame({ ...parts, levels: parts.levels.map((l, i) => (i === 1 ? { ...l, undrawn } : l)) }).join('\n');
+  assert.doesNotMatch(listing(['op.other']), /undrawn/);
+  assert.match(listing(['equal.copy']), /undrawn \["equal\.copy"\]: rules of num\.parts\.split's list, each once/);
+  assert.match(listing(['op.other', 'op.other']), /undrawn \["op\.other","op\.other"\]/);
 });
 
 test('the deal checks catch forms and answers that do not match the level', () => {

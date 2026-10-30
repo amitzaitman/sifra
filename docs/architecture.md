@@ -73,15 +73,18 @@ export function canShow(round, choice) {}     // optional: can this round's pict
 ```
 
 `displays` lists, each once, the ids of the §4.2 catalogue's displays that the game draws. Its `miss` (2.4) draws a
-display through a table keyed by these ids, and throws an Error on any other id before it changes the picture, so a
-display never falls through to another one's drawing. `canShow(round, { value, rule })` says whether this round's
-picture can draw that choice's display (`RULES[rule].display`): a game whose drawing depends on more than the id
-exports it, and its `makeRound` deals no wrong choice that `canShow` rejects. The ten-frame exports it: each kind of
-picture (frame, bond, pair cards, bundles, bundles with a cover, two frames) has its own table in help.js, a count-up
-from the bundle needs 10 or more, and a frame's empty plate needs an empty unknown; its drawings throw on the same
-cases. The balance has none: its view.js keeps a table per scene (the pans draw each display their own way, a judging
-card and the turned rows draw each as ghosts), and its `budget` already says no where the pans have no drawing
-(`drawable`) or not enough rows. The generic test checks both on every wrong card dealt (4.2).
+display through a table keyed by these ids, and throws an Error on any other id (the balance: on any display its
+round has no drawing for) before it changes the picture, so a display never falls through to another one's drawing.
+`canShow(round, { value, rule })` says whether this round's picture can draw that choice's display
+(`RULES[rule].display`): a game whose drawing depends on more than the id exports it, and its `makeRound` deals no
+wrong choice that `canShow` rejects; the next rule in the skill's list takes the place, as with a budget (4.2). The
+ten-frame: each kind of picture (frame, bond, pair cards, bundles, bundles with a cover, two frames) has its own table
+in help.js, a count-up from the bundle needs 10 or more, and a frame's empty plate needs an empty unknown; its
+drawings throw on the same cases. The balance: view.js keeps a table per scene (the pans draw each display their own
+way, a judging card and the turned rows draw each as ghosts), and `drawable` there gives the jumps to `? = a + b`
+only; its `budget` says no where `canShow` does, and where the rows do not fit. So a rule of the skill's list whose
+display the picture cannot draw is skipped without a word: the level names each such rule in `undrawn` (2.2), and the
+generic test fails a game that deals such a card anyway, and a level that does not name such a rule (4.2).
 
 No grade anywhere: not in `meta`, not in a level, not in the shell. Levels and progression are independent of
 school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails a `meta` with a grade key (4.2).
@@ -91,7 +94,8 @@ school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails
 - One complete plain object per level (build the list with spread; nothing is inherited at run time). Required: `id`
   (unique in the game, never reused: storage keys on it, so a level can be inserted later), `skill`, `demo`,
   `options` (3 or 4), `model`, `look`, `terms`; then the skills.md parameters the level needs, `min` when the
-  range does not start at 0, and `forms` and `exclude` below. Nothing else outside the skills.md parameter table.
+  range does not start at 0, and `forms`, `exclude` and `undrawn` below. Nothing else outside the skills.md parameter
+  table.
 - `structure` or `ask` as an array makes a mixed level: the planner picks one per round and passes it in (R3, R11).
 - `forms`: the forms makeRound deals, each `{ unknown, eqform, w }`: what it sets of the two (the rest is the
   level's, `eqform` `'standard'`) and its weight; a form's share is `w` over the sum. A level whose `unknown` is an
@@ -106,6 +110,12 @@ school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails
 - `exclude`: the whole numbers of the level's range `[min ?? 0, max]` that are never an answer, each for a reason in
   a comment beside it (a known part is 1 or more, so a missing part is under the whole). The generic test fails
   a number of the range that is neither dealt nor listed, and a listed one that is dealt (4.2).
+- `undrawn`: the rules of the skill's list that the game has, and whose display this level's picture cannot draw
+  (`displays`, `canShow`, 2.1) on some of its rounds, each for a reason in a comment beside it. makeRound skips such
+  a rule there in silence, so a skills.md edit that brings one in would change what a child meets without a word.
+  The generic test fails a rule with such a round that is not listed, and a listed one that every round draws (4.2).
+  The ten-frame's bridge levels list `count.start-included` (the two frames have no jumps), and so do the balance's
+  `eq.sign.missing` levels (the jumps only on `? = a + b`; section 6, "Open questions for the owner").
 - Levels are numbered from 1 wherever a person or a URL sees them (§6 tables, `#/dev`, records).
 
 ### 2.3 Rounds and rules
@@ -522,18 +532,23 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - Budget: a game that exports `budget(round, choice)` returns why a wrong choice's display would not fit the
   picture, else null; every wrong choice dealt must fit, and a real error that does not fit is not one "the round
   could offer" in R4's slip check (rules.md R4). The balance: a display takes 8 rows on the pans at most (design
-  6.8, `displayRows` in view.js, which show() also sets), and `drawable` names what the pans draw: `flash`,
-  `empty-plate`, the jumps on `? = a + b` only, and as ghosts `overflow`, `balance` and a slip's `count-up` (design
-  7.3); show() throws on any other. So its `choose` leaves out a value whose display does not fit and the next rule
-  takes its place, keeping R4's two real errors; with no such rule the numbers are drawn again. On level 8 that
-  next rule is `slip.near`; on level 6 there is none (section 6, "Open questions for the owner").
+  6.8, `displayRows` in view.js, which show() also sets), and `drawable` (its `canShow`, 2.1) names what the pans
+  draw: `flash`, `empty-plate`, the jumps on `? = a + b` only, and as ghosts `overflow`, `balance` and a slip's
+  `count-up` (design 7.3); miss throws on any other. So its `choose` leaves out a value whose display does not fit
+  and the next rule takes its place, keeping R4's two real errors; with no such rule the numbers are drawn again. On
+  level 8 that next rule is `slip.near`; on level 6 there is none (section 6, "Open questions for the owner").
   e2e/balance.spec.js reads the rows each display draws (every cube's, ghost's and mark's `--r`) for the largest
   card of each display on each level, against the scene's `--rows` and 8.
 - Displays (2.1): `displays` is exported, non-empty, each id once and a display of the §4.2 catalogue. Every wrong
-  card dealt has its `RULES[rule].display` in `displays`, and `canShow(round, choice)` true where the game exports it.
-  Like a budget, a real error whose display the game cannot draw is not one "the round could offer" in R4's slip
-  check. tests/ten-frame.test.js checks that each kind's table throws on a display it has no drawing for (the two
-  frames' `jumps`, the bond's `empty-plate`), and the two guards.
+  card dealt has its `RULES[rule].display` in `displays`, and `canShow(round, choice)` true where the game exports it;
+  since `choose` filters by them, this fails only a game that deals such a card anyway. Like a budget, a real error
+  whose display the game cannot draw is not one "the round could offer" in R4's slip check. The rules a level cannot
+  draw (`checkUndrawn`, over its 200 seeds): a rule of the skill's list that the game has, with a wrong card on some
+  round (R4's types, not the answer) none of whose values the picture can draw, is in the level's `undrawn`, and every
+  rule there is one; a count-up rule that gives 9 on `pv.teens.ten-and`'s 10 fails it. The rows of the budget are not
+  part of it: they depend on the numbers (the Budget item above). tests/ten-frame.test.js checks that each kind's
+  table throws on a display it has no drawing for (the two frames' `jumps`, the bond's `empty-plate`), and the two
+  guards.
 - The deal, a test of its own per level (one per value of a mixed structure or ask): over seeds 1 to 5000 every
   form in the level's `forms` is dealt, and its share is within 4 standard deviations of its weight (2.3 points at
   20%, 2.8 at 50%), read from the level and never from the code, so the balance's old drift (16.2% for 20% on

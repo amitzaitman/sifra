@@ -37,6 +37,8 @@ interface Level {
   forms?: LevelForm[];
   /** numbers in the level's range that are never an answer, each for a reason (architecture 4.2) */
   exclude?: number[];
+  /** rules of the skill's list whose display this level's picture cannot draw on some round, each for a reason (architecture 2.2) */
+  undrawn?: string[];
   [param: string]: any;
 }
 

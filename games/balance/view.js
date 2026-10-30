@@ -610,6 +610,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
    * @param {number} step
    */
   const missed = async ({ value, rule, display }, step) => {
+    // A display the round has no drawing for throws before the picture changes (architecture 2.1).
+    if (!drawable(round, display)) throw new Error(`balance: no drawing for ${display} on this round`);
     if (!s) draw(false);
     // The previous display goes at once; the new one runs (R5, design 7.2).
     clear(false);

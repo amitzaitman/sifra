@@ -13,7 +13,9 @@ export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 4, 
 const pans = {
   structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false, cardDots: false,
 };
-const missing = { ...pans, skill: 'eq.sign.missing', max: 10 };
+// undrawn (architecture 2.2): count.start-included's jumps count on over the two numbers of the other
+// pan, so only ? = a + b draws them; a missing part has none (architecture 6, "Open questions").
+const missing = { ...pans, skill: 'eq.sign.missing', max: 10, undrawn: ['count.start-included'] };
 // Every form met so far, c = a + ? in 40% of the rounds (R8) and each other form in 20%.
 const symbols = {
   ...missing, unknown: ['right-part', 'left-part', 'result-left'], look: /** @type {Level['look']} */ ('symbols'),
@@ -132,6 +134,18 @@ export const rules = {
 /** The displays the balance draws (architecture 2.1; view.js): show() throws on any other. */
 export const displays = DISPLAYS;
 
+/**
+ * Whether the round's picture can draw a wrong choice's display (architecture 2.1; drawable() in
+ * view.js): the jumps count on over the two numbers of the other pan (? = a + b), so a missing part
+ * has none. budget() says no where this does, and where the rows do not fit.
+ * @param {Round} round
+ * @param {Choice} choice
+ * @returns {boolean}
+ */
+export function canShow(round, { rule }) {
+  return drawable(round, RULES[rule]?.display ?? '');
+}
+
 /** @type {(side: 'left' | 'right', role: Group['role'], count: number) => Piece} */
 const piece = (side, role, count) => ({ side, role, count, shown: role === 'unknown' ? 'covered' : 'items' });
 
@@ -147,7 +161,7 @@ const MAX_ROWS = 8;
  */
 export function budget(round, { value, rule }) {
   const { display } = RULES[rule];
-  if (!drawable(round, display)) return `${display} has no drawing on this round`;
+  if (!canShow(round, { value, rule })) return `${display} has no drawing on this round`;
   const rows = displayRows(round, display, value);
   return rows > MAX_ROWS ? `${display} needs ${rows} rows on the pans, ${MAX_ROWS} at most` : null;
 }
@@ -155,9 +169,9 @@ export function budget(round, { value, rule }) {
 /**
  * One wrong choice per rule in the skill's order, each value once, slips only where no real error
  * gives the value; ascending. A value whose display does not fit (budget: no drawing on this round,
- * or more than MAX_ROWS rows) is left out, and the next rule takes its place, like the ten-frame's
- * drawable(). null when there are not enough, or fewer than two real errors where the skill lists
- * two (R4). In a reversed form the equal.* rules come first (depth 4.9, eq.sign.missing; architecture 4.2).
+ * canShow, or more than MAX_ROWS rows) is left out, and the next rule takes its place, like the
+ * ten-frame's canShow. null when there are not enough, or fewer than two real errors where the
+ * skill lists two (R4). In a reversed form the equal.* rules come first (depth 4.9, eq.sign.missing; architecture 4.2).
  * @param {Round} round
  * @param {Level} level
  * @returns {Choice[] | null}

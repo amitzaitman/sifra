@@ -20,7 +20,7 @@ export const meta = {
 /**
  * What levels of a skill share; each level is a complete object (architecture 2.2).
  * @typedef {{ skill: string, structure: string, unknown: string, max: number, min?: number, bridge?: string, model: string,
- *   look: 'objects' | 'dots' | 'symbols', options: number, demo: boolean, terms: boolean, exclude?: number[] }} Base
+ *   look: 'objects' | 'dots' | 'symbols', options: number, demo: boolean, terms: boolean, exclude?: number[], undrawn?: string[] }} Base
  */
 /** @type {Base} */
 const split = { skill: 'num.parts.split', structure: 'part-whole', unknown: 'part', max: 10, model: 'frame', look: 'dots', options: 4, demo: false, terms: false };
@@ -30,8 +30,12 @@ const ten = { ...split, skill: 'num.parts.make-ten' };
 const teen = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'whole', min: 10, max: 20, model: 'bundles', look: 'dots', options: 4, demo: false, terms: false };
 /** Ten and a missing part (level 9): the answer is the ones, 1 to 9, so the level has no min. @type {Base} */
 const teenPart = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'part', max: 20, model: 'bundles', look: 'symbols', options: 4, demo: false, terms: false };
-/** a and b are 9 at most, so the sum is 18 at most. @type {Base} */
-const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false, exclude: [19, 20] };
+/**
+ * a and b are 9 at most, so the sum is 18 at most. undrawn (architecture 2.2): count.start-included, whose
+ * jumps the two frames have no drawing for.
+ * @type {Base}
+ */
+const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false, exclude: [19, 20], undrawn: ['count.start-included'] };
 
 /** whole = part + ? in a third of the rounds (R8: 25% at least), part + ? = whole in the rest. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -512,8 +516,8 @@ export function render(host, round, ctx) {
       if (!pic) draw();
     },
     async miss({ value, rule, display }, step) {
+      const drawing = displayOf(pictureOf(round).kind, display);   // throws, before any change, on a display this picture has none for
       if (!pic) draw();
-      const drawing = displayOf(pic.kind, display);   // throws, before any change, on a display this picture has none for
       misses += 1;
       locked = true;
       clear();

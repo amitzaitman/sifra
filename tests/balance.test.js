@@ -181,6 +181,13 @@ test('displays: the balance draws six, on every model, and says no to any other 
     assert.equal(drawable(r, 'constructor'), false, `${id}: constructor`);
   }
   assert.match(balance.budget(balance.makeRound(level('turn'), rng(1)), { value: 2, rule: 'seq.decade-ten' }), /regroup has no drawing/);
+  // canShow is drawable: the jumps count on over the other pan's two numbers, so ? = a + b only.
+  const rounds = Array.from({ length: 40 }, (_, k) => balance.makeRound(level('missing-reversed'), rng(k + 1)));
+  const jumps = (r) => balance.canShow(r, { value: r.answer + 1, rule: 'count.start-included' });
+  const [sum, part] = ['result-left', 'right-part'].map((u) => rounds.filter((r) => r.unknown === u));
+  assert.ok(sum.length && sum.every(jumps), '? = a + b draws the jumps');
+  assert.ok(part.length && !part.some(jumps), 'c = a + ? has none');
+  assert.equal(balance.canShow(rounds[0], { value: 2, rule: 'seq.decade-ten' }), false);
 });
 
 test('R6: the turned rows go left to right, a group after the other, the second in the light shade', () => {
