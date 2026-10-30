@@ -17,9 +17,11 @@ const SEEDS = 10;
 const LOOP = 50;
 /**
  * Levels whose cover at rest has one size whatever is under it: the balance's pans (design 6.6, the
- * fixed dome, owner decision 2026-10-18). Elsewhere a cover in the picture covers the unknown's
- * places (design 6.6), so its size is the deduction the picture offers: the ten-frame, the balance's
- * rows (`set`, level 9, 3 + 5 = 5 + ?) and the fixtures fail this clause by design.
+ * fixed dome). Elsewhere a cover in the picture covers the unknown's places (design 6.6), so its size
+ * is the deduction the picture offers: the ten-frame, the balance's turning row (`set`, level 9,
+ * 3 + 5 = 5 + ?) and the fixtures fail this clause by design. The owner's answer of 2026-10-18
+ * (decisions.md, "המכסה במאזניים מגלה את התשובה") fixed the dome on the pans and left level 9's row
+ * as it was.
  * @type {(game: Game, level: Level) => boolean}
  */
 const fixedCover = (game, level) => game.meta.id === 'balance' && level.model === 'balance';
@@ -167,10 +169,10 @@ for (const { path, games } of SITES) {
         }
       });
     }
-    // One run with motion, on the game's first level with 4 options (the whole help ladder: a display
-    // that stays, one that leaves, the hint, the tour): the waits chain on real animations here. The
-    // loop in the page runs every level's motion, finishing each animation as it starts.
-    const n = game.levels.findIndex((l) => l.options === 4) + 1;
+    // One run with motion, on the game's first level with the most options (4 today: the whole help
+    // ladder, a display that stays, one that leaves, the hint, the tour): the waits chain on real
+    // animations here. The loop in the page runs every level's motion, finishing each animation as it starts.
+    const n = game.levels.reduce((best, l, i, all) => (l.options > all[best].options ? i : best), 0) + 1;
     test(`${id} ${n}, seed 1, with motion: the shell's path keeps the render contract`, async ({ page }) => {
       await page.clock.install({ time: NOW });
       await page.goto(`${path}#/dev`);
@@ -312,7 +314,8 @@ async function loop({ url, levels, seeds }) {
   for (const level of levels) {
     for (let seed = 1; seed <= seeds && out.length < 40; seed++) {
       const at = `${level.id}${level.structure ? ` ${level.structure}` : ''} seed ${seed}`;
-      const ctl = new AbortController();
+      // The panel's round, and the thumbs': each drawn with a live signal, as the shell draws them.
+      const [ctl, still] = [new AbortController(), new AbortController()];
       try {
         const round = frozen(game.makeRound(level, rng(seed)));
         const symbols = level.look === 'symbols';
@@ -345,13 +348,14 @@ async function loop({ url, levels, seeds }) {
         // A thumb is the picture at rest or solved, checked above in the panel: here only its boxes
         // and, solved, no cover. Home draws its thumbs at seed 1; the end screen, solved, at any seed.
         for (const solved of seed === 1 ? [false, true] : [true]) {
-          render(thumb, round, 'thumb', solved, ctl.signal);
+          render(thumb, round, 'thumb', solved, still.signal);
           check(thumb, `${at} thumb${solved ? ', solved' : ''}`, { solved, top: false });
         }
       } catch (e) {
         out.push(`${at}: threw ${e?.stack ?? e}`);
       }
       ctl.abort();
+      still.abort();
     }
   }
   probe.remove();

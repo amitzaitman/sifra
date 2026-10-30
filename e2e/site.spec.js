@@ -350,6 +350,23 @@ test('a game whose render throws leaves its home card with the title only, and h
   expect(logged.some((text) => text.includes('a broken game')), 'the error is logged').toBe(true);
 });
 
+test('the shell freezes the round before render: a game that sorts its choices breaks its thumb and its round (2.5)', async ({ page, errors }) => {
+  // The scale fixture, served with a render that sorts the round's cards first. Only the shell's
+  // freeze (dealt in app.js) makes that write throw: no game writes to a round, and the contract
+  // loop freezes its own copy, so this is the one test that fails if the shell stops freezing.
+  errors.allow(/read.?only|frozen|not extensible/i);
+  await page.route((url) => url.pathname.endsWith('/tests/fixtures/scale/game.js') && !url.search, (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "import { render as draw } from './game.js?real';\nexport * from './game.js?real';\n" +
+      'export function render(host, round, ctx) { round.choices.sort(); return draw(host, round, ctx); }\n',
+  }));
+  await open(page, FIXTURE);
+  await expect(page.locator('[data-card] [data-thumb][data-game="scale"]')).toHaveAttribute('data-broken');
+  await expect(page.locator('[data-card] [data-thumb][data-game="parts"] > *')).not.toHaveCount(0);
+  await page.evaluate(() => { location.hash = '#/dev/scale/2/1'; });
+  await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
+});
+
 test('#/dev/export: one button downloads the stored value as is, named by the local day', async ({ page }) => {
   const value = storeWith({ sessions: 3 });
   await seedStore(page, value);

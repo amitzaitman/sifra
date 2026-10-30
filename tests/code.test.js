@@ -87,6 +87,20 @@ test('shell/ imports only lib/, data/ and shell/; games never import shell/ or a
   ]);
 });
 
+test('every e2e spec takes test from e2e/helpers.js, never from @playwright/test (architecture 4.5)', () => {
+  // helpers.js's test carries the errors fixture: a spec on Playwright's own test would let a page
+  // that throws or logs an error pass. JSDoc's import('@playwright/test') types are fine.
+  const specs = all.filter((f) => /^e2e\/[^/]+\.spec\.js$/.test(f));
+  assert.ok(specs.length > 0, 'no e2e specs found');
+  none(specs.flatMap((f) => {
+    const text = read(f);
+    return [
+      ...(/^\s*(import|export)\b[^;]*?\bfrom\s*['"]@playwright\/test['"]/m.test(text) ? [`${f}: imports from @playwright/test`] : []),
+      ...(/^\s*import\s*\{[^}]*\btest\b[^}]*\}\s*from\s*['"]\.\/helpers\.js['"]/m.test(text) ? [] : [`${f}: does not import test from ./helpers.js`]),
+    ];
+  }));
+});
+
 // Features newer than Safari 16.4 (CLAUDE.md: the target). Neither the ES2022 + DOM type lib nor CI's
 // WebKit (Playwright's current WebKit) catches them, so this list does. Before using a feature on it,
 // check Safari 16.4 support; add any newer feature found later.

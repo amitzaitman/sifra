@@ -607,6 +607,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - CSS: no `&`; game.css selectors scoped. JSDoc type lines: no em dash. Meteg is already test 8 of docs.test.js.
 - Site files: no feature on a list of CSS, HTML and JS features newer than Safari 16.4 (`@starting-style`,
   `text-wrap`, `popover`, `modulepreload`, `checkVisibility`, Set methods, and more); a feature found later joins it.
+- e2e/*.spec.js: each imports `test` from ./helpers.js and nothing from `@playwright/test` (JSDoc's
+  `import('@playwright/test')` types aside), so no spec loses the errors fixture (4.5).
 
 ### 4.5 Playwright
 
@@ -632,12 +634,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `expectThumbsDrawn`: no `[data-thumb]` empty or `data-broken` (a thumb that throws no longer reaches the error
   screen, 3.9), on home and each game's end screen.
   e2e/fixture.html is index.html with the fixture games.
-- Every spec imports `test` and `expect` from e2e/helpers.js, never from `@playwright/test`. Its `test` has one
-  automatic fixture, `errors`: every page of the test's context is watched, and an uncaught error (`pageerror`) or
-  a `console.error()` in any of them fails the test when it ends, with the page's URL and the message. The shell logs
-  what it catches so a screen still opens (a thumb or a next step that throws, 3.9); here such an error fails a test.
-  A test whose point is an error lets it through with `errors.allow(/its message/)` (site.spec.js, the broken
-  planner and the broken render). A failed resource load is a console error too: fixture.html links the icon, as
+- Every spec imports `test` and `expect` from e2e/helpers.js, never from `@playwright/test` (a code scan, 4.4).
+  Its `test` has one automatic fixture, `errors`: every page of the test's context is watched, and an uncaught
+  error (`pageerror`) or a `console.error()` in any of them fails the test when it ends, with the page's URL and
+  the message. The shell logs what it catches so a screen still opens (a thumb or a next step that throws, 3.9);
+  here such an error fails a test. A test whose point is an error lets it through with
+  `errors.allow(/its message/)` (site.spec.js, the broken planner, the broken render and the write to a frozen
+  round). A failed resource load is a console error too: fixture.html links the icon, as
   index.html does, so the browser does not ask for a missing /favicon.ico.
 
 ### 4.6 site.spec.js
@@ -652,7 +655,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   screen's home button (home stays); a broken stored record (3.9) opens home, plays the next step and logs one
   `repair` event with what it lost; a next step that throws (shell/planner.js replaced by a Playwright route) leaves
   home without its card, the games drawn, and `#/next` goes home; a game whose render throws (its module replaced
-  the same way) leaves its home card with the title only, its thumb empty and `data-broken`.
+  the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a game whose render
+  sorts the round's `choices` (replaced the same way) leaves its thumb `data-broken` and its round on the error screen,
+  the one test of the shell's own freeze (2.5: the contract loop freezes its own copy, and no game writes).
 - On index.html, looping over the registry (both games, ten-frame and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; home with every game's ladder at each level in turn draws every thumb
@@ -700,16 +705,18 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   there. In `symbols` look the same round again, solved on the first tap, then the picture button past the tap
   window: its picture shows no cover (2.4). On the balance's pans two seeds with different answers show covers of
   the same size at rest (design 6.6, the fixed dome); elsewhere a cover covers the unknown's places, so the clause
-  is for the pans only (the balance's rows on level 9 too cover the places).
-- **With motion**, once per game: the same path on its first 4-option level at seed 1, so the waits chain on real
-  animations.
+  is for the pans only. Level 9's turning row covers its places too: the owner's answer of 2026-10-18
+  (decisions.md, "המכסה במאזניים מגלה את התשובה") fixed the dome on the pans and left that row as it was.
+- **With motion**, once per game: the same path on its first level with the most options (4 in every game today)
+  at seed 1, so the waits chain on real animations.
 - **The loop in the page**, a test per game and size (320×568 and 1024×1366), the longest, so they come first: one
   `page.evaluate()` imports the game, puts a host of the panel's size in the panel's place and, for every level (each
   value of a mixed one) and seeds 1-50, freezes the round as the shell does, calls `render`, `picture()` in
   `symbols` look (the host must be empty before it), `view.miss()` for each wrong choice in order with the shell's
   `step` and `first`, then `solve()`; in `symbols` look also `solve()` then `picture()`; and the round as a thumb
-  (unsolved at seed 1, as home draws it; solved at every seed, as the end screen does). Every animation is finished
-  as it starts (`Animation.finish()`; an infinite one cannot finish, and its wait fails). After each step: nothing
+  (unsolved at seed 1, as home draws it; solved at every seed, as the end screen does), on a signal of its own
+  that is live while it draws, as the shell's screen signal is. Every animation is finished as it starts
+  (`Animation.finish()`; an infinite one cannot finish, and its wait fails). After each step: nothing
   threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
   inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
   shown; in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
@@ -718,7 +725,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   design 7.2). A cover without a mark, the bridge between the pieces of a cover over two rows, is not checked as
   topmost: the hint's ring runs along it in the same colour (the balance, design 6.6).
 - The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
-  included (a `round.choices.sort()` in a render fails every clause). Reverting 4781e24 (a ghost appended after
+  included (a `round.choices.sort()` in a render fails every clause; the shell's own freeze is site.spec.js's,
+  4.6). Reverting 4781e24 (a ghost appended after
   the digits) fails the loop's topmost clause on the ten-frame's pair cards.
 - About 3.3 minutes on Chromium with two workers; the balance's loop is half of it.
 
