@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
 import { rng } from '../shell/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';
@@ -1564,5 +1564,6 @@ test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
   }
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
   await expect(page.locator('main[data-screen="end"] .bl-stage.is-thumb')).toHaveCount(8);
+  await expectThumbsDrawn(page);
   expect((await stored(page)).child.attempts.every((a) => a.outcome === 'first')).toBe(true);
 });

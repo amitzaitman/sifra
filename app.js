@@ -89,14 +89,15 @@ function screen(name, title, attrs = {}) {
 /**
  * A still picture of a round (home, the end screen); app.css stops motion under [data-thumb].
  * It is drawn by drawThumbs() once the host is in the page, so render can measure it as in a round.
- * A thumb that throws is left empty, so one broken game or record never takes the screen down (3.9).
+ * A thumb that throws is left empty, marked data-broken for the tests, so one broken game or record
+ * never takes the screen down (3.9).
  * @param {() => Level} level built when the thumb is drawn
  */
 function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
   const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, onAttempt() {} };
   S.thumbs.push(() => {
-    try { game.render(host, game.makeRound(level(), rng(seed)), ctx); } catch (err) { host.replaceChildren(); console.error(err); }
+    try { game.render(host, game.makeRound(level(), rng(seed)), ctx); } catch (err) { host.replaceChildren(); host.dataset.broken = ''; console.error(err); }
   });
   return host;
 }
@@ -426,7 +427,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   root.addEventListener('click', (e) => S.taps.click(e.timeStamp, byPointer(e)) && drop(e), { capture: true });
   errorScreen();
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-  S.store = load(store, newId, today());
+  S.store = load(store, newId, { t: S.now().toISOString(), day: today() });
   navigator.storage?.persist?.().catch(() => null);
   for (const g of ordered) if (g.meta.css) document.head.append(h('link', { rel: 'stylesheet', href: g.meta.css }));
   addEventListener('hashchange', route);

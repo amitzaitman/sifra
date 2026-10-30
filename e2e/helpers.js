@@ -181,6 +181,17 @@ export async function expectCalm(page) {
 }
 
 /**
+ * Every thumb on screen is drawn: none left empty, or marked data-broken, by a render that threw
+ * (app.js thumb catches it so the screen still opens, architecture 3.9).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} [where]
+ */
+export async function expectThumbsDrawn(page, where) {
+  await expect(page.locator('[data-thumb]').first(), where).toBeAttached();
+  await expect(page.locator('[data-thumb]:is([data-broken], :empty)'), where).toHaveCount(0);
+}
+
+/**
  * R6 [browser]: every [data-role] element shows its role token in background-color or fill
  * (removed: a hollow outline in its colour; a second known part, [data-second], the part's light
  * shade --role-part-2, design 3); only one cover kind.

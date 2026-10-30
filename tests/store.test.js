@@ -12,11 +12,13 @@ import { SKILLS } from '../data/skills.js';
 
 const newId = () => 'c0000abcd';
 const DAY = '2026-10-14';
+/** The load's time and local day, as app.js stamps events. */
+const WHEN = { t: '2026-10-14T07:00:00.000Z', day: DAY };
 const GAMES = [parts, scale];
 /** A stored value of schema 1 with one child, c1. */
 const storedWith = (child) => ({ schema: 1, current: 'c1', children: { c1: child } });
 /** The child c1 after migrate. */
-const mended = (child) => migrate(JSON.stringify(storedWith(child)), newId, DAY).data.children.c1;
+const mended = (child) => migrate(JSON.stringify(storedWith(child)), newId, WHEN).data.children.c1;
 /** The planner runs on a child: home's next step, a session's plan and its reviews. */
 const plays = (c) => {
   assert.ok(nextStep(c, GAMES, SKILLS));
@@ -57,24 +59,28 @@ const throwing = new Proxy({}, { get() { throw new Error('SecurityError: storage
 
 test('importing and loading with a storage that throws on any access does not throw', async () => {
   await import('../shell/store.js?again');
-  const store = load(throwing, newId, DAY);
+  const store = load(throwing, newId, WHEN);
   assert.equal(store.data.current, 'c0000abcd');
   assert.deepEqual(childOf(store), newChild(DAY));
   assert.equal(save(store), false);
-  assert.equal(load(null, newId, DAY).data.schema, SCHEMA);
+  assert.equal(load(null, newId, WHEN).data.schema, SCHEMA);
   assert.doesNotThrow(() => exportFile(throwing, new Date(), null, DAY));
 });
 
-test('migrate: missing, unparsable or broken gives a new value; schema 1 stays', () => {
+test('migrate: missing, unparsable or broken gives a new value that keeps what was stored; schema 1 stays', () => {
+  const fresh = (events) => ({ schema: 1, current: 'c0000abcd', children: { c0000abcd: { ...newChild(DAY), events } } });
+  for (const raw of [null, '']) assert.deepEqual(migrate(raw, newId, WHEN), { data: fresh([]), writable: true }, 'nothing stored, nothing logged');
   const broken = ['{"schema":1,"current":"x","children":{}}', '{"schema":1,"current":"x","children":{"x":5}}',
     '{"schema":1,"current":"x","children":{"x":null}}', '{"schema":1,"current":"0","children":[{}]}', '{"schema":1,"current":"x","children":{"x":[]}}'];
-  for (const raw of [null, '', '{', '"text"', '[]', '{"schema":0}', ...broken]) {
-    const { data, writable } = migrate(raw, newId, DAY);
+  for (const raw of ['{', '"text"', '[]', '{"schema":0}', ...broken]) {
+    // The first save overwrites what was stored: the repair event keeps it whole, for the export.
+    const was = raw === '{' ? raw : JSON.parse(raw);
+    const { data, writable } = migrate(raw, newId, WHEN);
     assert.equal(writable, true, raw);
-    assert.deepEqual(data, { schema: 1, current: 'c0000abcd', children: { c0000abcd: newChild(DAY) } }, raw);
+    assert.deepEqual(data, fresh([{ t: WHEN.t, day: DAY, type: 'repair', lost: { '*': was } }]), raw);
   }
   const stored = { schema: 1, current: 'c1', children: { c1: { ...newChild('2026-01-01'), sessions: 4 } } };
-  assert.deepEqual(migrate(JSON.stringify(stored), newId, DAY), { data: stored, writable: true });
+  assert.deepEqual(migrate(JSON.stringify(stored), newId, WHEN), { data: stored, writable: true });
   // The records the shell writes stay as they are, and nothing is logged.
   const c = { ...newChild('2026-01-01'), sessions: 2, attempts: [{ outcome: 'first' }] };
   c.games.parts = moveTo(step(startLadder(parts.levels), parts.levels, { outcome: 'first', kind: 'new', session: 1 }).state, 'split-5', true);
@@ -83,7 +89,7 @@ test('migrate: missing, unparsable or broken gives a new value; schema 1 stays',
   schedule(c.skills, 'num.parts.split', { day: '2026-01-02', kind: 'review', outcome: 'first', passed: false });
   c.events.push({ type: 'jump', game: 'parts' });
   const full = { schema: 1, current: 'c1', children: { c1: c, c2: newChild('2026-02-01') } };
-  assert.deepEqual(migrate(JSON.stringify(full), newId, DAY), { data: full, writable: true });
+  assert.deepEqual(migrate(JSON.stringify(full), newId, WHEN), { data: full, writable: true });
 });
 
 test('a ladder without passed migrates and nextStep runs (it threw on the stored record)', () => {
@@ -104,7 +110,7 @@ test('a child with only `created` migrates', () => {
   assert.deepEqual(mended({}), newChild(DAY), 'no created: today');
 });
 
-test('a wrong-typed value takes its default; a ladder whose level is not a string, and a skill state that is not an object, are dropped; one repair event names each', () => {
+test('a wrong-typed value takes its default; a ladder whose level is not a string, and a skill state that is not an object, are dropped; one repair event keeps each by its path', () => {
   const c = mended({
     created: '2026-10-01', sessions: '3', attempts: {}, events: 'x', extra: 1,
     games: {
@@ -125,11 +131,13 @@ test('a wrong-typed value takes its default; a ladder whose level is not a strin
   });
   assert.deepEqual([c.created, c.sessions, c.attempts, c.extra], ['2026-10-01', 0, [], 1], 'keys outside the shape stay');
   assert.deepEqual(c.events, [{
-    type: 'repair', day: DAY, lost: [
-      'sessions', 'attempts', 'events',
-      'games/parts/streak', 'games/parts/window', 'games/parts/passed', 'games/parts/at', 'games/parts/demoDue', 'games/scale', 'games/gone',
-      'skills/num.parts.split/box', 'skills/num.parts.split/reviewDays', 'skills/num.parts.split/lastReviewFirst', 'skills/eq.sign.same-as',
-    ],
+    t: WHEN.t, day: DAY, type: 'repair', lost: {
+      sessions: '3', attempts: {}, events: 'x',
+      'games/parts/streak': -1, 'games/parts/window': null, 'games/parts/passed': 'split-5', 'games/parts/at': [], 'games/parts/demoDue': 3,
+      'games/scale': { level: 2, passed: ['same'] }, 'games/gone': 'x',
+      'skills/num.parts.split/box': 'x', 'skills/num.parts.split/reviewDays': '2026-10-13', 'skills/num.parts.split/lastReviewFirst': 'yes',
+      'skills/eq.sign.same-as': 7,
+    },
   }]);
   plays(c);
   // The repair event joins the events under their cap.
@@ -140,12 +148,12 @@ test('a wrong-typed value takes its default; a ladder whose level is not a strin
 
 test('every child is mended, not only the current one; normaliseChild does not change what it is given', () => {
   const other = { created: '2026-02-01', games: { parts: { level: 'split-5' } } };
-  const { data } = migrate(JSON.stringify({ schema: 1, current: 'c1', children: { c1: newChild('2026-01-01'), c2: other, c3: 'x' } }), newId, DAY);
+  const { data } = migrate(JSON.stringify({ schema: 1, current: 'c1', children: { c1: newChild('2026-01-01'), c2: other, c3: 'x' } }), newId, WHEN);
   assert.deepEqual(data.children.c2.games.parts.passed, []);
   assert.equal(data.children.c3, 'x', 'a value that is not a child is kept as it is');
   const given = { created: '2026-02-01', games: { parts: { level: 'split-5', passed: 'x' } }, skills: { x: 1 }, events: [{ type: 'jump' }] };
   const copy = structuredClone(given);
-  normaliseChild(given, DAY);
+  normaliseChild(given, WHEN);
   assert.deepEqual(given, copy);
 });
 
@@ -170,7 +178,7 @@ test('the keys of newChild, startLadder and a new skill state equal SHAPE, and S
 test('migrate: a newer schema plays from memory and is never written', () => {
   const raw = JSON.stringify({ schema: SCHEMA + 1, current: 'c1', children: { c1: newChild('2026-01-01') } });
   const storage = memory({ [KEY]: raw });
-  const store = load(storage, newId, DAY);
+  const store = load(storage, newId, WHEN);
   assert.equal(store.writable, false);
   assert.equal(store.data.current, 'c0000abcd');
   assert.equal(save(store), false);
@@ -178,20 +186,20 @@ test('migrate: a newer schema plays from memory and is never written', () => {
   // A newer schema of another shape is not "broken": still never written.
   const other = JSON.stringify({ schema: SCHEMA + 1, current: 'p1', profiles: { p1: {} } });
   const storage2 = memory({ [KEY]: other });
-  const store2 = load(storage2, newId, DAY);
+  const store2 = load(storage2, newId, WHEN);
   assert.equal(store2.writable, false);
   assert.equal(save(store2), false);
   assert.equal(storage2.getItem(KEY), other);
-  assert.equal(migrate('{"schema":2,"current":"x","children":{}}', newId, DAY).writable, false);
+  assert.equal(migrate('{"schema":2,"current":"x","children":{}}', newId, WHEN).writable, false);
 });
 
 test('save and load round-trip under one key', () => {
   const storage = memory();
-  const store = load(storage, newId, DAY);
+  const store = load(storage, newId, WHEN);
   childOf(store).sessions = 3;
   assert.equal(save(store), true);
   assert.deepEqual([...storage.items.keys()], [KEY]);
-  assert.equal(childOf(load(storage, () => 'other', DAY)).sessions, 3);
+  assert.equal(childOf(load(storage, () => 'other', WHEN)).sessions, 3);
 });
 
 test('caps: 4000 attempts and 500 events, oldest first out', () => {
@@ -208,19 +216,19 @@ test('caps: 4000 attempts and 500 events, oldest first out', () => {
 test('a quota error drops the oldest half of the attempts and retries once', () => {
   const quota = Object.assign(new Error('full'), { name: 'QuotaExceededError' });
   const storage = memory({}, quota);
-  const store = load(storage, newId, DAY);
+  const store = load(storage, newId, WHEN);
   childOf(store).attempts.push(...Array.from({ length: 10 }, (_, i) => ({ i })));
   assert.equal(save(store), true);
   assert.deepEqual(childOf(store).attempts.map((a) => a.i), [5, 6, 7, 8, 9]);
   assert.equal(storage.writes, 1);
   // Two quota errors in a row: give up, without throwing.
   const twice = memory({}, quota);
-  const store2 = load(twice, newId, DAY);
+  const store2 = load(twice, newId, WHEN);
   twice.setItem = () => { throw quota; };
   assert.equal(save(store2), false);
   // Any other error: no retry, nothing dropped.
   const other = memory({}, new Error('broken'));
-  const store3 = load(other, newId, DAY);
+  const store3 = load(other, newId, WHEN);
   childOf(store3).attempts.push({ i: 0 }, { i: 1 });
   assert.equal(save(store3), false);
   assert.equal(childOf(store3).attempts.length, 2);

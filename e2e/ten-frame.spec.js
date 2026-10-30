@@ -5,7 +5,7 @@ import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
 import { layoutBridge } from '../games/ten-frame/draw.js';
 import { rng } from '../shell/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const ID = 'ten-frame';
 /** @type {(id: string) => number} a level's number, from 1 */
@@ -833,6 +833,7 @@ test('a session of 8 rounds ends on the solved pictures, and a round after it pl
   await playAt(page, 'split-10');
   await playToEnd(page);
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
+  await expectThumbsDrawn(page);
   for (const thumb of await page.locator('.end-thumbs [data-thumb]').all()) {
     await expect(thumb.locator('.cover')).toHaveCount(0);
     // The unknown shown, or a ring with 0 when nothing was under the cover.

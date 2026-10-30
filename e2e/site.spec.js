@@ -10,8 +10,8 @@ import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
 import {
-  CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectTouchTargets,
-  ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
+  CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
+  expectTouchTargets, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
 } from './helpers.js';
 
 const SITES = [
@@ -287,15 +287,15 @@ test('an uncaught error shows the error screen with a home button, not a white p
   await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
 });
 
-test('a broken stored record is mended on load: home opens, the next step plays, and one repair event names what was lost (3.9)', async ({ page }) => {
+test('a broken stored record is mended on load: home opens, the next step plays, and one repair event keeps what was lost (3.9)', async ({ page }) => {
   // A ladder without `passed` made the next step throw on home, and the error screen's reload threw again.
   await seedStore(page, storeWith({
     sessions: 'x', games: { parts: { level: 'split-5' }, scale: { level: 3, passed: ['same'] } }, skills: { 'num.parts.split': { last: YESTERDAY } },
   }));
   await open(page, FIXTURE);
   await expect(page.locator('main[data-screen="home"]')).toBeVisible();
-  await expect(page.locator('a.next-step [data-thumb] > *')).not.toHaveCount(0);
-  await expect(page.locator('[data-card] [data-thumb] > *')).not.toHaveCount(0);
+  await expect(page.locator('a.next-step [data-thumb]')).toHaveCount(1);
+  await expectThumbsDrawn(page);
   await look(page);
   await page.locator('a.next-step').click();
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '1');
@@ -303,11 +303,36 @@ test('a broken stored record is mended on load: home opens, the next step plays,
   expect(child.games).toEqual({ parts: { ...ladderAt('split-5'), hold: null } });
   expect(child.skills).toEqual({ 'num.parts.split': skillState({ last: YESTERDAY }) });
   expect(child.sessions).toBe(1);
-  expect(child.events).toEqual([{ type: 'repair', day: TODAY, lost: ['sessions', 'games/scale'] }]);
+  expect(child.events).toEqual([{ t: expect.any(String), day: TODAY, type: 'repair', lost: { sessions: 'x', 'games/scale': { level: 3, passed: ['same'] } } }]);
+});
+
+test('a next step that throws leaves home without its card, the games open, and #/next goes home (3.9)', async ({ page }) => {
+  // The planner, served with a nextStep that throws; the module itself loads from ?real. The
+  // console error is this test's point (an error fixture must let it through).
+  await page.route((url) => url.pathname.endsWith('/shell/planner.js') && !url.search, (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "export * from './planner.js?real';\nexport function nextStep() { throw new Error('a broken next step'); }\n",
+  }));
+  const logged = [];
+  page.on('console', (m) => { if (m.type() === 'error') logged.push(m.text()); });
+  await open(page, FIXTURE);
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await expect(page.locator('a.next-step')).toHaveCount(0);
+  await expect(page.locator('[data-card]')).toHaveCount(2);
+  await expectThumbsDrawn(page);
+  await look(page);
+  await page.goto(`${FIXTURE}#/next`);
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator('main[data-screen="home"] [data-card]')).toHaveCount(2);
+  expect(logged.some((text) => text.includes('a broken next step')), 'the error is logged').toBe(true);
+  await look(page);
+  await page.locator('[data-card]').first().click();
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-game', 'parts');
 });
 
 test('a game whose render throws leaves its home card with the title only, and home still opens (3.9)', async ({ page }) => {
-  // The scale fixture, served with a render that throws; the module itself loads from ?real.
+  // The scale fixture, served with a render that throws; the module itself loads from ?real. The
+  // console error is this test's point (an error fixture must let it through).
   await page.route((url) => url.pathname.endsWith('/tests/fixtures/scale/game.js') && !url.search, (route) => route.fulfill({
     contentType: 'text/javascript',
     body: "export * from './game.js?real';\nexport function render() { throw new Error('a broken game'); }\n",
@@ -319,6 +344,7 @@ test('a game whose render throws leaves its home card with the title only, and h
   await expect(page.locator('[data-card]')).toHaveCount(2);
   await expect(page.locator('[data-card]').nth(1)).toHaveText(scale.meta.title);
   await expect(page.locator('[data-card] [data-thumb][data-game="scale"]')).toBeEmpty();
+  await expect(page.locator('[data-card] [data-thumb][data-game="scale"]')).toHaveAttribute('data-broken');
   await expect(page.locator('[data-card] [data-thumb][data-game="parts"] > *')).not.toHaveCount(0);
   expect(logged.some((text) => text.includes('a broken game')), 'the error is logged').toBe(true);
 });
@@ -368,6 +394,18 @@ for (const site of SITES) {
         const next = await page.locator('[data-next]').boundingBox();
         expect(next.y + next.height, `${hash} הַבָּא`).toBeLessThanOrEqual(height);
       }
+    }
+  });
+
+  test(`${site.name}: home draws each level's thumb, on the game cards and the next-step card`, async ({ page }) => {
+    // A thumb that throws is left empty so home still opens (3.9): no test would fail on it but this one.
+    await open(page, site.path);
+    for (let i = 0; i < Math.max(...site.games.map((g) => g.levels.length)); i++) {
+      const at = (g) => ladderAt(g.levels[Math.min(i, g.levels.length - 1)].id, { passed: g.levels.slice(0, i).map((l) => l.id) });
+      await page.evaluate((v) => localStorage.setItem('sifra', JSON.stringify(v)), storeWith({ games: Object.fromEntries(site.games.map((g) => [g.meta.id, at(g)])) }));
+      await page.goto(`${site.path}?${i}#/`);
+      await expect(page.locator('main[data-screen="home"] [data-card]')).toHaveCount(site.games.length);
+      await expectThumbsDrawn(page, `level ${i + 1}`);
     }
   });
 

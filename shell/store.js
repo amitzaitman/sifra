@@ -27,21 +27,24 @@ const baseLadder = (level) => ({ level, fast: null, streak: 0, window: [], passe
 /** @type {() => SkillState} */
 const baseSkill = () => ({ last: null, passedDay: null, box: 0, due: null, reviewDays: [], lastReviewFirst: null });
 
+/** @type {(when: { t: string, day: string }, lost: Record<string, any>) => Record<string, any>} stamped as app.js stamps events */
+const repair = (when, lost) => ({ t: when.t, day: when.day, type: 'repair', lost });
+
 /**
  * A record with every key of its shape: a missing value takes the default; so does a wrong-typed
- * one, whose path goes in lost. Keys outside the shape stay.
+ * one, whose value goes in lost under its path. Keys outside the shape stay.
  * @param {Record<string, any>} value
  * @param {Record<string, (v: any) => boolean>} checks
  * @param {Record<string, any>} base
  * @param {string} path
- * @param {string[]} lost
+ * @param {Record<string, any>} lost
  * @returns {any}
  */
 function fill(value, checks, base, path, lost) {
   const out = { ...value };
   for (const [k, ok] of Object.entries(checks)) {
     if (ok(out[k])) continue;
-    if (Object.hasOwn(out, k)) lost.push(path + k);
+    if (Object.hasOwn(out, k)) lost[path + k] = out[k];
     out[k] = base[k];
   }
   return out;
@@ -50,25 +53,25 @@ function fill(value, checks, base, path, lost) {
 /**
  * A stored child in this code's shape (architecture 3.9), so one bad record never stops the shell:
  * each record filled; a ladder whose level is not a string, or a skill state that is not an object,
- * dropped (a skill state comes back with the next round). What is replaced or dropped is named in
- * one `repair` event, so no progress goes silently.
+ * dropped (a skill state comes back with the next round). What is replaced or dropped is kept, by
+ * its path, in one `repair` event, so no progress goes silently and the export still holds it.
  * @param {Record<string, any>} stored
- * @param {string} day
+ * @param {{ t: string, day: string }} when the load's time and local day
  * @returns {Child}
  */
-export function normaliseChild(stored, day) {
-  /** @type {string[]} */
-  const lost = [];
-  const c = fill(stored, CHECKS.child, newChild(day), '', lost);
-  /** @type {(records: Record<string, any>, path: string, keep: (r: any) => boolean, mend: (r: any, at: string) => any) => Record<string, any>} */
+export function normaliseChild(stored, when) {
+  /** @type {Record<string, any>} */
+  const lost = {};
+  const c = fill(stored, CHECKS.child, newChild(when.day), '', lost);
+  /** @type {(records: Record<string, any>, path: string, keep: (r: any) => boolean, mend: (r: any, path: string) => any) => Record<string, any>} */
   const each = (records, path, keep, mend) => Object.fromEntries(Object.entries(records).flatMap(([id, r]) => {
     if (keep(r)) return [[id, mend(r, `${path}/${id}/`)]];
-    lost.push(`${path}/${id}`);
+    lost[`${path}/${id}`] = r;
     return [];
   }));
-  c.games = each(c.games, 'games', (l) => map(l) && text(l.level), (l, at) => fill(l, CHECKS.ladder, baseLadder(l.level), at, lost));
-  c.skills = each(c.skills, 'skills', map, (s, at) => fill(s, CHECKS.skill, baseSkill(), at, lost));
-  if (lost.length) c.events = [...c.events, { type: 'repair', day, lost }].slice(-CAPS.events);
+  c.games = each(c.games, 'games', (l) => map(l) && text(l.level), (l, p) => fill(l, CHECKS.ladder, baseLadder(l.level), p, lost));
+  c.skills = each(c.skills, 'skills', map, (s, p) => fill(s, CHECKS.skill, baseSkill(), p, lost));
+  if (Object.keys(lost).length) c.events = [...c.events, repair(when, lost)].slice(-CAPS.events);
   return c;
 }
 
@@ -80,26 +83,30 @@ const parse = (raw) => { try { return raw === null ? null : JSON.parse(raw); } c
 /**
  * Parses and upgrades a stored value. A schema newer than this code, whatever its shape: a new
  * value that is never written, so the newer data stays. Missing, unparsable or broken (no current
- * child object): a new value. Then each child is brought to this code's shape (normaliseChild).
+ * child object): a new value, whose repair event keeps what was stored under `*`, as the first save
+ * overwrites it. Then each child is brought to this code's shape (normaliseChild).
  * @param {string | null} raw
  * @param {() => string} newId
- * @param {string} day
+ * @param {{ t: string, day: string }} when the load's time and local day
  * @returns {{ data: Stored, writable: boolean }}
  */
-export function migrate(raw, newId, day) {
+export function migrate(raw, newId, when) {
   const data = parse(raw);
   const id = newId();
-  const fresh = { schema: SCHEMA, current: id, children: { [id]: newChild(day) } };
+  const fresh = { schema: SCHEMA, current: id, children: { [id]: newChild(when.day) } };
   if (Number.isInteger(data?.schema) && data.schema > SCHEMA) return { data: fresh, writable: false };
   const valid = map(data) && Number.isInteger(data.schema) && data.schema >= 1 && map(data.children) && map(data.children[data.current]);
-  if (!valid) return { data: fresh, writable: true };
+  if (!valid) {
+    if (raw) fresh.children[id].events.push(repair(when, { '*': data }));
+    return { data: fresh, writable: true };
+  }
   // Each new schema adds a step here, e.g. if (data.schema === 1) { ...; data.schema = 2; }
-  for (const [cid, c] of Object.entries(data.children)) if (map(c)) data.children[cid] = normaliseChild(c, day);
+  for (const [cid, c] of Object.entries(data.children)) if (map(c)) data.children[cid] = normaliseChild(c, when);
   return { data, writable: true };
 }
 
-/** @type {(storage: Storage | null, newId: () => string, day: string) => Store} reads and migrates; never throws */
-export const load = (storage, newId, day) => ({ storage, ...migrate(readRaw(storage), newId, day) });
+/** @type {(storage: Storage | null, newId: () => string, when: { t: string, day: string }) => Store} reads and migrates; never throws */
+export const load = (storage, newId, when) => ({ storage, ...migrate(readRaw(storage), newId, when) });
 
 /** @type {(store: Store) => Child} */
 export const childOf = (store) => store.data.children[store.data.current];

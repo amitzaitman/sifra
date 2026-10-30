@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as scale from '../tests/fixtures/scale/game.js';
-import { FIXTURE, NOW, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { FIXTURE, NOW, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 /**
  * Opens a play session of a game whose ladder is at a level (its demo already seen). The seed
@@ -229,6 +229,7 @@ test('a session of 8 rounds ends on the solved pictures and the home button', as
     await page.locator('[data-next]').click();
   }
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
+  await expectThumbsDrawn(page);
   const { child } = await stored(page);
   expect(child.attempts).toHaveLength(8);
   expect(child.attempts.every((a) => a.session === 1 && a.outcome === 'first')).toBe(true);
