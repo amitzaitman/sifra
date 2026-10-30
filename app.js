@@ -176,7 +176,7 @@ function mount(session, spec) {
     } });
 }
 
-/** A solved counted round: the ladder (3.4), the review schedule (3.5), the attempt (3.9), a stuck return (3.7). */
+/** A solved counted round: the ladder (3.4), the review schedule (3.5), a stuck return (3.7), then the attempt (3.9). */
 function finish(session, spec, level, round, outcome) {
   const [c, game, day, rec] = [child(), S.byId.get(spec.game), today(), spec.record];
   const [id, before, last] = [game.meta.id, c.games[game.meta.id], c.skills[level.skill]?.last];

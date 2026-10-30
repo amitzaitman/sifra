@@ -130,6 +130,8 @@ test('a symbols level shows the picture on request and logs picture', async ({ p
 
 test('a saved attempt does not change after the solve', async ({ page }) => {
   // Solved on the first tap; then the picture button and a tap in each area. None of it is the round's.
+  // This pins the saved record only: the copies (finish) and the solved guards (runRound) each keep it,
+  // and nothing else reads the round's record after the solve.
   const first = await playAt(page, 'parts', 'split-sym');
   await card(page, first.answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
@@ -137,6 +139,7 @@ test('a saved attempt does not change after the solve', async ({ page }) => {
   expect(saved).toMatchObject({ outcome: 'first', wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 } });
   await look(page);
   await page.locator('[data-show-picture]').click();
+  // It draws; what it draws after the solve is a known gap (architecture 2.5 step 2).
   await expect(page.locator('[data-area="picture"] [data-role="part"]').first()).toBeVisible();
   for (const area of ['[data-area="picture"]', '[data-area="equation"]', '.progress']) {
     const box = await page.locator(area).boundingBox();

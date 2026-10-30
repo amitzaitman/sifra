@@ -12,7 +12,7 @@ and report. Section 6 lists the gaps in the docs that this file closes. Read wit
 ```text
 index.html            <html lang="he" dir="rtl">, viewport (design §10), font preloads, app.css, and an inline module
                       that imports games/registry.js and calls start()
-app.js                the shell (424 lines): routes, screens, round runner, demo, error screen
+app.js                the shell (428 lines): routes, screens, round runner, demo, error screen
 app.css               the design.md §3 block verbatim, then the shell's components
 types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
@@ -145,7 +145,9 @@ dev-spec A.1 is the shape, with these precisions:
    else the number, plus dots in rows of five when `look` is not `symbols`, the level's `cardDots` is not `false` and every
    value is an integer 0-20), then
    `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
-   `view.picture()` and logs `picture`; after the solve it stays and still draws, and logs nothing.
+   `view.picture()` and logs `picture`; after the solve it stays, still calls `view.picture()`, and logs nothing.
+   A known gap, older than the record fix: every game's `picture()` (and the fixtures') then draws the start
+   picture, its `?` cover down, while the equation shows the answer; it should draw the solved picture.
 3. A correct tap (`deepEqual(value, answer)`, key order ignored) goes to step 5. A wrong tap: the shell retires the
    card (design §6.5), counts the miss, sets `step` to `min(3, misses)` with 4 options or `min(3, misses + 1)` with 3,
    locks the cards, calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
@@ -295,7 +297,7 @@ learning order, 3.6) of the skill of their first level (ten-frame, then balance)
   `[data-area="equation"]`; cards `[data-choices]` of `button[data-index]`; `button[data-next]`;
   `[data-show-picture]`. Control buttons have `data-control` and an `svg[data-icon]`.
 - Off-target taps: each pointerdown on the screen that hits no button and no `[data-target]` is counted by the
-  nearest `[data-area]` (`picture`, `equation`, else `other`); one the double-tap window drops is not.
+  nearest `[data-area]` (`picture`, `equation`, else `other`) until the solve; one the double-tap window drops is not.
 - Double tap (design 6.9; owner decision 2026-10-14, "חלון של 0.3 שנייה"): the shell drops a tap that comes within
   300 ms of a change under the finger: a screen drawn (`screen()`: every route, round and demo) or "הַבָּא" put in
   the cards' place, where it stays until the next screen. shell/taps.js decides on event times alone. A change is
