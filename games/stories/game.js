@@ -5,6 +5,7 @@ import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { lidAt, rowsFor } from './scene.js';
+import { DISPLAYS, renderScene } from './view.js';
 
 export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 1, css: new URL('game.css', import.meta.url).href };
 
@@ -40,8 +41,8 @@ const VARIANT = { 'add-10': { morph: true }, 'take-10': { morph: true }, 'whole-
 
 export const text = [];
 
-/** The displays the scene draws (architecture 2.1; view.js throws on any other). */
-export const displays = ['overflow', 'flash', 'count-up', 'jumps'];
+/** The displays the scene draws (architecture 2.1): view.js's table, which throws on any other. */
+export const displays = DISPLAYS;
 
 // ---------- Rules (docs/depth/errors.md): one formula per id, from round.story ----------
 
@@ -193,12 +194,13 @@ export function labelOf(round) {
 }
 
 /**
- * The picture (view.js, step 4b of the build plan): not drawn yet.
+ * The picture (view.js): the event, the displays, the hint, the tour, the closing and the demo;
+ * the label from its locked template.
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
  * @returns {RoundView}
  */
 export function render(host, round, ctx) {
-  throw new Error(`stories: the picture comes with view.js (${host.tagName}, ${round.skill}, ${ctx.mode})`);
+  return { ...renderScene(host, round, ctx), label: labelOf(round) };
 }

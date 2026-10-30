@@ -1,0 +1,161 @@
+/* The story scene (design 6.10, architecture 2.8). scene.js lays out every mark as a box of lengths
+   a·u + b px; view.js puts each in one span with its box in --xu --xp --yu --yp --wu --wp --hu --hp,
+   and strokes and fonts as such pairs on the drawing (--lu --lp the line, --tu --tp a thin edge,
+   --su --sp a string, --cfu --cfp a chip's font). No geometry property here holds a literal length
+   but a 1px that multiplies a variable (tests/code.test.js): a number that fails changes in scene.js.
+   The unit is solved here from the stage, the ten-frame's pattern; a display that adds rows changes
+   --dhu and --dhp, which transition, so every mark slides as the unit shrinks. */
+@property --dhu { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --dhp { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+/* The stage is the host's content box (the panel's, or a thumb's), a size container. */
+[data-game="stories"] .st-stage { position: absolute; inset: 0; display: grid; place-items: center; padding: inherit; container-type: size; }
+[data-game="stories"] .st-draw {
+  --u: min(calc(var(--umax) * 1px), calc((100cqw - var(--dwp) * 1px) / var(--dwu)), calc((100cqh - var(--dhp) * 1px) / var(--dhu)));
+  position: relative; width: calc(var(--dwu) * var(--u) + var(--dwp) * 1px); height: calc(var(--dhu) * var(--u) + var(--dhp) * 1px);
+  transition: --dhu var(--t-move) var(--ease), --dhp var(--t-move) var(--ease);
+}
+/* A reset goes at once: this wins over every transition in the drawing (the size, the outlines' grey). */
+[data-game="stories"] .st-draw.is-instant, [data-game="stories"] .st-draw.is-instant * { transition: none !important; }
+[data-game="stories"] .st-layer { position: absolute; inset: 0; pointer-events: none; }
+
+/* The one positioning rule. A balloon's node is its disc (its role colour fills it): the string
+   hangs below it, inside the place's box that scene.js keeps for it. */
+[data-game="stories"] .st-mark {
+  position: absolute; left: calc(var(--xu) * var(--u) + var(--xp) * 1px); top: calc(var(--yu) * var(--u) + var(--yp) * 1px);
+  width: calc(var(--wu) * var(--u) + var(--wp) * 1px); height: calc(var(--hu) * var(--u) + var(--hp) * 1px);
+}
+[data-game="stories"] .st-obj[data-shape="balloon"] { height: calc(var(--wu) * var(--u) + var(--wp) * 1px); }
+
+/* Objects (design 6.10, R6): the start in the part's yellow (in take too), what came in --role-added
+   with a solid edge, the basket's second part in the light shade; the unknown is app.css's. */
+[data-game="stories"] .st-obj { border-radius: 50%; box-shadow: inset 0 0 0 calc(var(--lu) * var(--u) + var(--lp) * 1px) var(--edge, transparent); }
+[data-game="stories"] .st-obj[data-role="part"] { --edge: var(--role-part-edge); background-color: var(--role-part); }
+[data-game="stories"] .st-obj[data-role="part"][data-second] { background-color: var(--role-part-2); }
+[data-game="stories"] .st-obj[data-role="added"] { --edge: var(--role-added-edge); background-color: var(--role-added); }
+/* A balloon's knot and its string: no role (R6). A ball's one seam, in its edge colour. */
+[data-game="stories"] .st-obj[data-shape="balloon"]::before {
+  content: ''; position: absolute; left: 50%; top: calc(100% - 0.02 * var(--u)); width: calc(0.16 * var(--u)); height: calc(0.06 * var(--u));
+  translate: -50% 0; background: var(--ink-soft); clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
+}
+[data-game="stories"] .st-obj[data-shape="balloon"]::after {
+  content: ''; position: absolute; left: 50%; top: 100%; width: calc(var(--su) * var(--u) + var(--sp) * 1px); height: calc(0.2 * var(--u));
+  translate: -50% 0; background: var(--ink-soft);
+}
+[data-game="stories"] .st-obj[data-shape="ball"]::after {
+  content: ''; position: absolute; inset: 14%; border-radius: 50%; rotate: 30deg;
+  border: calc(var(--tu) * var(--u) + var(--tp) * 1px) solid transparent; border-left-color: var(--edge);
+}
+/* Who left: a hollow outline at its place, grey with the hint in take (design 7.3). */
+[data-game="stories"] .st-outline {
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-removed); border-radius: 50%; transition: opacity var(--t-move) var(--ease);
+}
+[data-game="stories"] .st-outline[data-faded] { opacity: 0.4; }
+/* A touch on a counted thing (design 6.3): an ink dot with a white edge, once. Targets take taps. */
+[data-game="stories"] [data-target] { pointer-events: auto; }
+[data-game="stories"] .st-touch {
+  position: absolute; left: 50%; top: 50%; width: calc(var(--tap) * 1px); height: calc(var(--tap) * 1px); translate: -50% -50%;
+  border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 calc(var(--tap-edge) * 1px) var(--surface);
+}
+
+/* What a wrong choice says (design 7.1): ghosts with a dashed edge, a dashed new place, rings of the
+   line 2px off a disc, dashed round an object counted, solid round what the value does not reach. */
+[data-game="stories"] .st-ghost {
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost);
+}
+[data-game="stories"] .st-place {
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--surface);
+}
+[data-game="stories"] .st-ring { border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-added-edge); border-radius: 50%; }
+[data-game="stories"] .st-ring[data-dash] { border-style: dashed; }
+/* A jump: from the top of one place to the top of the next, 8px high; across a row break half of
+   it leaves the row on the right and half comes in on the next row's left. */
+[data-game="stories"] .st-arc {
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+[data-game="stories"] .st-arc[data-half="out"] { border-right: 0; border-radius: 100% 0 0 0 / 100% 0 0 0; }
+[data-game="stories"] .st-arc[data-half="in"] { border-left: 0; border-radius: 0 100% 0 0 / 0 100% 0 0; }
+
+/* Lines (design 6.10): the wrap, the bracket and the tour's ring in magenta, the whole navy, the
+   basket's rim --frame; each a run of boxes of the line's thickness. */
+[data-game="stories"] .st-line[data-tone="unknown"] { background: var(--role-unknown); }
+[data-game="stories"] .st-line[data-tone="whole"] { background: var(--role-whole); }
+[data-game="stories"] .st-line[data-tone="frame"] { background: var(--frame); }
+[data-game="stories"] .st-halo { background: var(--halo); }
+
+/* Covers (design 6.6): lib/cover.js's dome, its corners from its height (--cover-h, app.css). The
+   small dome on the wrap or the bracket and level 3's fixed dome are squares, their '?' 0.6 of the
+   height; the stretched cover is a piece per row, its '?' on its first place over the hint's dashed
+   places, and a plain bridge between the pieces. A halo has its dome's shape. */
+[data-game="stories"] .st-lid, [data-game="stories"] .st-dome, [data-game="stories"] .st-piece, [data-game="stories"] .st-halo[data-shape="dome"] {
+  --cover-h: calc(var(--hu) * var(--u) + var(--hp) * 1px);
+}
+[data-game="stories"] .st-halo[data-shape="dome"] {
+  border-radius: min(50%, var(--cover-h) / 2) min(50%, var(--cover-h) / 2) min(20%, var(--cover-h) / 5) min(20%, var(--cover-h) / 5) / 80% 80% 20% 20%;
+}
+[data-game="stories"] .st-lid > .cover, [data-game="stories"] .st-dome > .cover { --cover-fs: calc(0.6 * var(--cover-h)); }
+[data-game="stories"] .st-piece > .cover { --cover-fs: calc(0.6 * var(--u)); }
+[data-game="stories"] .st-piece > .cover::after { translate: calc((var(--u) - var(--wu) * var(--u) - var(--wp) * 1px) / 2) 0; }
+[data-game="stories"] .st-piece.is-bridge > .cover { border-radius: 0; }
+[data-game="stories"] .st-dash { border: calc(var(--tu) * var(--u) + var(--tp) * 1px) dashed var(--on-unknown); border-radius: 50%; }
+
+/* Chips (design 6.10, 7.1): white, a thin edge; the start's digit in ink, the whole's navy with a
+   navy edge, the answer's magenta. Flashed, a ring of the line takes the edge's place inside it. */
+[data-game="stories"] .st-chip {
+  display: grid; place-items: center; padding-top: 0.12em; border-radius: calc(0.3 * (var(--hu) * var(--u) + var(--hp) * 1px));
+  background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 calc(var(--tu) * var(--u) + var(--tp) * 1px) var(--chip-edge, var(--frame));
+  font-size: max(calc(var(--fmin) * 1px), calc(var(--cfu) * var(--u) + var(--cfp) * 1px)); font-weight: 800; line-height: 1; white-space: nowrap;
+}
+[data-game="stories"] .st-chip[data-tone="whole"] { --chip-edge: var(--role-whole); color: var(--role-whole); }
+[data-game="stories"] .st-chip[data-tone="unknown"] { --chip-edge: var(--role-unknown); color: var(--role-unknown); }
+[data-game="stories"] .st-chip[data-ring] { box-shadow: inset 0 0 0 calc(var(--lu) * var(--u) + var(--lp) * 1px) var(--role-added-edge); }
+
+/* Digits on objects (design 6.10, 7.1-7.2): proportional, on a white circle the line and 8% in from
+   the disc's edge, so its colour shows round it; a thin white outline where they pass the circle.
+   A display's in --role-added-edge, the tour's in --role-unknown; the tour's last grows 1.3 (two
+   digits in height only), its circle does not. */
+[data-game="stories"] .st-digit {
+  z-index: 0; display: grid; place-items: center; padding-top: 0.12em; color: var(--role-added-edge);
+  font-size: max(calc(var(--fmin) * 1px), calc(var(--fk) * var(--u))); font-weight: 800; line-height: 1; font-variant-numeric: proportional-nums;
+  text-shadow: 0 0 1px var(--surface), 1.5px 0 var(--surface), -1.5px 0 var(--surface), 0 1.5px var(--surface), 0 -1.5px var(--surface),
+    1px 1px var(--surface), -1px 1px var(--surface), 1px -1px var(--surface), -1px -1px var(--surface);
+}
+[data-game="stories"] .st-digit::before {
+  content: ''; position: absolute; inset: calc(var(--lu) * var(--u) + var(--lp) * 1px + 8%); z-index: -1; border-radius: 50%; background: var(--surface);
+}
+[data-game="stories"] .st-digit[data-tone="unknown"] { color: var(--role-unknown); }
+[data-game="stories"] .st-digit.is-grow { scale: 1.3; }
+[data-game="stories"] .st-digit.is-grow::before { scale: 0.7692; }
+[data-game="stories"] .st-digit.is-grow.is-two { scale: 1 1.3; }
+[data-game="stories"] .st-digit.is-grow.is-two::before { scale: 1 0.7692; }
+
+/* Motion (design 6.10, 8): each runs once, 250ms a move, 600ms a blink or a pulse, 150ms a digit;
+   delays between items entering in order only, 0.3 s at most (view.js). Thumbs never move (app.css). */
+[data-game="stories"] [data-anim="in"] { animation: stories-in var(--t-move) var(--ease) backwards; }
+[data-game="stories"] [data-anim="out"] { animation: stories-out var(--t-move) var(--ease) forwards; }
+[data-game="stories"] [data-anim="from"] { animation: stories-from var(--t-move) var(--ease) backwards; }
+[data-game="stories"] [data-anim="fly"] { animation: stories-fly var(--t-move) ease-in forwards; }
+[data-game="stories"] [data-anim="pop"] { animation: stories-pop var(--t-move) var(--ease) forwards; }
+[data-game="stories"] [data-anim="drop"] { animation: stories-drop var(--t-move) var(--ease) backwards; }
+[data-game="stories"] [data-anim="ring"] { animation: stories-ring var(--t-blink) var(--ease) backwards; }
+[data-game="stories"] [data-anim="blink"], [data-game="stories"] [data-anim="pulse"] { animation: stories-blink var(--t-blink) var(--ease) backwards; }
+[data-game="stories"] .st-obj[data-anim="pulse"] { animation: stories-pulse var(--t-blink) var(--ease); }
+[data-game="stories"] [data-anim="digit"] { animation: stories-digit 150ms var(--ease) backwards; }
+[data-game="stories"] [data-anim="q"] > .cover::after { animation: stories-in 150ms var(--ease) backwards; }
+
+@keyframes stories-in { from { opacity: 0; } }
+@keyframes stories-out { to { opacity: 0; } }
+/* An arrival from past the stage's right edge, a flown leaver past its top (scene.js Offset). */
+@keyframes stories-from {
+  from { transform: translate(calc(var(--fxu) * var(--u) + var(--fxp) * 1px + var(--fsx) * 100cqw), calc(var(--fyu) * var(--u) + var(--fyp) * 1px + var(--fsy) * 100cqh)); }
+}
+@keyframes stories-fly {
+  to { transform: translate(calc(var(--txu) * var(--u) + var(--txp) * 1px + var(--tsx) * 100cqw), calc(var(--tyu) * var(--u) + var(--typ) * 1px + var(--tsy) * 100cqh)); }
+}
+/* A pop grows a quarter and fades, no burst shapes (design 6.10). */
+@keyframes stories-pop { to { opacity: 0; transform: scale(1.25); } }
+@keyframes stories-drop { from { opacity: 0; transform: translateY(-60%); } }
+@keyframes stories-ring { 0% { opacity: 0; } 1% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes stories-blink { 50% { opacity: 0.3; } }
+@keyframes stories-pulse { 50% { transform: scale(1.12); } }
+@keyframes stories-digit { from { opacity: 0; transform: scale(0.4); } }

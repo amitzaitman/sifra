@@ -197,3 +197,34 @@ test('games/registry.js: one export line per game, sorted by id, each game in it
   assert.deepEqual(ids, [...ids].sort());
   for (const id of ids) assert.ok(existsSync(new URL(`../games/${id}/game.js`, import.meta.url)), id);
 });
+
+// The stories' geometry is scene.js's alone (architecture 2.8, 4.4, 4.9): in their game.css no
+// geometry property, and no custom property, holds a literal length but a 1px that multiplies a
+// variable (100cqw and 100cqh, the stage, aside), so a number that fails the Node geometry test
+// changes in scene.js and never in CSS; every font has the floor --fmin, 14 in rounds and 0 in thumbs.
+const GEOMETRY = /^(--[\w-]+|left|top|right|bottom|inset(-[a-z-]+)?|(min-|max-)?(width|height)|border(-[a-z-]+)?|outline(-[a-z-]+)?|box-shadow|font-size)$/;
+const LENGTH = /(?<![\w.-])\d*\.?\d+(px|em|rem|ex|ch|lh|vw|vh|vmin|vmax|[sld]v[wh]|cq(w|h|i|b|min|max)|cm|mm|in|pt|pc|q)\b/i;
+/**
+ * The declarations of a stylesheet whose geometry holds a literal length.
+ * @param {string} css
+ * @returns {string[]}
+ */
+function literalLengths(css) {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(--[\w-]+|[a-z-]+)\s*:\s*([^;{}]+)/gi)]
+    .filter(([, prop, value]) => GEOMETRY.test(prop) && LENGTH.test(value.replace(/\*\s*1px\b/g, '').replace(/\b100cq[wh]\b/g, '')))
+    .map(([d]) => d.trim());
+}
+
+test('stories: game.css holds no literal length in its geometry but a 1px that multiplies a variable; fonts have the --fmin floor', async () => {
+  // The scan catches what it is for.
+  assert.deepEqual(literalLengths('a { left: 3px; top: calc(var(--y) * 1px); --g: 2em; inset: 0; width: 50%; font-size: 14px; translate: 0 2px; }'),
+    ['left: 3px', '--g: 2em', 'font-size: 14px']);
+  const css = read('games/stories/game.css');
+  none(literalLengths(css).map((d) => `games/stories/game.css: ${d}`));
+  const fonts = [...css.matchAll(/font-size\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
+  assert.ok(fonts.length > 0);
+  none(fonts.filter((f) => !f.startsWith('max(calc(var(--fmin) * 1px), ')).map((f) => `games/stories/game.css: font-size ${f} has no --fmin floor`));
+  const { ROUND, THUMB } = await import('../games/stories/scene.js');
+  assert.deepEqual([ROUND.font.min, THUMB.font.min], [14, 0]);
+  assert.match(read('games/stories/view.js'), /setProperty\('--fmin', num\(set\.font\.min\)\)/);
+});
