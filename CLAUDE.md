@@ -67,6 +67,7 @@ with children) only after the owner's iPhone check there is logged in `docs/devi
 - Plain JavaScript with JSDoc, checked by `tsc --checkJs` (`npm run typecheck`). `node:test` for logic. Playwright on Chromium (Pixel 7) and WebKit (iPhone 13). `npm run check` runs all three.
 - `npm test` runs `tests/*.test.js`: `tests/docs.test.js` keeps skill ids, error rules, displays, models, meteg and links consistent across the docs (run it after every docs change); `tests/games.test.js` is the generic test (every game x level x 200 seeds); the shell's units and the code scans (no grade, no timers, no storage in games, `lib/` imports nothing and stays under 600 lines, `shell/` imports only `lib/`, `data/` and `shell/`, no game imports `shell/`).
 - `data/` is generated from the docs by `npm run gen` and never edited by hand, except `data/videos.js`; `tests/sync.test.js` fails when it is stale.
+- `tests/rounds.lock.json` locks each game's rounds (seeds 1-50 per level): `tests/lock.test.js` fails when they change without a `meta.version` bump or a locked level id goes; after a bump, `npm run lock`.
 - `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
 - One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit and deploys to Pages.
 - Right after a merge to main: the owner's manual iPhone check on the GitHub Pages address, logged with a date in

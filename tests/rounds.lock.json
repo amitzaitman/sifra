@@ -1,0 +1,35 @@
+{
+  "balance": {
+    "version": 4,
+    "levels": {
+      "same": "d1c33eb173eb56cdfd7074b5798bb31758e2606223bbf1c81857adb82ad29483",
+      "missing-right": "07a554d108be36f307d200a2ec494d97e9edf162f12cdb1be4633c317cd31c5d",
+      "missing-left": "12e0a03fbf72921b024d1e88e5669f4ee9bbf171934fa4acda383f2cbd56ffaa",
+      "missing-reversed": "aea3a0004fd16ec80d5bf3516596f806127cffaf3f619cdf0853a7297342e8ee",
+      "missing-symbols": "3652c95171d1ebc5a2c7938fc5180642530c125b9e4103339dcf2865a0bd7216",
+      "missing-symbols-20": "e4ea746f5cc0eb58743cacab372e083f4ff4d00d69cd623435949a85f507a152",
+      "both-sides": "84592986f4618710b038beba44e18e80c1783593d99e2af1a751f92f93fab989",
+      "both-sides-symbols": "bf55015f8fc65e1f76aa5587f3093991bec9ede44d6fbb41ad2d6904a384e124",
+      "turn": "b8947bbade394d472a1088bcf3091fc0aa902b1e58fa0479c26c4e93f210b531",
+      "true-false": "b404507390bbe53a53482740dec3a50c5cb30110a90a2dd8290a0014dc7346c8",
+      "relational": "a28f25f7c7390896c9d2785f6affab53cc985d44fccbe424be1d064c7b54f39c"
+    }
+  },
+  "ten-frame": {
+    "version": 3,
+    "levels": {
+      "split-5": "d1a1875e5fa9306c6f11a06ba2f0a26dfa71a0cf942221880613d5a540a36e1e",
+      "split-10": "18cd62fb4595635b3076df2c8493ecb54ef411260961458edd2d04b66cc6e76b",
+      "split-bond": "581333f8e65e481fbcab4482214c287991135cf8a687b7736da022b31be1ee24",
+      "split-pairs": "5e149a5b5cef027b51217f6e89003538f85ea233cfeff3e573a30e1d18e87a94",
+      "ten-empty": "416f406c07250e03b9abae3526f873a8aa02b309e695639e1593a201bf6da535",
+      "ten-cover": "bf7e1d2b3c45bcaedda0d64e3b6facf60a944479ec9cd3472b3529296e798f48",
+      "ten-symbols": "df3b4fa78adec4d8586ffbfa5fa1424192aa93e511156efb3ff28d9099c0010a",
+      "teen-bundle": "db164cd84314810f6b10e686d8759fcb3ca1ee40a0614e4dca86abc7aab76940",
+      "teen-symbols": "fd4dea81af9860195e07e13b880b30aea70abb0976f450ea1f065958d65911d7",
+      "bridge-move": "3e55f93d83b294a31f8945e25b79ef20567dd2785536220073ccd1b853c3bf6f",
+      "bridge-frames": "0fa42004b80dc6021e3624dbda3810b076300181801bf911a6aba22b75686412",
+      "bridge-symbols": "019560b346221ca0e3b070d712610add2d48e19e719f45ec0c53d2e9f04e4450"
+    }
+  }
+}

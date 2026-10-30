@@ -37,9 +37,10 @@ games/registry.js     one line per game, sorted by id: export * as tenFrame from
 games/<id>/           game.js, game.css (may be empty), any module the game owns
 fonts/                rubik-hebrew.woff2, rubik-latin.woff2 (from AlefBet), OFL.txt
 assets/               icons (new)
-scripts/              gen-data.js, docs-parse.js (the parsers now in tests/docs.test.js, moved there and shared)
+scripts/              gen-data.js, docs-parse.js (the parsers now in tests/docs.test.js, moved there and shared),
+                      lock-rounds.js (npm run lock: tests/rounds.lock.json, 4.1)
 start.js              static server from AlefBet: node start.js [port]; fails if the port is taken; opens no browser
-tests/                node:test (section 4), with two fixture games in tests/fixtures/
+tests/                node:test (section 4), with two fixture games in tests/fixtures/ and rounds.lock.json (4.1)
 e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js (4.8), <id>.spec.js per game
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
 ```
@@ -57,7 +58,7 @@ assets/.
 export const meta = {
   id: 'ten-frame',                        // the folder name
   title: 'מִסְגֶּרֶת עֶשֶׂר',                  // with nikud: game card, hidden <h1>, <title>
-  version: 1,                             // bump when makeRound output changes for the same level and seed
+  version: 1,                             // bump when makeRound output changes for the same level and seed (lock, 4.1)
   css: new URL('game.css', import.meta.url).href,   // the shell links it at start (home thumbs draw every game)
 };
 export const levels = [];                 // Level objects (2.2). Level n is levels[n - 1]
@@ -499,6 +500,17 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
   (4.3); `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3 and 10: the colour tokens measured from
   app.css, the role fills, `--role-removed` and the part's second shade apart, text and graphics contrast);
   `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
+- `tests/lock.test.js`, the rounds lock: `tests/rounds.lock.json` holds, for each game of games/registry.js, the
+  `version` of its `meta` and, per level id, a sha256 (node:crypto) of `JSON.stringify(makeRound(level, rng(seed)))`
+  for seeds 1-50, one line per round, each value of a mixed level passed as the shell passes it.
+  scripts/lock-rounds.js (`npm run lock`) writes it; the test rebuilds it in memory, as tests/sync.test.js does data/.
+  It fails when a level's rounds changed and the version did not go up (2.1: an attempt's `seed`, `version` and
+  `params` rebuild its round, 3.9), or went down; when a locked level id is no longer a level (storage keys on it,
+  2.2, and `indexOf` would put the child back at level 1 without a word); and, saying "run npm run lock", when the
+  lock is stale: the version went up, or a game or a level is new. `npm run lock` refuses to write on the first two,
+  so a level id leaves the lock only by a hand edit. A digest per level, not one per game: a new level changes no
+  existing round and needs no bump, and the message names the levels that changed. The fixtures are not locked: no
+  child's record points at them.
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
   `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
   `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`
@@ -734,7 +746,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 
 ```json
 "scripts": { "test": "node --test", "typecheck": "tsc -p tsconfig.json", "e2e": "playwright test",
-  "check": "npm test && npm run typecheck && npm run e2e", "gen": "node scripts/gen-data.js", "start": "node start.js" },
+  "check": "npm test && npm run typecheck && npm run e2e", "gen": "node scripts/gen-data.js",
+  "lock": "node scripts/lock-rounds.js", "start": "node start.js" },
 "devDependencies": { "@playwright/test": "1.56.1", "typescript": "5.9.3" }
 
 { "compilerOptions": { "target": "es2022", "module": "es2022", "moduleResolution": "bundler",
@@ -744,6 +757,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 ```
 
 - `node --test` finds `tests/**/*.test.js` and not the e2e specs. `check` is the full gate.
+- `npm run lock` rewrites tests/rounds.lock.json (4.1) after a game's version (`meta`, 2.1) goes up, or a game or
+  level is added; it writes nothing while a level's rounds changed without a bump or a locked level id is gone.
 - `noUnusedLocals`: an import, variable or function nothing reads fails the typecheck (an import a merge brought
   back, 548c6dd). Unused parameters stay allowed: a game's `render` and `face` keep the contract's signature.
 - The ES2022 lib keeps some APIs newer than Safari 16.4 out (`Object.groupBy`, `Promise.withResolvers`), but its DOM

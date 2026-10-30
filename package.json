@@ -11,6 +11,7 @@
     "e2e": "playwright test",
     "check": "npm test && npm run typecheck && npm run e2e",
     "gen": "node scripts/gen-data.js",
+    "lock": "node scripts/lock-rounds.js",
     "start": "node start.js",
     "icons": "node scripts/render-icons.js"
   },
