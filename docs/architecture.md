@@ -269,9 +269,9 @@ meaning (from the mount).
   animation. Games never listen for animationend themselves.
 - Delays only between items entering in order, at most 0.3 s (design §7.1), longer only inside `[data-demo]`. No
   infinite animation. Thumbs never move (app.css stops animations under `[data-thumb]`).
-- `reduced()` (reduced motion is on) is exported by lib/settle.js, the one copy: the balance's view.js and the story
-  fixture import it, and the stories will (built 2026-10-30 for game 3: the two identical copies went, no change in
-  behaviour, no version bump). The ten-frame has none. Each game keeps its own
+- `reduced()` (reduced motion is on) is exported by lib/settle.js, the one copy (a code scan, 4.4): the balance's
+  view.js and the story fixture import it, and the stories will (built 2026-10-30 for game 3: the two identical
+  copies went, no change in behaviour, no version bump). The ten-frame has none. Each game keeps its own
   entering delays: the ten-frame's `stagger(j, n, step = 40)` (draw.js: at most 40 ms apart, the first at 0, the last
   starting by 0.3 s) stays in draw.js, which imports nothing (condition 6), and the stories copy that formula; the
   balance's `delay(k, n)` is another formula (the first at 40 ms, the last by 280 ms) and stays, so its live timing
@@ -680,6 +680,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `Math.random`.
 - games/: no `localStorage`, `sessionStorage`, `indexedDB`, `cookie` or the storage manager (condition 1); no
   `animationend` or `transitionend`; no class name containing "cover" but lib/cover.js's.
+- app.js, shell/, lib/, games/ and the fixtures: `prefers-reduced-motion` in JS only in lib/settle.js, whose
+  `reduced()` is the one copy (2.7); CSS media queries are not scanned.
 - lib/: no import and no `export ... from`, under 600 lines, and a game (games/) imports each module. shell/:
   imports only lib/, data/ and shell/. games/ and the fixtures: no import of shell/ or app.js. Every deployed text
   file (section 1: data/videos.js, games/ and assets/ included): no grade, neither "grade" nor "כיתה"/"כיתות" in either spelling, compared without nikud (owner
@@ -909,7 +911,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 
 | Topic | Choice | Why |
 |---|---|---|
-| What lib/ and shell/ hold | Who imports a module decides. shell/: the modules only app.js (and the tests) import: cards, equation, ladder, planner, rng, store, taps (the double-tap window, 3.2); they may import lib/, data/ and shell/, and no game imports them. lib/: what the games share (cover, settle); a game imports each module, each imports nothing, under 600 lines. Decided 2026-10-14 ("להפריד את המעטפת"), see decisions.md; shell/'s import rule and "a game imports each lib/ module" are an engineering decision the owner may reverse | lib/ was 596 of 600 lines, 359 of them the shell's alone (ladder, planner, store), so the first helper both games need had no room. The limit and "only when a second game needs it" were written for game code; node:test still needs the shell's logic outside app.js, and the scans (4.4) keep the boundary both ways. rng.js goes with the shell: no game imports it, the shell hands makeRound an rng |
+| What lib/ and shell/ hold | Who imports a module decides. shell/: the modules only app.js (and the tests) import: cards, equation, ladder, planner, rng, store, taps (the double-tap window, 3.2); they may import lib/, data/ and shell/, and no game imports them. lib/: what the games share (cover, settle, weights); a game imports each module, each imports nothing, under 600 lines. Decided 2026-10-14 ("להפריד את המעטפת"), see decisions.md; shell/'s import rule and "a game imports each lib/ module" are an engineering decision the owner may reverse | lib/ was 596 of 600 lines, 359 of them the shell's alone (ladder, planner, store), so the first helper both games need had no room. The limit and "only when a second game needs it" were written for game code; node:test still needs the shell's logic outside app.js, and the scans (4.4) keep the boundary both ways. rng.js goes with the shell: no game imports it, the shell hands makeRound an rng |
 | "Mastered" | Skill passed (last level passed) for the next step; mastered (R11) for the stuck rule | §5.12 defines it by the level rule and §5.4 by R11; one definition would stall the next step for days |
 | Attempt | One record per round, by the shell; `onAttempt` is only a build-round commit | The CLAUDE.md fields describe a round, and R5 must act the same in every game |
 | Help ladder | The shell counts, picks the step, locks and decides; the game draws | R5 is one rule: one implementation, tested once |

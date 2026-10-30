@@ -50,6 +50,11 @@ test('games never touch storage, wait for animationend, or make their own cover'
   ]);
 });
 
+test('reduced motion is read only by lib/settle.js, whose reduced() is the one copy (architecture 2.7)', () => {
+  const js = ['app.js', ...shell, ...lib, ...gameFiles].filter((f) => f.endsWith('.js') && f !== 'lib/settle.js');
+  none(scan(js, /prefers-reduced-motion/, 'reduced motion: import reduced() from lib/settle.js'));
+});
+
 test('no grade at run time or on screen: no deployed file names one (owner decision 2026-10-14, pedagogy 1.2)', () => {
   // Every deployed text file (architecture 1), parents labels included; Hebrew compared without
   // nikud, so both spellings of "class" (with and without yod) are caught.
