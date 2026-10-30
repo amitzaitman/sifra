@@ -83,12 +83,24 @@ export function withoutCode(line) {
 }
 
 /**
- * The trimmed cells of a markdown table row.
+ * The trimmed cells of a markdown table row as GitHub splits them, escapes kept: a pipe after a
+ * backslash stays in its cell, any other pipe ends one, inside a code span too. The outer pipes are optional.
+ * @param {string} line
+ * @returns {string[]}
+ */
+export function splitRow(line) {
+  let row = line.trim().replace(/^\|/, '');
+  if (/(?<!\\)\|$/.test(row)) row = row.slice(0, -1);
+  return row.split(/(?<!\\)\|/).map((cell) => cell.trim());
+}
+
+/**
+ * The trimmed cells of a markdown table row, with each escaped pipe read as a pipe.
  * @param {string} line
  * @returns {string[]}
  */
 export function cells(line) {
-  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+  return splitRow(line).map((cell) => cell.replaceAll('\\|', '|'));
 }
 
 /**

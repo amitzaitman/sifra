@@ -1,5 +1,5 @@
 // Consistency checks for the docs: skill ids, prerequisites, error rules, displays,
-// models, totals, meteg, links and the §4.6 ceilings. Run: npm test
+// models, totals, meteg, links, the §4.6 ceilings and table rows. Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -7,11 +7,14 @@ import { dirname, join } from 'node:path';
 import {
   DEPTH, ERRORS, FILE_NAME, MEANING, METEG, NO_PREREQS, ROOT, RULE_ID, SHARED, SKILLS, SKILL_ID, SKILL_TOKEN,
   allows, boldBlock, bullet, findCycles, formRows, isEarly, kindOf, listFiles, parseCatalogue, parseParams,
-  parsePrereqs, parseSkills, parseStrands, proseLines, read, sections, tableIds, ticked, underHeading,
+  parsePrereqs, parseSkills, parseStrands, proseLines, read, sections, splitRow, tableIds, ticked, underHeading,
   withoutCode,
 } from '../scripts/docs-parse.js';
 
 const TOTALS = /בסך הכול (\d+) מיומנויות פעילות: (\d+) בעומק.*?(\d+) של\s+כיתות א–ב ברמת מפה, ו-(\d+) של כיתה ג/s;
+const DELIMITER_CELL = /^:?-+:?$/;
+// A line that starts another block, and so ends a table: a heading, a quote, HTML, a fence, a list item, a rule.
+const BLOCK_START = /^(?:#{1,6}(?:\s|$)|>|<[A-Za-z!?/]|`{3,}|~{3,}|[-+*](?:\s|$)|\d{1,9}[.)](?:\s|$)|(?:[-*_][ \t]*){3,}$)/;
 
 // ---------- helpers ----------
 
@@ -76,6 +79,30 @@ function skillMentions(line) {
 function linkTargets(line) {
   const links = line.matchAll(/!?\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g);
   return [...links].map((m) => m[1].replace(/^<|>$/g, ''));
+}
+
+/**
+ * The tables in a file, as GitHub reads them: a line with a pipe, then a delimiter row (`|---|:-:|`),
+ * then every line up to a blank one or the start of another block. A line there without a pipe
+ * is a row too (`lazy`). Line numbers count from 0.
+ * @param {string[]} lines the file's prose lines
+ * @returns {{ line: number, header: number, delimiter: number, rows: { line: number, cells: number, lazy: boolean }[] }[]}
+ */
+function tables(lines) {
+  const found = [];
+  for (let i = 0; i + 1 < lines.length; i += 1) {
+    const delimiter = lines[i + 1];
+    if (!/(?<!\\)\|/.test(lines[i]) || !delimiter.includes('|')) continue;
+    if (!splitRow(delimiter).every((cell) => DELIMITER_CELL.test(cell))) continue;
+    const table = { line: i, header: splitRow(lines[i]).length, delimiter: splitRow(delimiter).length, rows: [] };
+    let j = i + 2;
+    for (; j < lines.length && lines[j].trim() && !BLOCK_START.test(lines[j].trimStart()); j += 1) {
+      table.rows.push({ line: j, cells: splitRow(lines[j]).length, lazy: !lines[j].trimStart().startsWith('|') });
+    }
+    found.push(table);
+    i = j - 1;
+  }
+  return found;
 }
 
 // ---------- the checks ----------
@@ -307,5 +334,27 @@ test('10. the §4.6 table: every row has a ceiling (a number or a dash), the sam
     else if (ceilings.has(structure) && ceilings.get(structure) !== ceiling) problems.push(`${where}: ceiling ${ceiling}, an earlier row of ${structure} says ${ceilings.get(structure)}`);
     else ceilings.set(structure, ceiling);
   }
+  assertNone(problems);
+});
+
+test('11. every table row in the .md files has as many cells as its header, split as GitHub splits them', (t) => {
+  const problems = [];
+  let count = 0;
+  for (const file of listFiles(['.md'])) {
+    for (const { line, header, delimiter, rows } of tables(proseLines(read(file)))) {
+      count += 1;
+      if (delimiter !== header) {
+        problems.push(`${file}:${line + 2}: the delimiter row has ${delimiter} cells, the header ${header}: GitHub shows no table`);
+      }
+      for (const row of rows) {
+        if (row.cells === header) continue;
+        const lazy = row.lazy ? ' (a line right after a table is its row: leave a blank line)' : '';
+        const n = `${row.cells} cell${row.cells === 1 ? '' : 's'}`;
+        problems.push(`${file}:${row.line + 1}: ${n}, the header has ${header}${lazy}`);
+      }
+    }
+  }
+  t.diagnostic(`${count} tables`);
+  if (!count) problems.push('no table found');
   assertNone(problems);
 });
