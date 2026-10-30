@@ -62,6 +62,24 @@ export function solveEquation({ row, covers }) {
 }
 
 /**
+ * Builds the row with a story's event (architecture 2.4): only the listed tokens show, by index in
+ * [...left, '=', ...right]; every other one keeps its place, hidden (.is-unbuilt), so the row,
+ * measured once, never reflows, and the row is aria-busy while one is hidden, so the live region
+ * never reads half an exercise. null shows every token. An index that is no token throws.
+ * @param {HTMLElement} row
+ * @param {number[] | null} indices
+ */
+export function buildEquation(row, indices) {
+  const tokens = [...row.children];
+  const bad = (indices ?? []).filter((i) => !(Number.isInteger(i) && i >= 0 && i < tokens.length));
+  if (bad.length) throw new RangeError(`build: ${bad.join(', ')} is no token of the row (it has ${tokens.length})`);
+  const shown = indices ? new Set(indices) : null;
+  tokens.forEach((token, i) => token.classList.toggle('is-unbuilt', shown !== null && !shown.has(i)));
+  if (shown && tokens.some((_, i) => !shown.has(i))) row.setAttribute('aria-busy', 'true');
+  else row.removeAttribute('aria-busy');
+}
+
+/**
  * Shrinks a row wider than its box by 4px steps down to 28px, then lets it wrap (design 6.4).
  * @param {HTMLElement} row
  */

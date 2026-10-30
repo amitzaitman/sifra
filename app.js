@@ -2,7 +2,7 @@
 // demos and the error screen. The shell owns levels, storage and records; games only draw.
 import { drawCards } from './shell/cards.js';
 import { cover } from './lib/cover.js';
-import { drawEquation, fitEquation, solveEquation } from './shell/equation.js';
+import { buildEquation, drawEquation, fitEquation, solveEquation } from './shell/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
 import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
 import { demoSeed, rng, seedFrom } from './shell/rng.js';
@@ -104,7 +104,7 @@ function screen(name, title, attrs = {}) {
  */
 function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
-  const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, onAttempt() {} };
+  const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, build() {}, onAttempt() {} };
   S.thumbs.push(() => {
     try { game.render(host, dealt(game, level(), seed), ctx); } catch (err) { host.replaceChildren(); host.dataset.broken = ''; console.error(err); }
   });
@@ -246,9 +246,12 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   // Locked while a display runs (R5); [data-locked] tells tests when a tap is taken again.
   const lock = (on) => { busy = on; cards.row.toggleAttribute('data-locked', on); };
   lock(busy);
+  // A new row is fully built: setEquation also ends a story's build (2.4).
   const setEquation = (equation) => fitEquation(Object.assign(eq, drawEquation(eqArea, equation, round.answer, cover)).row);
+  // After the solve (every token shown) and after abort (the screen is gone), build does nothing.
+  const build = (indices) => { if (!solved && !signal.aborted) buildEquation(eq.row, indices); };
   const answerAt = round.choices.findIndex((c) => same(c.value, round.answer));
-  const ctx = { signal, mode: mode === 'demo' ? 'demo' : 'play', solved: false, setEquation, onAttempt() {} };
+  const ctx = { signal, mode: mode === 'demo' ? 'demo' : 'play', solved: false, setEquation, build, onAttempt() {} };
   const view = game.render(host, round, ctx) ?? {};
   const help = (kind) => Boolean(rec.help.includes(kind) || rec.help.push(kind));
   const label = () => {
@@ -301,6 +304,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     onSolved?.(rec.tour ? 'shown' : rec.wrong.length || rec.help.length ? 'help' : 'first');
     cards.correct(i);
     main.setAttribute('data-solved', '');
+    // Every token, and out of aria-busy, before the cover lifts: a tap during a story's event comes here first (2.5).
+    buildEquation(eq.row, null);
     solveEquation(eq);
     await Promise.all([settle(eqArea, signal), view.solve?.()]);
     if (signal.aborted) return;

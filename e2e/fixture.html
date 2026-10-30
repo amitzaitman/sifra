@@ -10,14 +10,17 @@
   <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-  <!-- index.html with the two fixture games of tests/fixtures instead of the registry; ?seed=n fixes the seeds. -->
+  <!-- index.html with the fixture games of tests/fixtures instead of the registry; ?seed=n fixes the seeds. The story
+       fixture comes only with ?story: its skill would move the next step that the other specs expect. -->
   <div id="app"></div>
   <script type="module">
     import { start } from '../app.js';
     import * as parts from '../tests/fixtures/parts/game.js';
     import * as scale from '../tests/fixtures/scale/game.js';
-    const seed = Number(new URLSearchParams(location.search).get('seed')) || undefined;
-    start({ root: document.getElementById('app'), games: [parts, scale], seed });
+    import * as story from '../tests/fixtures/story/game.js';
+    const params = new URLSearchParams(location.search);
+    const seed = Number(params.get('seed')) || undefined;
+    start({ root: document.getElementById('app'), games: [parts, scale, ...(params.has('story') ? [story] : [])], seed });
   </script>
 </body>
 </html>

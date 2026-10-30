@@ -1,4 +1,4 @@
-// The render contract (architecture 2.4-2.5, 4.8), machine-checked on every registered game and both
+// The render contract (architecture 2.4-2.5, 4.8), machine-checked on every registered game and the
 // fixture games: the shell's path through each level on #/dev, and one loop in the page that calls
 // render and view.miss directly over many seeds and two screen sizes. A new game passes it with no
 // spec of its own; its game spec (4.7) checks what it draws.
@@ -6,11 +6,14 @@ import { RULES } from '../data/errors.js';
 import * as registry from '../games/registry.js';
 import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
+import * as story from '../tests/fixtures/story/game.js';
 import { FIXTURE, INDEX, NOW, expect, look, roundOf, test } from './helpers.js';
 
 const SITES = [
   { path: INDEX, games: Object.values(registry) },
   { path: FIXTURE, games: [parts, scale] },
+  // A story's event builds the equation row (2.4); fixture.html loads its fixture with ?story.
+  { path: `${FIXTURE}?story`, games: [story] },
 ];
 /** The seeds of the shell path, and of the loop in the page. */
 const SEEDS = 10;
@@ -241,26 +244,31 @@ async function loop({ url, levels, seeds }) {
     channel.port1.onmessage = () => resolve(undefined);
     channel.port2.postMessage(0);
   });
+  // A story's event (2.4) runs on its own from the mount, a phase at a time: while [data-event] is
+  // in the page it is not over, even between two phases when nothing runs.
+  const event = () => document.querySelector('[data-event]') !== null;
   /**
-   * Awaits a promise, finishing every animation as it starts, until it has settled and nothing
-   * runs (what it started without awaiting included, as the hint). An infinite animation cannot
-   * finish: a promise that waits on one never settles, and fails.
+   * Awaits a promise, finishing every animation as it starts, until it has settled, nothing runs
+   * (what it started without awaiting included, as the hint) and no event is left. An infinite
+   * animation cannot finish: a promise that waits on one never settles, and fails; so does an
+   * event that never ends.
    */
   const drive = async (promise) => {
     let [done, error] = [false, null];
     Promise.resolve(promise).then(() => { done = true; }, (e) => { [done, error] = [true, e]; });
     for (let k = 0; k < 400; k++) {
       const running = document.getAnimations().filter((a) => a.playState === 'running');
-      if (done && !running.length) break;
+      if (done && !running.length && !event()) break;
       for (const a of running) {
         try { a.finish(); } catch { /* infinite */ }
       }
       // What the finished animations release runs in microtasks; a macrotask only when it waits on more.
       for (let j = 0; j < 8; j++) await null;
-      if (!done || document.getAnimations().some((a) => a.playState === 'running')) await tick();
+      if (!done || event() || document.getAnimations().some((a) => a.playState === 'running')) await tick();
     }
     if (error) throw error;
     if (!done) throw new Error('it never settled (an animation that cannot finish?)');
+    if (event()) throw new Error('its event never ended ([data-event] is still there)');
   };
   const name = (n) => `${n?.getAttribute?.('class') || n?.tagName} "${(n?.textContent ?? '').slice(0, 12)}"`;
   /** @type {(root: Element, where: string, o: { solved: boolean, top: boolean }) => void} */
@@ -323,7 +331,7 @@ async function loop({ url, levels, seeds }) {
   /** @type {(into: HTMLElement, round: Round, mode: string, solved: boolean, signal: AbortSignal) => any} */
   const render = (into, round, mode, solved, signal) => {
     into.replaceChildren();
-    return game.render(into, round, { signal, mode, solved, setEquation() {}, onAttempt() {} }) ?? {};
+    return game.render(into, round, { signal, mode, solved, setEquation() {}, build() {}, onAttempt() {} }) ?? {};
   };
   for (const level of levels) {
     for (let seed = 1; seed <= seeds && out.length < 40; seed++) {

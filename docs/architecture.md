@@ -48,7 +48,7 @@ assets/               icons (new)
 scripts/              gen-data.js, docs-parse.js (the parsers now in tests/docs.test.js, moved there and shared),
                       lock-rounds.js (npm run lock: tests/rounds.lock.json, 4.1)
 start.js              static server from AlefBet: node start.js [port]; fails if the port is taken; opens no browser
-tests/                node:test (section 4), with two fixture games in tests/fixtures/ and rounds.lock.json (4.1);
+tests/                node:test (section 4), with three fixture games in tests/fixtures/ and rounds.lock.json (4.1);
                       game 3 adds stories.test.js (4.1)
 e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js (4.8), <id>.spec.js per game
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
@@ -180,7 +180,9 @@ dev-spec A.1 is the shape, with these precisions:
 //   build        game 3: (indices | null) => void: show only these tokens of the equation row, by index in
 //                [...left, '=', ...right]; every other token keeps its place with visibility: hidden (.is-unbuilt), so
 //                the row, measured once, never reflows; the row is aria-busy while a token is hidden; null shows all.
-//                setEquation shows all; app.css shows every token under [data-solved]; a no-op in thumbs
+//                setEquation draws a row with every token; app.css shows every token under [data-solved]; a no-op
+//                in thumbs, after the solve (the shell has shown every token) and after abort; an index that is no
+//                token of the row throws (shell/equation.js buildEquation)
 //   onAttempt    (value) => void: commit of a build round; unused in milestone 1
 // RoundView: { miss, solve, picture, demo, label }
 //   miss({ value, rule, display, step, first }) => Promise<void>
@@ -357,7 +359,8 @@ export function render(host, round, { signal }) {
 ### 3.1 start() and routes
 
 `start({ root, games, now = () => new Date(), storage, seed })`. index.html passes `Object.values(registry)`;
-e2e/fixture.html passes the fixture games, and `?seed=n` as `seed`, so a failing round can be replayed; unit tests
+e2e/fixture.html passes the fixture games `parts` and `scale` (and `story` with `?story`, 4.1), and `?seed=n` as
+`seed`, so a failing round can be replayed; unit tests
 inject `storage` (default: localStorage, read only inside start) and `now`; `seed` defaults to a uint32 from
 `crypto.getRandomValues()`. start installs the error screen (from AlefBet error-screen.js, without the emoji:
 `main[data-screen="error"]` and a home button), loads the store, calls `navigator.storage.persist()` once, links each
@@ -563,10 +566,17 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
   level id leaves the lock only by a hand edit. A digest per level, not one per game: a new level changes no
   existing round and needs no bump, and the message names the levels that changed. The fixtures are not locked: no
   child's record points at them.
-- `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
-  `num.parts.make-ten`) and `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
-  `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's). The fixture `render`
-  throws when its host is not in the page.
+- `tests/fixtures/`: three small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
+  `num.parts.make-ten`), `scale` (`eq.sign.same-as`, `eq.sign.missing`, and a judging level of
+  `eq.sign.true-false` with a `face`, whose answer keys come in another order than its card's) and `story`, standing
+  in for game 3: one level of `addsub.meaning.part-whole` in `scene`, with the parts rounds (a third reversed), whose
+  picture runs an event under `[data-event]` (the part arrives with the sum's first number, then the covered unknown
+  with its operator and `?`, then the rest of the row) and builds the equation row with it (`build`, 2.4). A tap
+  finishes the event first: a miss rewrites the row with `setEquation`, a solve finds it shown by the shell; its demo
+  waits for the event's end; with reduced motion and in thumbs it is at its end at once (and calls `build(null)`, so
+  a thumb without `build` breaks). Only e2e/fixture.html?story loads it: its skill would move the next step and the
+  ladder that site.spec.js and planner.test.js pin on the default fixture page. The fixture `render` throws when its
+  host is not in the page.
 
 ### 4.2 The generic game test
 
@@ -693,11 +703,12 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   Game specs open fixture.html or index.html routes with a fixed seed where the round matters, and assert what they
   need of the round instead of returning early.
 - e2e/helpers.js (from AlefBet): `readsLeftToRight` per character and line, `expectTouchTargets` at 64px,
-  `roundOf`, `stored`, `seedStore`, `look` (the tap window, above), `expectCalm` (R10), which first waits out
-  finite animations in `[data-hint]` and `[data-display]` (the hint's pulse outlives the lock, 2.5), and
+  `roundOf`, `stored`, `seedStore`, `look` (the tap window, above), `expectCalm` (R10), which first waits until no
+  `[data-event]` is left (a story's event runs with the cards live, 2.4), then waits out finite animations in
+  `[data-hint]` and `[data-display]` (the hint's pulse outlives the lock, 2.5), and
   `expectThumbsDrawn`: no `[data-thumb]` empty or `data-broken` (a thumb that throws no longer reaches the error
   screen, 3.9), on home and each game's end screen.
-  e2e/fixture.html is index.html with the fixture games.
+  e2e/fixture.html is index.html with the fixture games (the story fixture only with `?story`, 4.1).
 - Every spec imports `test` and `expect` from e2e/helpers.js, never from `@playwright/test` (a code scan, 4.4).
   Its `test` has one automatic fixture, `errors`: every page of the test's context is watched, and an uncaught
   error (`pageerror`) or a `console.error()` in any of them fails the test when it ends, with the page's URL and
@@ -757,7 +768,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 
 ### 4.8 The render contract (e2e/contract.spec.js)
 
-Sections 2.4-2.5, checked on every game of games/registry.js and both fixture games with no game's own knowledge,
+Sections 2.4-2.5, checked on every game of games/registry.js and the fixture games (the story fixture on
+fixture.html?story) with no game's own knowledge,
 so a new game passes them without a spec of its own (its 4.7 spec checks what it draws). On each engine:
 
 - **The shell's path**, a test per level, on `#/dev/<game>/<level>/<seed>` for seeds 1-10 with reduced motion: in
@@ -780,8 +792,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   `symbols` look (the host must be empty before it), `view.miss()` for each wrong choice in order with the shell's
   `step` and `first`, then `solve()`; in `symbols` look also `solve()` then `picture()`; and the round as a thumb
   (unsolved at seed 1, as home draws it; solved at every seed, as the end screen does), on a signal of its own
-  that is live while it draws, as the shell's screen signal is. Every animation is finished as it starts
-  (`Animation.finish()`; an infinite one cannot finish, and its wait fails). After each step: nothing
+  that is live while it draws, as the shell's screen signal is; its ctx has no-op `setEquation` and `build`. Every
+  animation is finished as it starts (`Animation.finish()`; an infinite one cannot finish, and its wait fails), and a
+  wait is over only when no `[data-event]` is left (a story's event goes on a phase at a time, with nothing running
+  between two phases; one that never ends fails). After each step: nothing
   threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
   inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
   shown; in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
@@ -818,10 +832,18 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 - Code scan (4.4): in games/stories/game.css no geometry property (left, top, right, bottom, inset, width, height,
   border*, outline*, box-shadow, font-size) holds a literal length but a `1px` that multiplies a variable; fonts are
   `max(calc(var(--fmin) * 1px), …)`, `--fmin` 14 in rounds and 0 in thumbs.
-- e2e/helpers.js: `expectCalm` also waits out `[data-event]`. e2e/fixtures.spec.js: a fixture level whose view builds
-  the equation row (`build`): hidden tokens keep the row's box, the row is `aria-busy` while one is hidden,
-  `[data-solved]` shows them all, a correct tap shows every token and clears `aria-busy` before the equation cover
-  lifts, `setEquation` resets it, a thumb ignores it.
+- Built with the shell's step (2026-10-30): e2e/helpers.js's `expectCalm` waits out `[data-event]`, and
+  e2e/fixtures.spec.js runs the story fixture (4.1) through the real shell, its event held at each phase (its
+  animations start paused, and the test finishes the running one): on a standard and a reversed round the row shows
+  the tokens of each phase in story order, `aria-busy` until every token is shown, and the row and every token keep
+  their boxes from the first phase to the last; a right tap during the event is taken (outcome `first`), every token
+  shows and `aria-busy` goes before the equation cover lifts (a MutationObserver's order), `[data-solved]` shows a
+  token marked unbuilt after the solve, and the next round starts from its own first phase; a wrong tap during the
+  event finishes it and gets its display, and `setEquation` draws a new row, whole and not busy; "show me how"
+  during the event opens a demo that builds its own row and waits for its event, then the same round starts again
+  from its first phase; with reduced motion the row is whole at once, and home's story thumb draws (its render calls
+  `build`); and `buildEquation` in the page: by index, `[]` hides every token, `null` shows them all and clears
+  `aria-busy`, an index that is no token throws and changes nothing. The contract spec (4.8) runs the fixture too.
 - `e2e/stories.spec.js` (4.7, both engines): at 320×568, 568×320 and 390×844 the browser's `--u` within 0.25px of
   Node's, and a place, a dome, a wrap, a chip, a tour digit and a ghost within 1px of the layout, at rest, in a
   4-row overflow and solved; after every step the text rects of digits and chips inside their discs and chips, and
@@ -921,7 +943,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | `balance` level numbers | Pedagogy §6.3 has 11 rows, one per level: row 5's `max: 10` and then `max: 20` are levels 5 and 6 (`missing-symbols`, `missing-symbols-20`), and §6.3's level n is `levels[n - 1]`. Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | The game built two levels, so from level 6 on the doc's numbers missed `#/dev` and the records; two levels keep the step from 10 to 20 a rung of the ladder |
 | When a game goes live | "Live" means "shared with children". CI deploys every merge to main to Pages, the owner's iPhone check runs there right after the merge, and the link is not shared with children until its row in `device-checks.md` is logged; a failed check is fixed or reverted on main at once (section 7). Decided 2026-10-14, see decisions.md (an engineering decision the owner may reverse) | A merge puts a game on the public site before its check can be done, and the saving checks need Pages: `start.js` listens on 127.0.0.1 only, and plain http on a home network is not a secure context (no storage manager) |
 | Game 3 (`stories`): scope and level order | Eight levels of `scene`, all to 10: `change-add` (result to 5, result to 10, change), `change-take` (result to 5, result to 10), `part-whole` (whole to 5, to 10), and one `mixed` level (add and take, result). Each skill's levels in one block, result before change, the skills in learning order; a later level goes at the end of its skill's block with a new id. The next step, computed with the real planner and SKILLS: ten-frame 1-4, stories 1-5, ten-frame 5-9, stories 6-7, balance 1, stories 8, ten-frame 10-12, balance 2-11; home order ten-frame, stories, balance. Part, start and take-change are not in v1. Decided 2026-10-30, see decisions.md (an engineering decision the owner may reverse) | `nextStep` opens the first unpassed skill's lowest unpassed level, so a child goes skill by skill whatever the list order; in a nine-level interleaved draft (take-change right after add-change) an always-right child never played take-5 or take-10. Take-change: every wordless drawing found shows the leavers before they are hidden (a cover landing on visible balloons shows how many by its width and place), which tests memory, not the missing change; it goes to the printed-picture check (pedagogy §8.3) |
-| The story's event and the equation row | The shell gives `build(indices)` (2.4; `null` shows all): hidden tokens keep their place, `aria-busy` while any is hidden, all shown under `[data-solved]` and by `setEquation`, a no-op in thumbs. No lock for the event: the cards are live from the mount, `miss` and `solve` first finish the event, and a tap during it is an attempt like any other (a correct one: the shell shows every token, so the row leaves `aria-busy`, before it lifts the equation cover, 2.5); the demo waits for the event to end. `firstMs` keeps its meaning. A shell change on its own branch, tested with a fixture level (4.9). Decided 2026-10-30, see decisions.md | Design 7.1 locks the cards only while a display runs and 6.5 answers a press within 100 ms; a lock to the event's end would be one more locked state with no sign of its end. The demo shows the story, so it does not cut it short. Built from the mount in story order, the row never reflows and the live region never reads half an exercise |
+| The story's event and the equation row | The shell gives `build(indices)` (2.4; `null` shows all): hidden tokens keep their place, `aria-busy` while any is hidden, all shown under `[data-solved]` and by `setEquation`, a no-op in thumbs. No lock for the event: the cards are live from the mount, `miss` and `solve` first finish the event, and a tap during it is an attempt like any other (a correct one: the shell shows every token, so the row leaves `aria-busy`, before it lifts the equation cover, 2.5); the demo waits for the event to end. `firstMs` keeps its meaning. A shell change on its own branch, tested with a fixture level (4.9). Decided 2026-10-30, see decisions.md. Built (2026-10-30, an engineering choice the owner may reverse): `build` does nothing after the solve and after abort, and an index that is no token of the row throws; the shell's solve shows every token itself (`buildEquation(row, null)` in shell/equation.js), not through the game's `build`; the fixture is a third fixture game, `story`, loaded only by fixture.html?story, not a level of `parts` | Design 7.1 locks the cards only while a display runs and 6.5 answers a press within 100 ms; a lock to the event's end would be one more locked state with no sign of its end. The demo shows the story, so it does not cut it short. Built from the mount in story order, the row never reflows and the live region never reads half an exercise. A game's event chain resumes in a microtask, so a `build` it sends after a tap would hide tokens again and leave the live region busy over a solved row; after abort the row belongs to a screen that is gone. A wrong index is a game's bug, and throwing shows it in the tests, as an unknown display does (2.1). A level of `parts` changes what site.spec.js, planner.test.js and store.test.js pin: another skill moves the next step, and a `num.parts.split` level the skill's last level and the level numbers; the render gets the round, not the level, so the fixture's view needs a round of its own kind (`scene`, a skill no default fixture page offers) |
 | The fixed dome in stories (level 3) | At rest one dome of a fixed size, a square of 1.25u, plain until it lands: it slides in from the right and stands after the last dot, in the same row while two places are free there, else at the next row's start, always on its row's floor (rising 0.25u above it); then its `?`; then the whole's outline (round the dots and the dome) and its chip. The k places are drawn only when it lifts, continuing the rows after the dots; from the hint, the stretched cover with the places' dashed outlines (the balance's `.is-outline`). The drawing holds the rows of r from the mount (`3 + ? = 7` is two rows at rest, though the dots and the dome fill one), so lifting the dome never re-lays the scene; r is on the chip, so the height tells nothing. Level 3 deals no `9 + ? = 10`. The placement stays in each game; only lib/cover.js is shared. Decided 2026-10-30, see decisions.md | The owner's balance decision of 2026-10-18: a stretched cover draws the answer's shape. The balance's size (two cubes and the gap, wide and tall) is two rows here, where rows stand 0.25u + 18px apart: it would push the dots to a third and fourth row. A one-place-tall dome has the shape of a cover over one or two places, the very thing it must not say. After four dots in the second row there is no room, so 9 + 1 would need a third row. The pans stack from the bottom and the story fills from the top, so the two placements share no logic |
 | `given.part` with several known parts | The known part on the unknown's side of `=`, else the first in the exercise; in take the start is the whole, so it is the change or what stayed (depth §4.2). This is the balance's `part()`, now written in the catalogue. The ten-frame is unchanged: its `given.part` gives a value only for a missing part, where there is one known part, and no card elsewhere. Decided 2026-10-30, see decisions.md | One formula per id across games (R4); "the first in the exercise" alone would give the answer in `3 + 5 = 5 + ?`. On the ten-frame's level 8 (`10 + 4 = ?`) the catalogue now gives 10 where the game gives nothing, and no card changes: earlier rules fill the cards there |
 | The display cap in stories | `budget` says no to a display that needs more than 4 rows (2 of the story, 2 more); the next rule of the skill's list takes the card. The band between two display rows is 0.1u + 11px (rings only), against 0.1u + 17px before the first (a line and a ring), and the margin under a display row 0.05u + 6px (rings only), against 0.05u + 12px under a story row. Decided 2026-10-30, see decisions.md | A cap from the round alone, never from a viewport. Rings need only 5 + 1 + 5px, and every px left to the unit counts: a 4-row overflow is about 16.4px on a landscape phone (with 0.1u + 17px between display rows, about 15.1px; with a 12px margin too, as first drafted, 13.8px, under the 14px floor). `op.other` leaves the cards in 7 of level 3's 34 exercises (2s + r over 20) and nowhere else; a 3-row cap would take it from 18 of those 34 and from 6 of take-10's 35 |

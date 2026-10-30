@@ -89,6 +89,12 @@ interface RenderContext {
   mode: 'play' | 'demo' | 'thumb';
   solved: boolean;
   setEquation(equation: Equation): void;
+  /**
+   * Game 3 (architecture 2.4): show only these tokens of the equation row, by index in [...left, '=', ...right];
+   * the rest keep their place, hidden, and the row is aria-busy. null shows all. A no-op in thumbs, after the
+   * solve and after abort; setEquation draws a fully built row.
+   */
+  build(indices: number[] | null): void;
   onAttempt(value: any): void;
 }
 

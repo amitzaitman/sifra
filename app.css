@@ -87,6 +87,9 @@ main {
 .eq-slot { position: relative; display: inline-grid; place-items: center; min-width: 1.3em; height: 1.3em; }
 .eq-answer { opacity: 0; color: var(--role-unknown); }
 [data-solved] .eq-answer { opacity: 1; }
+/* A story's event builds the row (architecture 2.4): an unbuilt token keeps its place, hidden; solved, every token shows. */
+.eq > .is-unbuilt { visibility: hidden; }
+[data-solved] .eq > .is-unbuilt { visibility: visible; }
 
 /* The one cover (design 6.6): a dome; it lifts 60% of its height and fades in 250ms. Its corners
    come from its height: a cover wider than tall (a run of places in a picture) sets --cover-h to

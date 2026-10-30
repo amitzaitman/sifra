@@ -237,3 +237,182 @@ test('a session of 8 rounds ends on the solved pictures and the home button', as
   await page.locator('[data-home]').click();
   await expect(page.locator('main[data-screen="home"]')).toBeVisible();
 });
+
+// A story's event and the equation row (architecture 2.4-2.5): the story fixture, on fixture.html?story,
+// builds the row with its event (ctx.build). The tests hold the event at each phase: its animations
+// start paused, and step() finishes the running one, so the next phase starts, paused too.
+const STORY = `${FIXTURE}?story`;
+const HOLD = '[data-event] * { animation-play-state: paused !important; }';
+const step = (page) => page.evaluate(() => {
+  for (const a of document.querySelector('[data-event]')?.getAnimations({ subtree: true }) ?? []) a.finish();
+});
+/** The equation row now: aria-busy, the tokens shown (by index), each token's box and the row's. */
+const rowNow = (page) => page.locator('[data-area="equation"] .eq').evaluate((row) => {
+  const box = (el) => { const b = el.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 10) / 10).join(' '); };
+  return {
+    busy: row.getAttribute('aria-busy'),
+    shown: [...row.children].flatMap((t, i) => (getComputedStyle(t).visibility === 'visible' ? [i] : [])),
+    unbuilt: row.querySelectorAll('.is-unbuilt').length,
+    boxes: [row, ...row.children].map(box),
+  };
+});
+/** The phases of a story fixture round: the sum's first number, then its operator and '?', then every token. */
+const phasesOf = (round) => {
+  const at = round.equation.left.length > 1 ? 0 : 2;
+  return [[at], [at, at + 1, at + 2], [0, 1, 2, 3, 4]];
+};
+
+/**
+ * Opens a page of fixture.html?story on a screen that does not move (the game's stylesheet loads
+ * there, so the round's event has its animations), holds every event, then goes to a hash.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} first a hash with no round
+ * @param {string} hash
+ */
+async function holdStory(page, first, hash) {
+  await page.clock.install({ time: NOW });
+  await page.goto(`${STORY}${first}`);
+  await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => l.getAttribute('href')?.endsWith('/story/game.css') && l.sheet));
+  await page.addStyleTag({ content: HOLD });
+  await page.evaluate((h) => { location.hash = h; }, hash);
+  await expect(page.locator('main[data-screen="round"][data-game="story"], main[data-screen="demo"][data-game="story"]')).toBeVisible();
+  await look(page);
+  return roundOf(page);
+}
+
+for (const seed of [1, 2]) {
+  test(`story, seed ${seed}: the event builds the equation row in place, aria-busy until every token shows`, async ({ page }) => {
+    const { round } = await holdStory(page, '#/dev', `#/dev/story/1/${seed}`);
+    expect(round.eqform).toBe(seed === 1 ? 'standard' : 'reversed');
+    const phases = phasesOf(round);
+    const first = await rowNow(page);
+    expect(first).toMatchObject({ busy: 'true', shown: phases[0], unbuilt: 4 });
+    await expect(page.locator('[data-area="picture"] [data-event]')).toHaveCount(1);
+    await step(page);
+    await expect.poll(async () => (await rowNow(page)).shown).toEqual(phases[1]);
+    expect(await rowNow(page)).toEqual({ ...first, shown: phases[1], unbuilt: 2 });
+    await step(page);
+    await expect.poll(async () => (await rowNow(page)).shown).toEqual(phases[2]);
+    // Built, the row and every token keep the boxes they had with one token shown: nothing moved.
+    expect(await rowNow(page)).toEqual({ ...first, busy: null, shown: phases[2], unbuilt: 0 });
+    await expect(page.locator('[data-event]')).toHaveCount(0);
+    expect(await page.locator('[data-area="equation"] .eq').ariaSnapshot()).toBe(spoken(round.equation, '?'));
+  });
+}
+
+test('story: a right tap during the event is taken; the row shows every token and leaves aria-busy before the cover lifts', async ({ page }) => {
+  await seedStore(page, storeWith({ games: { story: ladderAt('event') } }));
+  const { round, answerAt } = await holdStory(page, '#/', '#/play/story');
+  expect((await rowNow(page)).busy).toBe('true');
+  await page.locator('[data-area="equation"]').evaluate((area) => {
+    const log = [];
+    /** @type {any} */ (window).equationLog = log;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        const el = /** @type {Element} */ (r.target);
+        if (r.attributeName === 'aria-busy') log.push(`busy ${el.getAttribute('aria-busy')}`);
+        else if (el.classList.contains('cover')) log.push(el.classList.contains('is-lifted') ? 'lift' : 'cover');
+        else if (el.parentElement?.classList.contains('eq')) log.push(el.classList.contains('is-unbuilt') ? 'hide' : 'show');
+      }
+    }).observe(area, { attributes: true, subtree: true, attributeFilter: ['aria-busy', 'class'] });
+  });
+  await card(page, answerAt).click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  const log = await page.evaluate(() => /** @type {any} */ (window).equationLog);
+  expect(log.filter((e) => e !== 'cover')).toEqual(['show', 'show', 'show', 'show', 'busy null', 'lift']);
+  expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
+  await expect(page.locator('[data-event]')).toHaveCount(0);
+  await expect(page.locator('[data-next]')).toBeVisible();
+  // [data-solved] shows a token even if something marked it unbuilt after the solve (app.css).
+  const late = await page.locator('[data-area="equation"] .eq > *').nth(1).evaluate((t) => {
+    t.classList.add('is-unbuilt');
+    return getComputedStyle(t).visibility;
+  });
+  expect(late).toBe('visible');
+  expect(await lastAttempt(page)).toMatchObject({ game: 'story', outcome: 'first', wrong: [], answer: round.answer });
+  // The next round starts from its own event: one token shown, the row busy again.
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]:not([data-solved])')).toBeVisible();
+  const next = await roundOf(page);
+  expect(await rowNow(page)).toMatchObject({ busy: 'true', shown: phasesOf(next.round)[0], unbuilt: 4 });
+});
+
+test('story: a wrong tap during the event finishes it, gets its display, and setEquation draws the row whole', async ({ page }) => {
+  const { round, answerAt } = await holdStory(page, '#/dev', '#/dev/story/1/1');
+  await page.locator('[data-area="equation"] .eq').evaluate((row) => row.setAttribute('data-before', ''));
+  const wrong = answerAt === 0 ? 1 : 0;
+  await card(page, wrong).click();
+  await expect(page.locator(`[data-display="${RULES[round.choices[wrong].rule].display}"]`)).toBeVisible();
+  await unlocked(page);
+  await expect(page.locator('[data-event]')).toHaveCount(0);
+  // The fixture finishes its event on a miss with setEquation: a new row, fully built, not busy.
+  await expect(page.locator('[data-area="equation"] .eq')).not.toHaveAttribute('data-before');
+  expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
+  expect(await page.locator('[data-area="equation"] .eq').ariaSnapshot()).toBe(spoken(round.equation, '?'));
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+});
+
+test('story: "show me how" during the event: the demo builds its own row and waits for its event; then the round starts again', async ({ page }) => {
+  const { round } = await holdStory(page, '#/dev', '#/dev/story/1/1');
+  await page.locator('[data-how]').click();
+  await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+  const demo = await roundOf(page);
+  expect(await rowNow(page)).toMatchObject({ busy: 'true', shown: phasesOf(demo.round)[0] });
+  // The demo waits for the event: the hand has not moved, and nothing is solved.
+  await expect(page.locator('[data-hand]')).not.toHaveAttribute('style');
+  await step(page);
+  await expect.poll(async () => (await rowNow(page)).shown).toEqual(phasesOf(demo.round)[1]);
+  await expect(page.locator('main[data-screen="demo"]')).not.toHaveAttribute('data-solved');
+  await step(page);
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
+  expect(await rowNow(page)).toMatchObject({ busy: null, unbuilt: 0 });
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', '1');
+  expect(await rowNow(page)).toMatchObject({ busy: 'true', shown: phasesOf(round)[0], unbuilt: 4 });
+});
+
+test('story: with reduced motion the event is at its end at once; thumbs draw their end state', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install({ time: NOW });
+  await page.goto(`${STORY}#/`);
+  // Each thumb's render builds its row (a no-op there): the thumb ctx has build().
+  await expectThumbsDrawn(page);
+  await expect(page.locator('[data-card] [data-thumb][data-game="story"] > *')).not.toHaveCount(0);
+  await page.evaluate(() => { location.hash = '#/dev/story/1/2'; });
+  await expect(page.locator('main[data-screen="round"][data-game="story"]')).toBeVisible();
+  expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
+  await expect(page.locator('[data-event]')).toHaveCount(0);
+});
+
+test('buildEquation: by index in [...left, "=", ...right]; [] hides every token, null shows them all; an index that is no token throws', async ({ page }) => {
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}#/dev`);
+  const result = await page.evaluate(async () => {
+    const { buildEquation, drawEquation } = await import('/shell/equation.js');
+    const host = document.createElement('div');
+    document.body.append(host);
+    const { row } = drawEquation(host, { left: [5], right: [2, '+', '?'] }, 3, () => document.createElement('span'));
+    const now = () => ({ busy: row.getAttribute('aria-busy'), unbuilt: [...row.children].flatMap((t, i) => (t.classList.contains('is-unbuilt') ? [i] : [])) });
+    const states = [];
+    for (const indices of [[2], [2, 3, 4], [], null]) {
+      buildEquation(row, indices);
+      states.push(now());
+    }
+    const thrown = [[5], [-1], [1.5]].map((indices) => {
+      try { buildEquation(row, indices); return 'no throw'; } catch (e) { return e.name; }
+    });
+    host.remove();
+    return { states, thrown, after: now() };
+  });
+  expect(result.states).toEqual([
+    { busy: 'true', unbuilt: [0, 1, 3, 4] },
+    { busy: 'true', unbuilt: [0, 1] },
+    { busy: 'true', unbuilt: [0, 1, 2, 3, 4] },
+    { busy: null, unbuilt: [] },
+  ]);
+  expect(result.thrown).toEqual(['RangeError', 'RangeError', 'RangeError']);
+  expect(result.after, 'a throw changes nothing').toEqual({ busy: null, unbuilt: [] });
+});

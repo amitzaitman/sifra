@@ -1,0 +1,27 @@
+/* Fixture game "story" (test code). Every selector starts with [data-game="story"]: the parts fixture's drawing
+   (kit.js), then the event: the part arrives, then the covered unknown, which is not there before. */
+[data-game="story"] .fx-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; }
+[data-game="story"] .fx-group { position: relative; display: grid; place-items: center; min-width: 40px; min-height: 40px; }
+[data-game="story"] .fx-dots { display: flex; flex-wrap: wrap; gap: 6px; max-width: 134px; }
+[data-game="story"] .fx-dot { position: relative; width: 22px; height: 22px; border-radius: 50%; }
+[data-game="story"] .fx-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
+[data-game="story"] .fx-empty { box-shadow: inset 0 0 0 2px var(--frame); }
+[data-game="story"] .fx-tag { padding: 2px 12px; border-radius: var(--r-chip); background: var(--surface); color: var(--role-whole); font-size: 28px; font-weight: 800; }
+[data-game="story"] .fx-unknown .cover { inset: -3px; }
+[data-game="story"] .fx-display { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 180px; animation: story-in var(--t-move) var(--ease); }
+[data-game="story"] .fx-ghost { width: 14px; height: 14px; border-radius: 50%; background: var(--role-added-ghost); box-shadow: inset 0 0 0 2px var(--role-added-edge); }
+[data-game="story"] .fx-hint { position: absolute; inset: -8px; border-radius: 14px; box-shadow: 0 0 0 var(--ring) var(--role-unknown); pointer-events: none; animation: story-pulse var(--t-blink) var(--ease); }
+[data-game="story"] .fx-tour { position: absolute; inset: 0; display: grid; place-items: center; color: var(--on-unknown); font-size: 14px; font-weight: 800; animation: story-in 150ms var(--ease); }
+[data-game="story"] .fx-empty .fx-tour { color: var(--role-unknown); }
+[data-game="story"] [data-event="1"] > .fx-group:nth-child(2) { animation: story-arrive var(--t-move) var(--ease); }
+[data-game="story"] [data-event="1"] > .fx-unknown { visibility: hidden; }
+[data-game="story"] [data-event="2"] > .fx-unknown { animation: story-arrive var(--t-move) var(--ease); }
+/* A thumb: three groups fit its 80px (e2e/contract.spec.js). */
+[data-game="story"].thumb .fx-row { gap: 4px 8px; }
+[data-game="story"].thumb .fx-group { min-width: 0; min-height: 0; }
+[data-game="story"] .thumb .fx-dots, [data-game="story"].thumb .fx-dots { gap: 2px; max-width: 48px; }
+[data-game="story"] .thumb .fx-dot, [data-game="story"].thumb .fx-dot { width: 8px; height: 8px; }
+[data-game="story"].thumb .fx-tag { font-size: 16px; }
+@keyframes story-in { from { opacity: 0; transform: scale(0.6); } }
+@keyframes story-arrive { from { opacity: 0; transform: translateX(24px); } }
+@keyframes story-pulse { 50% { opacity: 0.3; } }
