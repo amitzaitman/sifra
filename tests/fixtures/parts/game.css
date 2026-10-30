@@ -13,8 +13,11 @@
 [data-game="parts"] .fx-hint { position: absolute; inset: -8px; border-radius: 14px; box-shadow: 0 0 0 var(--ring) var(--role-unknown); pointer-events: none; animation: parts-pulse var(--t-blink) var(--ease); }
 [data-game="parts"] .fx-tour { position: absolute; inset: 0; display: grid; place-items: center; color: var(--on-unknown); font-size: 14px; font-weight: 800; animation: parts-in 150ms var(--ease); }
 [data-game="parts"] .fx-empty .fx-tour { color: var(--role-unknown); }
-[data-game="parts"] .thumb .fx-dots, [data-game="parts"].thumb .fx-dots { gap: 3px; max-width: 62px; }
-[data-game="parts"] .thumb .fx-dot, [data-game="parts"].thumb .fx-dot { width: 10px; height: 10px; }
+/* A thumb: two groups to a line at 320px, so three groups fit its 80px (e2e/contract.spec.js). */
+[data-game="parts"].thumb .fx-row { gap: 4px 8px; }
+[data-game="parts"].thumb .fx-group { min-width: 0; min-height: 0; }
+[data-game="parts"] .thumb .fx-dots, [data-game="parts"].thumb .fx-dots { gap: 2px; max-width: 48px; }
+[data-game="parts"] .thumb .fx-dot, [data-game="parts"].thumb .fx-dot { width: 8px; height: 8px; }
 [data-game="parts"].thumb .fx-tag { font-size: 16px; }
 @keyframes parts-in { from { opacity: 0; transform: scale(0.6); } }
 @keyframes parts-pulse { 50% { opacity: 0.3; } }

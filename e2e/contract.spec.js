@@ -1,0 +1,359 @@
+// The render contract (architecture 2.4-2.5, 4.8), machine-checked on every registered game and both
+// fixture games: the shell's path through each level on #/dev, and one loop in the page that calls
+// render and view.miss directly over many seeds and two screen sizes. A new game passes it with no
+// spec of its own; its game spec (4.7) checks what it draws.
+import { RULES } from '../data/errors.js';
+import * as registry from '../games/registry.js';
+import * as parts from '../tests/fixtures/parts/game.js';
+import * as scale from '../tests/fixtures/scale/game.js';
+import { FIXTURE, INDEX, NOW, expect, look, roundOf, test } from './helpers.js';
+
+const SITES = [
+  { path: INDEX, games: Object.values(registry) },
+  { path: FIXTURE, games: [parts, scale] },
+];
+/** The seeds of the shell path, and of the loop in the page. */
+const SEEDS = 10;
+const LOOP = 50;
+/**
+ * Levels whose cover at rest has one size whatever is under it: the balance's pans (design 6.6, the
+ * fixed dome, owner decision 2026-10-18). Elsewhere a cover in the picture covers the unknown's
+ * places (design 6.6), so its size is the deduction the picture offers: the ten-frame, the balance's
+ * rows (`set`, level 9, 3 + 5 = 5 + ?) and the fixtures fail this clause by design.
+ * @type {(game: Game, level: Level) => boolean}
+ */
+const fixedCover = (game, level) => game.meta.id === 'balance' && level.model === 'balance';
+
+const card = (page, i) => page.locator(`button[data-index="${i}"]`);
+/** A tour can count twenty things, 150 ms each, with motion: the cards may stay locked a few seconds. */
+const unlocked = (page) => expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
+/** @type {(tokens: any[]) => number} */
+const total = (tokens) => tokens.reduce((n, t, i) => (typeof t !== 'number' ? n : tokens[i - 1] === '−' ? n - t : n + t), 0);
+/**
+ * The number the tour ends on (2.5 step 4): the answer; a pair card's second number; a true card's
+ * sum, the same on both sides (a judging round).
+ * @param {any} answer
+ */
+const tourEnd = (answer) => String(Array.isArray(answer) ? answer.at(-1) : Array.isArray(answer?.left) ? total(answer.left) : answer);
+
+/**
+ * In the page: the `.cover` elements under a root that a child sees (a box, and no display: none,
+ * visibility: hidden or opacity 0 on it or above it; a lifted cover has opacity 0), as
+ * "class w×h" with the size rounded to half a pixel.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} root
+ * @returns {Promise<string[]>}
+ */
+const shownCovers = (page, root) => page.locator(root).evaluate((el) => [...el.querySelectorAll('.cover')].flatMap((c) => {
+  const b = c.getBoundingClientRect();
+  if (!b.width || !b.height) return [];
+  for (let n = /** @type {Element | null} */ (c); n; n = n.parentElement) {
+    const s = getComputedStyle(n);
+    if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return [];
+  }
+  const half = (v) => Math.round(v * 2) / 2;
+  return [`${c.parentElement?.className} ${half(b.width)}×${half(b.height)}`];
+}));
+
+/**
+ * Opens a round on #/dev in the page already open (the same round again through the dev list),
+ * then looks past the tap window (3.2).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} hash
+ */
+async function openRound(page, hash) {
+  if (await page.evaluate((h) => location.hash === h, hash)) {
+    await page.evaluate(() => { location.hash = '#/dev'; });
+    await expect(page.locator('main[data-screen="dev"]')).toBeAttached();
+  }
+  await page.evaluate((h) => { location.hash = h; }, hash);
+  const [, , id, n, seed] = hash.split('/');
+  await expect(page.locator(`main[data-screen="round"][data-game="${id}"][data-level="${n}"][data-seed="${seed}"]`)).toBeVisible();
+  await look(page);
+  return roundOf(page);
+}
+
+/**
+ * The shell's path through one round (2.5): in symbols look the panel holds only the picture
+ * button until it is tapped; each wrong card in order, the cards unlocked after each; the first
+ * miss shows its rule's display, from step 2 a hint, at step 3 the last tour digit is the answer;
+ * then the answer, after which no cover is shown and "הַבָּא" is there. In symbols look, the same
+ * round again, solved on the first tap: the picture asked for after the solve shows no cover either.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} hash
+ * @returns {Promise<{ answer: any, covers: string[] }>} the answer, and the covers shown at rest
+ */
+async function shellPath(page, hash) {
+  const { round, level, answerAt } = await openRound(page, hash);
+  const panel = page.locator('main[data-screen="round"] [data-area="picture"]');
+  const where = (what) => `${hash}: ${what}`;
+  if (level.look === 'symbols') {
+    const drawn = await panel.evaluate((host) => [...host.children].filter((n) => !n.matches('[data-show-picture]')).map((n) => n.outerHTML.slice(0, 60)));
+    expect(drawn, where('symbols look: the panel holds only the picture button before picture()')).toEqual([]);
+    await page.locator('[data-show-picture]').click();
+  }
+  const covers = await shownCovers(page, 'main[data-screen="round"] [data-area="picture"]');
+  const wrong = round.choices.flatMap((c, i) => (c.rule ? [i] : []));
+  for (const [m, i] of wrong.entries()) {
+    const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
+    await card(page, i).click();
+    await unlocked(page);
+    if (m === 0) {
+      // Only the first miss: with reduced motion the balance skips a later display (design 7.2).
+      const display = RULES[round.choices[i].rule].display;
+      await expect(panel.locator(`[data-display="${display}"]`).first(), where(`miss 1 shows ${display}`)).toBeVisible();
+    }
+    if (step >= 2) await expect(panel.locator('[data-hint]').first(), where(`step ${step} has the hint`)).toBeAttached();
+    if (step === 3) {
+      await expect(page.locator('[data-tour]').last(), where('the tour ends on the answer')).toHaveText(tourEnd(round.answer));
+      break;
+    }
+  }
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]'), where('"הַבָּא" after the solve')).toBeVisible();
+  expect(await shownCovers(page, 'main'), where('no cover shown after the solve')).toEqual([]);
+  if (level.look === 'symbols') {
+    await openRound(page, hash);
+    await card(page, answerAt).click();
+    await expect(page.locator('[data-next]'), where('"הַבָּא" after a first try')).toBeVisible();
+    await look(page);
+    await page.locator('[data-show-picture]').click();
+    await expect(panel.locator('[data-show-picture]')).toHaveCount(0);
+    await expect(panel.locator(':scope > *').first(), where('the picture after the solve is drawn')).toBeAttached();
+    expect(await shownCovers(page, 'main'), where('no cover shown in the picture after a first try')).toEqual([]);
+  }
+  return { answer: round.answer, covers };
+}
+
+// The loop in the page first: its tests are the longest, so the workers start on them.
+for (const { path, games } of SITES) {
+  for (const game of games) {
+    const id = game.meta.id;
+    // Each value of a mixed level (R3), as the planner deals them.
+    const levels = game.levels.flatMap((l) => [l.structure].flat().flatMap((structure) => [l.ask].flat().map((ask) =>
+      ({ ...l, ...(structure !== undefined && { structure }), ...(ask !== undefined && { ask }) }))));
+    for (const [width, height] of [[320, 568], [1024, 1366]]) {
+      test(`${id} at ${width}×${height}: render and miss over every level, seeds 1-${LOOP}, keep every box, digit and cover in place`, async ({ page }) => {
+        test.setTimeout(240000);
+        await page.setViewportSize({ width, height });
+        await page.clock.install({ time: NOW });
+        await page.goto(`${path}#/dev/${id}/1/1`);
+        await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
+        const url = new URL(path === INDEX ? `/games/${id}/game.js` : `/tests/fixtures/${id}/game.js`, page.url()).pathname;
+        expect(await page.evaluate(loop, { url, levels, seeds: LOOP })).toEqual([]);
+      });
+    }
+  }
+}
+
+for (const { path, games } of SITES) {
+  for (const game of games) {
+    const id = game.meta.id;
+    for (const [i, level] of game.levels.entries()) {
+      test(`${id} ${i + 1} (${level.id}), seeds 1-${SEEDS}, reduced motion: the shell's path keeps the render contract`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.clock.install({ time: NOW });
+        await page.goto(`${path}#/dev`);
+        /** @type {{ seed: number, answer: any, covers: string[] }[]} */
+        const rest = [];
+        for (let seed = 1; seed <= SEEDS; seed++) rest.push({ seed, ...(await shellPath(page, `#/dev/${id}/${i + 1}/${seed}`)) });
+        if (!fixedCover(game, level)) return;
+        // Two rounds with different answers show the same covers at rest: the cover's size never
+        // tells what is under it (design 6.6, 6b76be4).
+        const sizes = (covers) => covers.map((c) => c.split(' ').at(-1)).sort();
+        for (const r of rest) {
+          if (JSON.stringify(r.answer) === JSON.stringify(rest[0].answer)) continue;
+          expect(sizes(r.covers), `seed ${r.seed} (answer ${JSON.stringify(r.answer)}) and seed 1 (answer ${JSON.stringify(rest[0].answer)})`).toEqual(sizes(rest[0].covers));
+        }
+      });
+    }
+    // One run with motion, on the game's first level with 4 options (the whole help ladder: a display
+    // that stays, one that leaves, the hint, the tour): the waits chain on real animations here. The
+    // loop in the page runs every level's motion, finishing each animation as it starts.
+    const n = game.levels.findIndex((l) => l.options === 4) + 1;
+    test(`${id} ${n}, seed 1, with motion: the shell's path keeps the render contract`, async ({ page }) => {
+      await page.clock.install({ time: NOW });
+      await page.goto(`${path}#/dev`);
+      await shellPath(page, `#/dev/${id}/${n}/1`);
+    });
+  }
+}
+
+/**
+ * In the page: every level of a game (each value of a mixed one), seeds 1 to `seeds`, rendered
+ * into a host of the panel's size as the shell would (the round frozen), each wrong choice missed
+ * in order with the shell's step and first, then solved; in symbols look also solved first and the
+ * picture asked for after; and the round as a thumb (unsolved at seed 1, solved at every seed).
+ * Animations are finished as they start. After each step: nothing threw; every box shown is finite
+ * and inside the host, and no inline style holds NaN; after a solve no cover is shown; in the panel,
+ * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
+ * is topmost (architecture 4.8). Returns what went wrong, the first 40 or so.
+ * @param {{ url: string, levels: Level[], seeds: number }} arg
+ * @returns {Promise<string[]>}
+ */
+async function loop({ url, levels, seeds }) {
+  const game = await import(url);
+  const { rng } = await import('/shell/rng.js');
+  const { RULES } = await import('/data/errors.js');
+  const out = [];
+  const main = /** @type {HTMLElement} */ (document.querySelector('main'));
+  const panel = /** @type {HTMLElement} */ (main.querySelector('[data-area="picture"]'));
+  const host = /** @type {HTMLElement} */ (panel.cloneNode(false));
+  panel.replaceWith(host);
+  const shelf = document.createElement('div');
+  shelf.className = 'end-thumbs';
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
+  thumb.dataset.thumb = '';
+  thumb.dataset.game = game.meta.id;
+  shelf.append(thumb, document.createElement('div'));
+  host.after(shelf);
+  // While the topmost check looks, every node with a fill or text of its own takes hits, and a
+  // hollow or hidden one (data-contract-miss) none (e2e/ten-frame.spec.js, paintedOver).
+  const probe = document.createElement('style');
+  probe.textContent = '[data-contract-hit] * { pointer-events: auto !important; } [data-contract-hit] [data-contract-miss] { pointer-events: none !important; }';
+  document.head.append(probe);
+  const frozen = (data) => {
+    if (data === null || typeof data !== 'object' || Object.isFrozen(data)) return data;
+    Object.freeze(data);
+    for (const v of Object.values(data)) frozen(v);
+    return data;
+  };
+  // A macrotask that the page's fake clock does not hold.
+  const tick = () => new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve(undefined);
+    channel.port2.postMessage(0);
+  });
+  /**
+   * Awaits a promise, finishing every animation as it starts, until it has settled and nothing
+   * runs (what it started without awaiting included, as the hint). An infinite animation cannot
+   * finish: a promise that waits on one never settles, and fails.
+   */
+  const drive = async (promise) => {
+    let [done, error] = [false, null];
+    Promise.resolve(promise).then(() => { done = true; }, (e) => { [done, error] = [true, e]; });
+    for (let k = 0; k < 400; k++) {
+      const running = document.getAnimations().filter((a) => a.playState === 'running');
+      if (done && !running.length) break;
+      for (const a of running) {
+        try { a.finish(); } catch { /* infinite */ }
+      }
+      // What the finished animations release runs in microtasks; a macrotask only when it waits on more.
+      for (let j = 0; j < 8; j++) await null;
+      if (!done || document.getAnimations().some((a) => a.playState === 'running')) await tick();
+    }
+    if (error) throw error;
+    if (!done) throw new Error('it never settled (an animation that cannot finish?)');
+  };
+  const name = (n) => `${n?.getAttribute?.('class') || n?.tagName} "${(n?.textContent ?? '').slice(0, 12)}"`;
+  /** @type {(root: Element, where: string, o: { solved: boolean, top: boolean }) => void} */
+  const check = (root, where, { solved, top }) => {
+    const R = root.getBoundingClientRect();
+    const nodes = [...root.querySelectorAll('*')];
+    const style = new Map(nodes.map((n) => [n, getComputedStyle(n)]));
+    const hiddenAt = new Map();
+    const hidden = (n) => {
+      if (n === root || !n) return false;
+      if (!hiddenAt.has(n)) {
+        const s = style.get(n);
+        hiddenAt.set(n, s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0' || hidden(n.parentElement));
+      }
+      return hiddenAt.get(n);
+    };
+    for (const n of nodes) {
+      if (/NaN|Infinity|undefined/.test(n.getAttribute('style') ?? '')) out.push(`${where}: ${name(n)} style "${n.getAttribute('style')}"`);
+      const b = n.getBoundingClientRect();
+      if (![b.left, b.top, b.width, b.height].every(Number.isFinite)) out.push(`${where}: ${name(n)} box not finite`);
+      if ((!b.width && !b.height) || hidden(n)) continue;
+      const over = Math.max(R.left - b.left, R.top - b.top, b.right - R.right, b.bottom - R.bottom);
+      if (over > 1) out.push(`${where}: ${name(n)} ${Math.round(over)}px outside the host`);
+    }
+    const shown = (n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height > 0 && !hidden(n); };
+    const digits = nodes.filter((n) => shown(n) && [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && /\d/.test(c.textContent ?? '')));
+    for (const d of digits) {
+      if (!(d instanceof HTMLElement) || d.scrollWidth <= d.clientWidth || !d.clientWidth) continue;
+      // Wider than its box: allowed only centred on it, as a 10 on one dot of the ten-frame's pair
+      // cards (design 7.2; e2e/ten-frame.spec.js keeps it inside its group's line).
+      const range = document.createRange();
+      range.selectNodeContents(d);
+      const [ink, b] = [range.getBoundingClientRect(), d.getBoundingClientRect()];
+      if (Math.abs(ink.left + ink.right - b.left - b.right) / 2 > 1) out.push(`${where}: ${name(d)} overflows its box, off its centre (${d.scrollWidth} > ${d.clientWidth})`);
+    }
+    const covers = nodes.filter((n) => n.matches('.cover') && shown(n));
+    if (solved) for (const c of covers) out.push(`${where}: a cover shown after the solve, in ${name(c.parentElement)}`);
+    // Topmost, so the hit at its centre is what is painted there. A cover without a mark joins the
+    // pieces of a cover over two rows, and the hint's ring may run along it in the same colour (the
+    // balance, design 6.6): only a cover with its ? or digit is checked.
+    const tops = [...digits, ...covers.filter((c) => c.getAttribute('data-mark'))];
+    if (!top || !tops.length) return;
+    const hollow = (n) => {
+      if (!(n instanceof HTMLElement)) return n.matches('svg');
+      const s = style.get(n);
+      return /^(transparent|rgba\(.*,\s*0\))$/.test(s.backgroundColor) && s.backgroundImage === 'none'
+        && ![...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent?.trim());
+    };
+    const misses = nodes.filter((n) => hollow(n) || hidden(n));
+    for (const n of misses) n.setAttribute('data-contract-miss', '');
+    root.setAttribute('data-contract-hit', '');
+    for (const el of tops) {
+      const b = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      if (!el.contains(hit)) out.push(`${where}: ${name(el)} under ${name(hit)}`);
+    }
+    root.removeAttribute('data-contract-hit');
+    for (const n of misses) n.removeAttribute('data-contract-miss');
+  };
+  /** @type {(into: HTMLElement, round: Round, mode: string, solved: boolean, signal: AbortSignal) => any} */
+  const render = (into, round, mode, solved, signal) => {
+    into.replaceChildren();
+    return game.render(into, round, { signal, mode, solved, setEquation() {}, onAttempt() {} }) ?? {};
+  };
+  for (const level of levels) {
+    for (let seed = 1; seed <= seeds && out.length < 40; seed++) {
+      const at = `${level.id}${level.structure ? ` ${level.structure}` : ''} seed ${seed}`;
+      const ctl = new AbortController();
+      try {
+        const round = frozen(game.makeRound(level, rng(seed)));
+        const symbols = level.look === 'symbols';
+        let view = render(host, round, 'play', false, ctl.signal);
+        if (symbols) {
+          if (host.childElementCount) out.push(`${at}: symbols look, ${host.childElementCount} nodes before picture()`);
+          view.picture?.();
+        }
+        await drive(null);
+        check(host, `${at} at rest`, { solved: false, top: true });
+        const wrong = round.choices.filter((c) => c.rule);
+        for (const [m, { value, rule }] of wrong.entries()) {
+          const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
+          await drive(view.miss?.({ value, rule, display: RULES[rule].display, step, first: m === 0 }));
+          check(host, `${at} miss ${m + 1} (${rule}, step ${step})`, { solved: false, top: true });
+          if (step === 3) break;
+        }
+        await drive(view.solve?.());
+        check(host, `${at} solved`, { solved: true, top: true });
+        if (symbols) {
+          ctl.abort();
+          const again = new AbortController();
+          view = render(host, round, 'play', false, again.signal);
+          await drive(view.solve?.());
+          view.picture?.();
+          await drive(null);
+          check(host, `${at} the picture after a first try`, { solved: true, top: true });
+          again.abort();
+        }
+        // A thumb is the picture at rest or solved, checked above in the panel: here only its boxes
+        // and, solved, no cover. Home draws its thumbs at seed 1; the end screen, solved, at any seed.
+        for (const solved of seed === 1 ? [false, true] : [true]) {
+          render(thumb, round, 'thumb', solved, ctl.signal);
+          check(thumb, `${at} thumb${solved ? ', solved' : ''}`, { solved, top: false });
+        }
+      } catch (e) {
+        out.push(`${at}: threw ${e?.stack ?? e}`);
+      }
+      ctl.abort();
+    }
+  }
+  probe.remove();
+  return out;
+}

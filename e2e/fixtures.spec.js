@@ -1,9 +1,8 @@
 // The game spec of architecture 4.7, run on the two fixture games through the real shell. Each
 // game branch writes e2e/<id>.spec.js the same way.
-import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as scale from '../tests/fixtures/scale/game.js';
-import { FIXTURE, NOW, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { test, expect, FIXTURE, NOW, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 /**
  * Opens a play session of a game whose ladder is at a level (its demo already seen). The seed
@@ -139,8 +138,9 @@ test('a saved attempt does not change after the solve', async ({ page }) => {
   expect(saved).toMatchObject({ outcome: 'first', wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 } });
   await look(page);
   await page.locator('[data-show-picture]').click();
-  // It draws; what it draws after the solve is a known gap (architecture 2.5 step 2).
+  // It draws the solved picture, without the cover (architecture 2.5 step 2).
   await expect(page.locator('[data-area="picture"] [data-role="part"]').first()).toBeVisible();
+  await expect(page.locator('[data-area="picture"] .cover')).toHaveCount(0);
   for (const area of ['[data-area="picture"]', '[data-area="equation"]', '.progress']) {
     const box = await page.locator(area).boundingBox();
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

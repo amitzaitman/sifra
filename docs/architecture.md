@@ -12,7 +12,7 @@ and report. Section 6 lists the gaps in the docs that this file closes. Read wit
 ```text
 index.html            <html lang="he" dir="rtl">, viewport (design §10), font preloads, app.css, and an inline module
                       that imports games/registry.js and calls start()
-app.js                the shell (435 lines): routes, screens, round runner, demo, error screen
+app.js                the shell (444 lines): routes, screens, round runner, demo, error screen
 app.css               the design.md §3 block verbatim, then the shell's components
 types.d.ts            ambient JSDoc types of section 2 (no runtime code)
 manifest.webmanifest  start_url "./", scope "./". The site lives under /sifra/, so every URL is relative
@@ -40,7 +40,7 @@ assets/               icons (new)
 scripts/              gen-data.js, docs-parse.js (the parsers now in tests/docs.test.js, moved there and shared)
 start.js              static server from AlefBet: node start.js [port]; fails if the port is taken; opens no browser
 tests/                node:test (section 4), with two fixture games in tests/fixtures/
-e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, <id>.spec.js per game
+e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js (4.8), <id>.spec.js per game
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
 ```
 
@@ -163,32 +163,38 @@ dev-spec A.1 is the shape, with these precisions:
 //                true card when solved)
 //   onAttempt    (value) => void: commit of a build round; unused in milestone 1
 // RoundView: { miss, solve, picture, demo, label }
-//   miss(choice, step) => Promise<void>   choice is { value, rule, display }; step is 1, 2 or 3
+//   miss({ value, rule, display, step, first }) => Promise<void>
+//                                         a wrong tap: display is RULES[rule].display; step is 1, 2 or 3; first is
+//                                         true on the round's first miss (step 1, or step 2 with 3 options). The
+//                                         shell counts; a game keeps no miss count of its own
 //   solve() => Promise<void>              the closing: the cover lifts, the picture closes
 //   picture() => void                     look 'symbols' only: draw helpPicture into host. In 'symbols' look render
 //                                         draws no picture in 'play' and 'demo' until picture() (the shell calls it
-//                                         at once in a demo); in 'thumb' it draws the help picture
+//                                         at once in a demo); in 'thumb' it draws the help picture. Called after
+//                                         solve() (the picture button stays, 2.5), it draws the solved picture, as
+//                                         a solved thumb does: no cover, no intro
 //   demo(hand) => Promise<void>           optional steps before the hand taps the answer; hand.tap(el) => Promise
 //   label                                 optional aria-label of the picture, from a locked template
 ```
 
 ### 2.5 One round
 
-1. The shell builds the level (adding the planner's `structure` or `ask`), calls `makeRound(level, rng(seed))`, and
-   runs the demo first when one is due (2.6).
+1. The shell builds the level (adding the planner's `structure` or `ask`), calls `makeRound(level, rng(seed))`,
+   freezes the round all the way down (`dealt` in app.js; a write to it throws, so neither the shell nor `render`
+   can change what the record and the next steps read), finds the answer card, and runs the demo first when one is
+   due (2.6). Thumbs, demos and `#/dev` get their rounds the same way.
 2. It builds the screen (3.2): the panel host `[data-area="picture"][data-game]`, the equation row (each `'?'` a cover
    over an `.eq-answer` with `aria-hidden`, so a screen reader hears the `?` and not the answer), the cards (`face`,
    else the number, plus dots in rows of five when `look` is not `symbols`, the level's `cardDots` is not `false` and every
    value is an integer 0-20), then
    `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
    `view.picture()` and logs `picture`; after the solve it stays, still calls `view.picture()`, and logs nothing.
-   A known gap, older than the record fix: every game's `picture()` (and the fixtures') then draws the start
-   picture, its `?` cover down, while the equation shows the answer; it should draw the solved picture.
+   Then `picture()` draws the solved picture, without the cover (2.4), as the equation shows the answer.
 3. A correct tap (`deepEqual(value, answer)`, key order ignored) goes to step 5. A wrong tap: the shell retires the
    card (design §6.5), counts the miss, sets `step` to `min(3, misses)` with 4 options or `min(3, misses + 1)` with 3,
    locks the cards, calls `view.picture()` first in `symbols` look if the picture is not shown, awaits
-   `view.miss({ value, rule, display }, step)` (`display` from RULES), and unlocks. After step 3 only the answer card
-   is left, ringed (design §6.5).
+   `view.miss({ value, rule, display, step, first })` (`display` from RULES, `first` true on the round's first miss),
+   and unlocks. After step 3 only the answer card is left, ringed (design §6.5).
 4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`; an id not in
    `displays` throws, 2.1); from step 2 it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2;
    a 3-option level's first miss is
@@ -283,7 +289,7 @@ export function makeRound(level, rng) {
 export function render(host, round, { signal }) {
   const frame = drawFrame(host, round);   // cells, dots with data-role, a cover over the unknown
   return {
-    async miss({ value, display }, step) {
+    async miss({ value, display, step }) {
       host.querySelector('[data-display]')?.remove();
       await settle(drawDisplay(frame, display, value, round), signal);
       if (step >= 2 && !frame.querySelector('[data-hint]')) frame.append(drawHint(round));   // not awaited (2.5)
@@ -626,6 +632,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `expectThumbsDrawn`: no `[data-thumb]` empty or `data-broken` (a thumb that throws no longer reaches the error
   screen, 3.9), on home and each game's end screen.
   e2e/fixture.html is index.html with the fixture games.
+- Every spec imports `test` and `expect` from e2e/helpers.js, never from `@playwright/test`. Its `test` has one
+  automatic fixture, `errors`: every page of the test's context is watched, and an uncaught error (`pageerror`) or
+  a `console.error()` in any of them fails the test when it ends, with the page's URL and the message. The shell logs
+  what it catches so a screen still opens (a thumb or a next step that throws, 3.9); here such an error fails a test.
+  A test whose point is an error lets it through with `errors.allow(/its message/)` (site.spec.js, the broken
+  planner and the broken render). A failed resource load is a console error too: fixture.html links the icon, as
+  index.html does, so the browser does not ask for a missing /favicon.ico.
 
 ### 4.6 site.spec.js
 
@@ -671,7 +684,43 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   part takes a second row (8 = ? + ?, card 6|1) and on make ten's flash ring round the tray (`given.whole`).
 - fixtures.spec.js also checks the shell's record (3.9): an attempt solved on the first tap, then the picture button
   and a tap in each area, reads the same after the next round is saved; a stuck return in the same game (3.7) logs
-  the level the child was moved to as `levelAfter`.
+  the level the child was moved to as `levelAfter`; the picture asked for after that solve has no cover.
+
+### 4.8 The render contract (e2e/contract.spec.js)
+
+Sections 2.4-2.5, checked on every game of games/registry.js and both fixture games with no game's own knowledge,
+so a new game passes them without a spec of its own (its 4.7 spec checks what it draws). On each engine:
+
+- **The shell's path**, a test per level, on `#/dev/<game>/<level>/<seed>` for seeds 1-10 with reduced motion: in
+  `symbols` look the panel holds only the picture button before `picture()` (then the test taps it); each wrong card
+  in order, and after each the cards lose `[data-locked]`; the first miss shows `[data-display]` of its rule's
+  display (only the first: with reduced motion the balance skips a later one, design 7.2); from step 2 a
+  `[data-hint]`; at step 3 the last `[data-tour]` reads the answer (a pair card's second number; a judging round's
+  true card's sum, the same on both sides); after the answer no `.cover` is shown on the screen and `[data-next]` is
+  there. In `symbols` look the same round again, solved on the first tap, then the picture button past the tap
+  window: its picture shows no cover (2.4). On the balance's pans two seeds with different answers show covers of
+  the same size at rest (design 6.6, the fixed dome); elsewhere a cover covers the unknown's places, so the clause
+  is for the pans only (the balance's rows on level 9 too cover the places).
+- **With motion**, once per game: the same path on its first 4-option level at seed 1, so the waits chain on real
+  animations.
+- **The loop in the page**, a test per game and size (320×568 and 1024×1366), the longest, so they come first: one
+  `page.evaluate()` imports the game, puts a host of the panel's size in the panel's place and, for every level (each
+  value of a mixed one) and seeds 1-50, freezes the round as the shell does, calls `render`, `picture()` in
+  `symbols` look (the host must be empty before it), `view.miss()` for each wrong choice in order with the shell's
+  `step` and `first`, then `solve()`; in `symbols` look also `solve()` then `picture()`; and the round as a thumb
+  (unsolved at seed 1, as home draws it; solved at every seed, as the end screen does). Every animation is finished
+  as it starts (`Animation.finish()`; an infinite one cannot finish, and its wait fails). After each step: nothing
+  threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
+  inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
+  shown; in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
+  topmost at its centre, by `elementFromPoint` with the painted nodes taking hits as `paintedOver` (4.7) does, and a
+  digit's text fits its box (`scrollWidth`), or is centred on it (a 10 on one dot of the ten-frame's pair cards,
+  design 7.2). A cover without a mark, the bridge between the pieces of a cover over two rows, is not checked as
+  topmost: the hint's ring runs along it in the same colour (the balance, design 6.6).
+- The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
+  included (a `round.choices.sort()` in a render fails every clause). Reverting 4781e24 (a ghost appended after
+  the digits) fails the loop's topmost clause on the ten-frame's pair cards.
+- About 3.3 minutes on Chromium with two workers; the balance's loop is half of it.
 
 ## 5. npm, tsconfig and CI
 
@@ -682,11 +731,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 
 { "compilerOptions": { "target": "es2022", "module": "es2022", "moduleResolution": "bundler",
     "lib": ["es2022", "dom", "dom.iterable"], "allowJs": true, "checkJs": true, "noEmit": true,
-    "strict": false, "noImplicitAny": false, "skipLibCheck": true },
+    "strict": false, "noImplicitAny": false, "noUnusedLocals": true, "skipLibCheck": true },
   "include": ["types.d.ts", "app.js", "shell", "lib", "games", "data"] }
 ```
 
 - `node --test` finds `tests/**/*.test.js` and not the e2e specs. `check` is the full gate.
+- `noUnusedLocals`: an import, variable or function nothing reads fails the typecheck (an import a merge brought
+  back, 548c6dd). Unused parameters stay allowed: a game's `render` and `face` keep the contract's signature.
 - The ES2022 lib keeps some APIs newer than Safari 16.4 out (`Object.groupBy`, `Promise.withResolvers`), but its DOM
   part has newer ones, and CI's WebKit is Playwright's current WebKit, not Safari 16.4; neither enforces the target.
   A code scan does (4.4). Only the browser code is type-checked: tests, scripts and e2e would need `@types/node`, and

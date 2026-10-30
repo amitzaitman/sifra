@@ -9,6 +9,7 @@
     "noEmit": true,
     "strict": false,
     "noImplicitAny": false,
+    "noUnusedLocals": true,
     "skipLibCheck": true
   },
   "include": ["types.d.ts", "app.js", "shell", "lib", "games", "data"]

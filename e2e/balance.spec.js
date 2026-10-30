@@ -1,11 +1,10 @@
 // The balance game through the real shell (architecture 4.7): a first try, every wrong rule's
 // display and its removal, the help ladder to the tour's last digit, the stored outcome, a round
 // after "show me how", reduced motion, demos, the symbols picture, 320px, R6 and R7, a session.
-import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
 import { rng } from '../shell/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';

@@ -64,8 +64,20 @@ interface Round {
 
 interface Hand { tap(el: Element): Promise<void> }
 
+/** A wrong tap, as the shell hands it to view.miss (architecture 2.4) */
+interface Miss {
+  value: any;
+  rule: string;
+  /** RULES[rule].display */
+  display: string;
+  /** the help step: 1, 2 or 3 (2.5) */
+  step: 1 | 2 | 3;
+  /** the round's first miss: its display stays to the next tap (step 1, or step 2 with 3 options) */
+  first: boolean;
+}
+
 interface RoundView {
-  miss?(choice: { value: any; rule: string; display: string }, step: number): Promise<void>;
+  miss?(miss: Miss): Promise<void>;
   solve?(): Promise<void>;
   picture?(): void;
   demo?(hand: Hand): Promise<void>;

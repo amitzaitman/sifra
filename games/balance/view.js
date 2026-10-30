@@ -552,6 +552,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   let hint = null;
   /** While a display runs, and once solved, a touch leaves no mark (as the cards, design 7.1). */
   let busy = false;
+  /** Solved: the picture asked for after the solve (symbols look) is the solved still. */
+  let closed = false;
   /** Counted things (design 6.3): the known cubes on the real pans and the known dots of the rows. */
   const counted = ':scope > .bl-pan > .bl-stack > .bl-cube:not([data-role="unknown"]), :scope > .bl-dot:not([data-role="unknown"])';
   /** In play, counted things are targets (architecture 2.8), so the shell does not log them as off-target. */
@@ -606,10 +608,9 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   };
   /**
    * A miss (architecture 2.5 step 4): its display, the hint from step 2, the tour at step 3.
-   * @param {{ value: any, rule: string, display: string }} choice
-   * @param {number} step
+   * @param {Miss} choice
    */
-  const missed = async ({ value, rule, display }, step) => {
+  const missed = async ({ value, rule, display, step, first }) => {
     // A display the round has no drawing for throws before the picture changes (architecture 2.1).
     if (!drawable(round, display)) throw new Error(`balance: no drawing for ${display} on this round`);
     if (!s) draw(false);
@@ -622,7 +623,6 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     // A first miss keeps its display to the next tap: step 1, or step 2 on a 3-option level,
     // where the hint joins it (architecture 2.5 step 4). A later miss's display runs and leaves,
     // so the start picture, cover included, gets the hint; with reduced motion it is skipped.
-    const first = step === 1 || (step === 2 && round.choices.length === 3);
     if (first || !reduced()) {
       const root = await s.show(display, value, rule, lift);
       await settle(s.scene, signal);
@@ -675,14 +675,15 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   };
   return {
     label: labelOf(round),
-    picture: () => draw(false),
-    async miss(choice, step) {
+    picture: () => draw(closed),
+    async miss(choice) {
       busy = true;
-      await missed(choice, step);
+      await missed(choice);
       busy = false;
     },
     async solve() {
       busy = true;
+      closed = true;
       // Judging: the true card is written in the equation row, so the full exercise is on screen (R5).
       if (round.model === 'cards') setEquation(round.answer);
       if (!s) return;

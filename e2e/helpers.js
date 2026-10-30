@@ -1,10 +1,37 @@
 // Shared Playwright helpers (architecture 4.5). The reading and touch-target checks come from
-// AlefBet's e2e helpers; rounds are rebuilt in Node from the screen's data attributes.
-import { expect } from '@playwright/test';
+// AlefBet's e2e helpers; rounds are rebuilt in Node from the screen's data attributes. Every spec
+// imports test and expect from here, so a page that throws or logs an error fails its test.
+import { test as base, expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { rng } from '../shell/rng.js';
 import { WINDOW } from '../shell/taps.js';
+
+/**
+ * Playwright's test with one automatic fixture, `errors`: every page of the test's context is
+ * watched, and an uncaught error (pageerror) or a console.error in any of them fails the test when
+ * it ends (architecture 4.5). The shell logs what it catches (a thumb or a next step that throws,
+ * 3.9), so this is where a swallowed error shows. A test whose point is an error lets it through:
+ * errors.allow(/its message/).
+ */
+export const test = base.extend({
+  errors: [async ({ context }, use) => {
+    /** @type {string[]} */
+    const seen = [];
+    /** @type {RegExp[]} */
+    const allowed = [];
+    /** @param {import('@playwright/test').Page} page */
+    const watch = (page) => {
+      page.on('pageerror', (e) => seen.push(`pageerror at ${page.url()}: ${e.stack ?? e.message}`));
+      page.on('console', (m) => { if (m.type() === 'error') seen.push(`console.error at ${page.url()}: ${m.text()} (${m.location().url})`); });
+    };
+    context.pages().forEach(watch);
+    context.on('page', watch);
+    await use({ allow: (/** @type {RegExp} */ pattern) => { allowed.push(pattern); } });
+    expect(seen.filter((text) => !allowed.some((p) => p.test(text))), 'errors in the page').toEqual([]);
+  }, { auto: true }],
+});
+export { expect };
 
 export const FIXTURE = '/e2e/fixture.html';
 export const INDEX = '/index.html';

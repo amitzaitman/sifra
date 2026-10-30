@@ -50,6 +50,15 @@ const still = (game, i) => {
   const { structure, ask } = game.levels[i];
   return built(game, { index: i, structure: [structure].flat()[0], ask: [ask].flat()[0] });
 };
+/** @type {<T>(data: T) => T} freezes plain data all the way down, in place */
+const frozen = (data) => {
+  if (data === null || typeof data !== 'object' || Object.isFrozen(data)) return data;
+  Object.freeze(data);
+  for (const v of Object.values(data)) frozen(v);
+  return data;
+};
+/** @type {(game: Game, level: Level, seed: number) => Round} a round, frozen before the shell or render reads it (2.4) */
+const dealt = (game, level, seed) => frozen(game.makeRound(level, rng(seed)));
 const ladderIndex = (game) => indexOf(game.levels, child().games[game.meta.id]?.level ?? game.levels[0].id);
 /** The next step, or null when the planner throws on a record migrate could not mend: home and #/next still open (3.9). */
 const nextOrNull = () => { try { return nextStep(child(), S.games, SKILLS); } catch (err) { console.error(err); return null; } };
@@ -97,7 +106,7 @@ function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
   const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, onAttempt() {} };
   S.thumbs.push(() => {
-    try { game.render(host, game.makeRound(level(), rng(seed)), ctx); } catch (err) { host.replaceChildren(); host.dataset.broken = ''; console.error(err); }
+    try { game.render(host, dealt(game, level(), seed), ctx); } catch (err) { host.replaceChildren(); host.dataset.broken = ''; console.error(err); }
   });
   return host;
 }
@@ -171,7 +180,7 @@ function nextRound(session) {
 function mount(session, spec) {
   const game = S.byId.get(spec.game);
   const level = built(game, spec);
-  const round = game.makeRound(level, rng(spec.seed));
+  const round = dealt(game, level, spec.seed);
   const r = runRound({ game, level, spec, round, done: session.done.length, record: (spec.record ??= blank()),
     onSolved: (outcome) => finish(session, spec, level, round, outcome),
     onNext: () => { session.done.push(spec); session.i += 1; nextRound(session); },
@@ -238,6 +247,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   const lock = (on) => { busy = on; cards.row.toggleAttribute('data-locked', on); };
   lock(busy);
   const setEquation = (equation) => fitEquation(Object.assign(eq, drawEquation(eqArea, equation, round.answer, cover)).row);
+  const answerAt = round.choices.findIndex((c) => same(c.value, round.answer));
   const ctx = { signal, mode: mode === 'demo' ? 'demo' : 'play', solved: false, setEquation, onAttempt() {} };
   const view = game.render(host, round, ctx) ?? {};
   const help = (kind) => Boolean(rec.help.includes(kind) || rec.help.push(kind));
@@ -264,7 +274,6 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     const area = t?.closest('[data-area]')?.getAttribute('data-area');
     if (t && !t.closest('button, a, [data-target]')) rec.taps[area === 'picture' || area === 'equation' ? area : 'other'] += 1;
   }, { signal });
-  const answerAt = round.choices.findIndex((c) => same(c.value, round.answer));
   const elapsed = () => performance.now() - rec.t0;
   const tap = async (i) => {
     if (busy || solved) return;
@@ -279,7 +288,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     if (n >= 2) help('hint');
     if (n === 3) rec.tour = help('tour');
     picture(false);
-    await view.miss?.({ value, rule, display: RULES[rule]?.display }, n);
+    await view.miss?.({ value, rule, display: RULES[rule]?.display, step: n, first: misses === 1 });
     if (signal.aborted) return;
     if (n === 3) cards.buttons.forEach((_, j) => (j === answerAt ? cards.shown(j) : cards.retire(j)));
     lock(false);
@@ -315,7 +324,7 @@ function demo(game, spec, then, done = 0) {
   const real = game.makeRound(level, rng(spec.seed));
   let seed = demoSeed(spec.seed);
   for (let n = 0; n < 50 && same(game.makeRound(level, rng(seed)), real); n++) seed = (seed + 1) >>> 0;
-  const round = game.makeRound(level, rng(seed));
+  const round = dealt(game, level, seed);
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
@@ -363,7 +372,7 @@ function dev(game, n, seed, choice) {
   }
   const [key, value] = Object.entries(pickMix(base, null, rng(seed)))[0] ?? [];
   const spec = { game: game.meta.id, index: n - 1, seed, kind: key ? 'mixed' : 'new', ...(key && { [key]: choice ?? value }) };
-  const round = game.makeRound(built(game, spec), rng(seed));
+  const round = dealt(game, built(game, spec), seed);
   const run = () => runRound({ game, level: built(game, spec), round, spec, record: blank(), onHow: () => demo(game, spec, run),
     onNext: () => { location.hash = `#/dev/${game.meta.id}/${n}/${(seed + 1) >>> 0}`; } })
     .main.append(h('pre', { class: 'dev-json', 'data-dev': true, dir: 'ltr' }, JSON.stringify(round, null, 1)));

@@ -451,15 +451,17 @@ export function render(host, round, ctx) {
   const still = mode === 'thumb';
   /** @type {any} */
   let pic = null;
-  let misses = 0;
   let locked = false;
+  let solved = false;
   /** @type {HTMLElement | null} */
   let shown = null;
   const kind = () => KINDS[pic.kind];
 
   const draw = () => {
-    pic = drawRound(host, round, still && ctx.solved);
-    if (still) return;
+    // A thumb of a solved round, or the picture asked for after the solve (symbols look): the
+    // solved still; the screen's [data-solved] shows the unknown, as a solved thumb's does.
+    pic = drawRound(host, round, (still && ctx.solved) || solved);
+    if (still || solved) return;
     // The first frame full: the exercise becomes 10 + the rest. Only level 10 moves counters
     // (pedagogy 6.2); fixed frames keep the child's exercise to the end.
     if (pic.kind === 'bridge' && pic.d.move) {
@@ -515,17 +517,15 @@ export function render(host, round, ctx) {
     picture() {
       if (!pic) draw();
     },
-    async miss({ value, rule, display }, step) {
+    async miss({ value, rule, display, step, first }) {
       const drawing = displayOf(pictureOf(round).kind, display);   // throws, before any change, on a display this picture has none for
       if (!pic) draw();
-      misses += 1;
       locked = true;
       clear();
       // The display of the rule chosen. A first miss keeps it to the next tap, also with reduced
       // motion (its final state); on a 3-option level that miss is step 2 and the hint joins it
       // (architecture 2.5 step 4). From the second miss it runs and leaves, so the picture is back
       // at its start when the hint is drawn on it (design 7.2).
-      const first = misses === 1;
       const root = layer(pic, 'display', display);
       shown = root;
       if (!first) root.classList.add('is-leaving');
@@ -540,6 +540,7 @@ export function render(host, round, ctx) {
     },
     async solve() {
       locked = true;
+      solved = true;
       if (!pic) return;
       clear();
       const moved = kind().solve(pic);

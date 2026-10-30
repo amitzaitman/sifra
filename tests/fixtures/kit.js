@@ -82,7 +82,8 @@ function drawGroups(host, groups, solved) {
  * The fixture's render: the picture (the help picture in symbols look, after view.picture()),
  * a ghost row per display (one of the game's displays; any other throws, architecture 2.1), a
  * ring as the hint (not awaited: it does not lock the cards, design 7.2), and a tour on the
- * unknown that ends in the answer. It checks that the host is in the page.
+ * unknown that ends in the answer (on a judging round, on the stage, to the true card's sum). It
+ * checks that the host is in the page. After the solve, picture() draws the solved picture.
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
@@ -95,10 +96,12 @@ export function render(host, round, { signal, mode, solved }, label, displays) {
   const groups = round.look === 'symbols' ? round.helpPicture : round.picture;
   if (round.look !== 'symbols' || mode === 'thumb') drawGroups(host, groups, solved);
   const unknown = () => host.querySelector('.fx-unknown');
+  let closed = false;
   return {
     label,
-    picture: () => drawGroups(host, groups, false),
-    async miss({ value, display }, step) {
+    // After the solve (symbols look): the solved picture, without the cover.
+    picture: () => drawGroups(host, groups, closed),
+    async miss({ value, display, step }) {
       if (!displays.includes(display)) throw new Error(`fixture: no drawing for ${display}`);
       host.querySelector('[data-display]')?.remove();
       const shown = el('div', 'fx-display');
@@ -111,7 +114,18 @@ export function render(host, round, { signal, mode, solved }, label, displays) {
         hint.dataset.hint = '';
         (unknown() ?? host.firstElementChild).append(hint);
       }
-      if (step < 3 || signal.aborted || !unknown()) return;
+      if (step < 3 || signal.aborted) return;
+      if (!unknown()) {
+        // A judging round: the tour counts the true card's sum on the stage (both sides weigh the same).
+        const stage = host.querySelector('.fx-stage');
+        for (let n = 1; n <= amount(round.answer) && !signal.aborted; n++) {
+          const digit = el('span', 'fx-tour', String(n));
+          digit.dataset.tour = String(n);
+          stage?.append(digit);
+          await settle(digit, signal);
+        }
+        return;
+      }
       const lid = unknown().querySelector('.cover');
       lid?.classList.add('is-lifted');
       await settle(lid, signal);
@@ -125,6 +139,7 @@ export function render(host, round, { signal, mode, solved }, label, displays) {
       }
     },
     async solve() {
+      closed = true;
       const lid = host.querySelector('.cover');
       lid?.classList.add('is-lifted');
       await settle(lid, signal);

@@ -1,11 +1,10 @@
 // The ten-frame game spec (architecture 4.7, R5, R6, R7, R9, R10) on index.html: play sessions
 // from a seeded ladder for what is stored, and #/dev rounds with chosen seeds where the round matters.
-import { test, expect } from '@playwright/test';
 import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
 import { layoutBridge } from '../games/ten-frame/draw.js';
 import { rng } from '../shell/rng.js';
-import { INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
 
 const ID = 'ten-frame';
 /** @type {(id: string) => number} a level's number, from 1 */

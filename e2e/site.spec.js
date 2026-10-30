@@ -1,7 +1,6 @@
 // The site (architecture 4.6): on e2e/fixture.html the shell's behaviour with the two fixture
 // games; on index.html and fixture.html alike, the layout, touch-target, R1, R6, R7 and R10
 // checks on home, the parents page and every level through #/dev.
-import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import * as registry from '../games/registry.js';
@@ -10,7 +9,7 @@ import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
 import {
-  CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
+  test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
 } from './helpers.js';
 
@@ -306,9 +305,10 @@ test('a broken stored record is mended on load: home opens, the next step plays,
   expect(child.events).toEqual([{ t: expect.any(String), day: TODAY, type: 'repair', lost: { sessions: 'x', 'games/scale': { level: 3, passed: ['same'] } } }]);
 });
 
-test('a next step that throws leaves home without its card, the games open, and #/next goes home (3.9)', async ({ page }) => {
+test('a next step that throws leaves home without its card, the games open, and #/next goes home (3.9)', async ({ page, errors }) => {
   // The planner, served with a nextStep that throws; the module itself loads from ?real. The
-  // console error is this test's point (an error fixture must let it through).
+  // console error is this test's point, so the errors fixture lets it through.
+  errors.allow(/a broken next step/);
   await page.route((url) => url.pathname.endsWith('/shell/planner.js') && !url.search, (route) => route.fulfill({
     contentType: 'text/javascript',
     body: "export * from './planner.js?real';\nexport function nextStep() { throw new Error('a broken next step'); }\n",
@@ -330,9 +330,10 @@ test('a next step that throws leaves home without its card, the games open, and 
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-game', 'parts');
 });
 
-test('a game whose render throws leaves its home card with the title only, and home still opens (3.9)', async ({ page }) => {
+test('a game whose render throws leaves its home card with the title only, and home still opens (3.9)', async ({ page, errors }) => {
   // The scale fixture, served with a render that throws; the module itself loads from ?real. The
-  // console error is this test's point (an error fixture must let it through).
+  // console error is this test's point, so the errors fixture lets it through.
+  errors.allow(/a broken game/);
   await page.route((url) => url.pathname.endsWith('/tests/fixtures/scale/game.js') && !url.search, (route) => route.fulfill({
     contentType: 'text/javascript',
     body: "export * from './game.js?real';\nexport function render() { throw new Error('a broken game'); }\n",
