@@ -1,10 +1,10 @@
-# One workflow (decisions.md, architecture 5): the full check on pushes to main, pull requests and
+# One workflow (decisions.md, architecture 5): the full check on a push to any branch, on pull requests and
 # by hand; on main, the site is deployed to GitHub Pages after the check passes.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -36,6 +36,7 @@ jobs:
           retention-days: 7
 
   deploy:
+    # A push to main only: a branch push runs the check and stops.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest

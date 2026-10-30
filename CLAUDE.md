@@ -69,7 +69,7 @@ with children) only after the owner's iPhone check there is logged in `docs/devi
 - `data/` is generated from the docs by `npm run gen` and never edited by hand, except `data/videos.js`; `tests/sync.test.js` fails when it is stale.
 - `tests/rounds.lock.json` locks each game's rounds (seeds 1-50 per level): `tests/lock.test.js` fails when they change without a `meta.version` bump or a locked level id goes; after a bump, `npm run lock`.
 - `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
-- One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit and deploys to Pages.
+- One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit on a push to any branch, and deploys main to Pages.
 - Right after a merge to main: the owner's manual iPhone check on the GitHub Pages address, logged with a date in
   `docs/device-checks.md`. Until it is logged the link is not shared with children ("goes live"); a failed check is
   fixed or reverted on main at once.

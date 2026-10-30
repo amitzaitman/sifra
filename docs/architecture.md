@@ -767,10 +767,14 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   part has newer ones, and CI's WebKit is Playwright's current WebKit, not Safari 16.4; neither enforces the target.
   A code scan does (4.4). Only the browser code is type-checked: tests, scripts and e2e would need `@types/node`, and
   the dev dependencies stay two.
-- CI (.github/workflows/ci.yml), on push to main, pull requests and workflow_dispatch: job `check` (Node 22: `npm ci`,
-  `npx playwright install --with-deps chromium webkit`, `npm run check`); job `deploy` (push to main, after `check`):
-  the deployed files (section 1) to `_site` with `.nojekyll`, `actions/upload-pages-artifact@v3`,
-  `actions/deploy-pages@v4`.
+- CI (.github/workflows/ci.yml), on a push to any branch (`branches: ['**']`, so not on a tag), pull requests and
+  workflow_dispatch: job `check` (Node 22: `npm ci`, `npx playwright install --with-deps chromium webkit`,
+  `npm run check`); job `deploy` (a push to main only, after `check`): the deployed files (section 1) to `_site` with
+  `.nojekyll`, `actions/upload-pages-artifact@v3`, `actions/deploy-pages@v4`. A branch push runs the full check and
+  deploys nothing, so WebKit runs before the merge: agents often have Chromium only, and three WebKit-only failures
+  (114e1b6, 4f84173, 0b1cf85) were first seen on main, where they blocked the deploy. A branch with an open pull
+  request is checked twice, once per event. Nothing makes a merge wait for the branch's run: merges are made
+  locally, without a pull request, and requiring the check is a GitHub setting only the owner can make.
 - The Pages source must be "GitHub Actions" (Settings > Pages > Build and deployment > Source; only the owner can set
   it). With "Deploy from a branch", GitHub's own `pages-build-deployment` also publishes the raw branch through
   Jekyll on every push to main, within a minute and whatever the check's result. After a push to main, the Actions
@@ -893,6 +897,6 @@ with its options until the owner decides.
   tests/<id>.test.js and one registry line. They do not edit shell/, lib/, app.* or data/. A game that needs a shell change,
   or finds a doc gap (a level needing a parameter skills.md lacks), stops and reports.
 - **Done:** `npm test`, `npm run typecheck` and `npm run e2e -- --project=chromium` pass locally; CI passes both
-  projects. CI deploys the merge to Pages at once, and the owner's iPhone check runs there right after it. The game
-  goes live (its link is shared with children) only once the check is logged with a date in `docs/device-checks.md`;
-  a failed check is fixed or reverted on main at once (decisions.md, 2026-10-14).
+  projects on the branch's own push (section 5). CI deploys the merge to Pages at once, and the owner's iPhone check
+  runs there right after it. The game goes live (its link is shared with children) only once the check is logged with
+  a date in `docs/device-checks.md`; a failed check is fixed or reverted on main at once (decisions.md, 2026-10-14).
