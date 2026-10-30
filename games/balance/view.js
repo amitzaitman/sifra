@@ -1,6 +1,6 @@
 // The balance on screen (architecture 2.4; design 6.8-6.9, 7). Waits go through settle().
 import { cover } from '../../lib/cover.js';
-import { settle } from '../../lib/settle.js';
+import { reduced, settle } from '../../lib/settle.js';
 import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, lidPlaces, paint, panLayer, ringClip, ringLinks, ringPieces, rowsOfPan, runsOf } from './stage.js';
 
 /** @typedef {'left' | 'right'} Side */
@@ -27,7 +27,6 @@ import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, 
  * @property {(hand: Hand) => Promise<void>} demo
  */
 
-const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 /** @type {(round: Round) => any[]} */
 const groupsOf = (round) => (round.look === 'symbols' ? round.helpPicture : round.picture) ?? [];
 /** @type {(tokens: any[]) => number} a side of a card */

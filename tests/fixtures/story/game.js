@@ -2,7 +2,7 @@
 // picture moves before its '?' (an event under [data-event]) and builds the equation row with it
 // (ctx.build, architecture 2.4); the rounds are the parts fixture's. Only fixture.html?story loads it:
 // its skill would move the next step of the default fixture page.
-import { settle } from '../../../lib/settle.js';
+import { reduced, settle } from '../../../lib/settle.js';
 import * as parts from '../parts/game.js';
 import { render as draw } from '../kit.js';
 
@@ -19,9 +19,6 @@ export const text = [];
 export const rules = parts.rules;
 export const displays = parts.displays;
 export const makeRound = parts.makeRound;
-
-/** @returns {boolean} */
-const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 /**
  * The parts picture with an event: the part arrives with the sum's first number, then the covered
