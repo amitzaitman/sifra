@@ -233,21 +233,30 @@ const stageOf = ([vw, vh]) => {
   return [Math.min(vw, 592) - 32 - 2 * pad, clamp(200, 0.4 * vh, 380) - 2 * pad];
 };
 const STAGES = VIEWPORTS.map(stageOf);
+/** The panel's padding at a viewport (app.css .panel): its clip edge is this far past the stage. */
+const padOf = ([vw]) => clamp(8, 0.03 * vw, 16);
 /** Home's game card, the end screen's (design 6.1): the thumb's content box. */
 const THUMBS = [[114, 96], [149, 96], [122, 80]];
 
 /** @type {Record<string, string | null>} a mark's kind to its class for the clearances */
 const CLASS = { object: 'item', outline: 'item', ghost: 'item', place: 'item', ring: 'ring', line: 'line', lid: 'cover', cover: 'cover', qmark: 'q', chip: 'chip', dome: 'dome', arc: 'arc', digit: 'digit', halo: null, coverPlace: null };
+/** @type {(m: any) => string | null} the tour's ring is drawn as lines on track 0, and kept as a ring: no chip on it */
+const classOf = (m) => (m.group === 'tour-ring' ? 'tour' : CLASS[m.kind]);
 
 /**
  * The clearance two marks keep, in px (architecture 4.9), or null where they may meet: objects 6;
- * a ring or a line to an item 1; a magenta line to the navy 3; a cover and its halo to an item 4, to
- * a line 3; chips to chips, domes and covers 2; the dome on the line it stands on 0; arcs, chips
- * and the covers' '?' 1 from each other. A chip may lie over a track-1 line, an arc over lines and rings.
+ * a ring (the tour's too) or a line to an item 1; a magenta line to the navy 3; a cover and its halo
+ * to an item 4, to a line 3; chips to chips, domes and covers 2; the dome on the line it stands on 0;
+ * arcs, chips and rings 1 from each other; a cover's '?' 1 from everything but its own cover. A chip
+ * may lie over a track-1 line, an arc over lines and rings.
  */
 function need(a, b) {
-  const [x, y] = [CLASS[a.kind], CLASS[b.kind]];
+  const [x, y] = [classOf(a), classOf(b)];
   if (!x || !y || x === 'digit' || y === 'digit') return null;
+  if (x === 'q' || y === 'q') {
+    const [q, other] = x === 'q' ? [a, b] : [b, a];
+    return other.id === q.of || other.group === q.of ? null : 1;
+  }
   const same = a.place !== undefined && a.place === b.place;
   const pair = [x, y].sort().join('-');
   const roles = [a.role, b.role].sort().join('-');
@@ -256,9 +265,10 @@ function need(a, b) {
     'item-item': same ? null : 6, 'item-ring': same ? null : 1, 'item-line': 1, 'cover-item': 4, 'chip-item': 1, 'dome-item': 1,
     'ring-ring': 1, 'line-ring': 1, 'cover-ring': 1, 'chip-ring': 1, 'dome-ring': 1,
     'line-line': a.group === b.group ? null : roles === 'unknown-whole' ? 3 : 1, 'cover-line': 3,
+    'item-tour': 1, 'ring-tour': 1, 'line-tour': roles === 'unknown-whole' ? 3 : 1, 'cover-tour': 3, 'chip-tour': 1, 'dome-tour': 1, 'tour-tour': null,
     'dome-line': dome && (a.group ?? b.group) === (dome.on === 'wrap' ? 'wrap' : 'bracket') ? 0 : 1,
     'cover-cover': a.group && a.group === b.group ? null : 2, 'chip-cover': 2, 'cover-dome': 2, 'arc-cover': 1,
-    'chip-q': 1, 'dome-q': 1, 'arc-q': 1, 'chip-chip': 2, 'chip-dome': 2, 'arc-chip': 1, 'arc-dome': 1,
+    'chip-chip': 2, 'chip-dome': 2, 'arc-chip': 1, 'arc-dome': 1,
   }[pair] ?? null;
 }
 
@@ -293,24 +303,29 @@ function closest(a, b, lo, hi) {
 
 /** @type {(text: string, font: number, grown: boolean) => [number, number]} a number's ink on an object (design 6.10), the tour's last grown */
 function inkOf(text, font, grown) {
-  const [w, h] = (GLYPH.ink14[text] ?? GLYPH.ink14.digit).map((x) => (x * font) / 14);
+  const ink = text.length === 1 ? GLYPH.ink14.digit : GLYPH.ink14[text];
+  if (!ink) throw new Error(`no measured ink for ${text}`);
+  const [w, h] = ink.map((x) => (x * font) / 14);
   return grown ? [text.length === 1 ? w * 1.3 : w, h * 1.3] : [w, h];
 }
 
-/** Every story of every level a child can meet (seeds 1-200), one round each (with its cards), by level and numbers. */
+/** Every story of every level's pool (poolOf), both verbs of take, one round each (with its cards), by level and numbers. */
 function cases() {
-  const out = new Map();
+  const out = [];
   for (const base of stories.levels) {
     for (const passed of variants(base)) {
-      for (let seed = 1; seed <= 200; seed++) {
+      const want = new Set(stories.poolOf(passed).flatMap(({ s, k }) => (passed.structure === 'change-take' ? ['fly', 'pop'] : ['']).map((v) => `${s}/${k}/${v}`)));
+      for (let seed = 1; want.size && seed < 20000; seed++) {
         const round = stories.makeRound(passed, rng(seed));
-        const key = `${base.id}/${round.structure}/${round.story.s}/${round.story.k}/${round.story.verb}`;
-        if (!out.has(key)) out.set(key, { base, round, key });
+        const story = `${round.story.s}/${round.story.k}/${round.structure === 'change-take' ? round.story.verb : ''}`;
+        if (want.delete(story)) out.push({ base, round, key: `${base.id}/${round.structure}/${story}` });
       }
+      assert.equal(want.size, 0, `${base.id} ${passed.structure}: no round for ${[...want]}`);
     }
   }
-  return [...out.values()];
+  return out;
 }
+const CASES = cases();
 
 /** The states of a round (architecture 4.9): the event's phases, rest, each card's display (with the hint on 3-option levels), the hint, each tour step, solved. */
 function statesOf(base, round) {
@@ -324,7 +339,7 @@ function statesOf(base, round) {
 
 /**
  * The geometry of one layout over u in [lo, hi] (architecture 4.9): every box inside the drawing
- * (the event's start and end offsets aside), every pair at its clearance, every chip's digits inside
+ * (a move's offset aside: checkMoves), every pair at its clearance, every chip's digits inside
  * it by 1px, every digit's ink inside its disc by 1px (a rectangle in a circle) and 1px off what
  * could cover it, sampled every 0.25px (a font has a floor, so it is not affine).
  * @returns {string[]}
@@ -338,9 +353,7 @@ function checkLayout(L, lo, hi) {
       const [x, y, w, h] = [at(m.box.x, u), at(m.box.y, u), at(m.box.w, u), at(m.box.h, u)];
       if (x < -1e-6 || y < -1e-6 || x + w > at(L.dw, u) + 1e-6 || y + h > at(L.dh, u) + 1e-6 || w < 0 || h < 0) problems.push(`${m.id} leaves the drawing at u ${u}`);
     }
-    if (m.from) for (const u of [lo, hi]) if (at(m.box.x, u) + at(m.from.x, u) < at(L.dw, u)) problems.push(`${m.id} arrives from inside`);
   }
-  for (const m of L.marks.filter((x) => x.to)) for (const u of [lo, hi]) if (at(m.box.y, u) + at(m.box.h, u) + at(m.to.y, u) > 0) problems.push(`${m.id} flies off inside`);
   for (let i = 0; i < marks.length; i++) {
     for (let j = i + 1; j < marks.length; j++) {
       const c = need(marks[i], marks[j]);
@@ -377,11 +390,40 @@ function checkLayout(L, lo, hi) {
   return problems;
 }
 
+/**
+ * The event's moves at each listed screen (design 6.10): an arrival starts, and a flown leaver ends,
+ * wholly past the panel's clip. The drawing is centred in the stage (the panel's content box), and
+ * the clip is the panel's padding box: the stage and its padding.
+ * @returns {string[]}
+ */
+function checkMoves(L) {
+  const problems = [];
+  VIEWPORTS.forEach((vp, i) => {
+    const [W, H] = STAGES[i];
+    const pad = padOf(vp);
+    const u = unitFor(L, W, H);
+    const [dw, dh] = [len(L.dw, u), len(L.dh, u)];
+    const [clipRight, clipTop] = [(W + dw) / 2 + pad, -(H - dh) / 2 - pad];
+    for (const m of L.marks) {
+      if (m.from) {
+        const x0 = len(m.box.x, u) + len(m.from.x, u) + m.from.stage[0] * W;
+        if (x0 < clipRight - 1e-6) problems.push(`${m.id} arrives from ${(clipRight - x0).toFixed(1)}px inside the panel at ${vp.join('×')}`);
+        if (len(m.from.y, u) + m.from.stage[1] * H !== 0) problems.push(`${m.id} arrives off its row`);
+      }
+      if (m.to) {
+        const y1 = len(m.box.y, u) + len(m.box.h, u) + len(m.to.y, u) + m.to.stage[1] * H;
+        if (y1 > clipTop + 1e-6) problems.push(`${m.id} flies off ${(y1 - clipTop).toFixed(1)}px inside the panel at ${vp.join('×')}`);
+      }
+    }
+  });
+  return problems;
+}
+
 test('geometry: every case, state and u from the state\'s floor to 64 at the listed screens; thumbs at rest and solved', () => {
   const problems = [];
   const floors = { digits: Infinity, ghosts: Infinity, other: Infinity, thumb: Infinity };
   let states = 0;
-  for (const { base, round, key } of cases()) {
+  for (const { base, round, key } of CASES) {
     const rest = layoutScene(planScene(round, 'rest'), ROUND);
     for (const state of statesOf(base, round)) {
       states += 1;
@@ -396,8 +438,9 @@ test('geometry: every case, state and u from the state\'s floor to 64 at the lis
       if (lo < floor) problems.push(`${where}: u ${lo.toFixed(2)} under the ${floor}px floor`);
       if (digits && L.rows > 3) problems.push(`${where}: digits on ${L.rows} rows`);
       problems.push(...checkLayout(L, Math.min(lo, ROUND.uMax), ROUND.uMax).map((p) => `${where}: ${p}`));
-      // An event mark ends on its rest box.
+      // An event mark ends on its rest box, and moves from or to outside the panel.
       if (typeof state === 'string' && state.startsWith('event:')) {
+        problems.push(...checkMoves(L).map((p) => `${where}: ${p}`));
         for (const m of L.marks) {
           const end = rest.marks.find((x) => x.id === m.id);
           if (end && !isDeepStrictEqual(end.box, m.box)) problems.push(`${where}: ${m.id} does not end on its rest box`);
@@ -425,18 +468,40 @@ test('geometry: every case, state and u from the state\'s floor to 64 at the lis
   assert.ok(floors.thumb >= 14, `thumbs ${floors.thumb}`);
 });
 
-test('rows: the budget says no exactly above 4 rows; a digit display needs 3 at most', () => {
-  for (const { round } of cases()) {
+test('rows: the story\'s and the places a display fills past them; the budget says no exactly above 4; a digit display needs 3 at most', () => {
+  // design 6.10, written out apart from planScene: the story's rows (the start of take, else the
+  // result or whole), and overflow and count-up fill v places from the asked group's first place.
+  const expected = (round, display, value) => {
+    const { s, r } = round.story;
+    const n = Math.ceil((round.structure === 'change-take' ? s : r) / 5);
+    const g0 = round.unknown === 'change' ? s : 0;
+    return ['overflow', 'count-up'].includes(display) ? Math.max(n, Math.ceil((g0 + value) / 5)) : n;
+  };
+  const seen = new Set();
+  for (const { round, key } of CASES) {
     for (const rule of ['op.other', 'given.whole', 'given.part', 'count.start-included', 'slip.near']) {
       const predicted = stories.rules[rule](round);
       for (const value of predicted === null ? [] : predicted.oneOf ?? [predicted]) {
         if (!Number.isInteger(value) || value < 0) continue;
-        const rows = rowsFor(round, RULES[rule].display, value);
-        assert.equal(stories.budget(round, { value, rule }) !== null, rows > 4);
-        if (['count-up', 'jumps'].includes(RULES[rule].display)) assert.ok(rows <= 3, `${rule} ${value}: ${rows} rows`);
+        const { display } = RULES[rule];
+        const rows = rowsFor(round, display, value);
+        seen.add(rows);
+        assert.equal(rows, expected(round, display, value), `${key} ${rule} ${value}`);
+        assert.equal(stories.budget(round, { value, rule }) !== null, expected(round, display, value) > 4, `${key} ${rule} ${value}`);
+        if (['count-up', 'jumps'].includes(display)) assert.ok(rows <= 3, `${rule} ${value}: ${rows} rows`);
       }
     }
   }
+  assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5, 6]);
+  // 6 + ? = 9: op.other's 15 from place 6 needs 5 rows, and is not dealt; 10 − 9 = ?: its 19 from place 0 needs 4, and is.
+  const six = roundOf('add-change', 6, 3);
+  assert.equal(rowsFor(six, 'overflow', 15), 5);
+  assert.match(stories.budget(six, { value: 15, rule: 'op.other' }), /5 rows/);
+  assert.ok(!six.choices.some((c) => c.value === 15));
+  const ten = roundOf('take-10', 10, 9);
+  assert.equal(rowsFor(ten, 'overflow', 19), 4);
+  assert.equal(stories.budget(ten, { value: 19, rule: 'op.other' }), null);
+  assert.deepEqual(ten.choices.find((c) => c.value === 19), { value: 19, rule: 'op.other' });
 });
 
 test('an event: arrivals slide in from the right, leavers fly up or pop, the fixed dome slides in and lands on its row', () => {
@@ -450,6 +515,12 @@ test('an event: arrivals slide in from the right, leavers fly up or pop, the fix
   const lid = change.marks.find((m) => m.id === 'lid');
   assert.equal(lid.mark, '');
   assert.ok(lid.from);
+  // Its halo moves with it; the stage's share puts every move past the panel's clip (checkMoves).
+  assert.deepEqual(change.marks.find((m) => m.id === 'lid-halo').from, lid.from);
+  for (const m of [...add.marks, ...take.marks, ...change.marks]) {
+    if (m.from) assert.deepEqual(m.from.stage, [0.5, 0], m.id);
+    if (m.to) assert.deepEqual(m.to.stage, [0, -0.5], m.id);
+  }
   // On its row's floor (the second row: no room after four dots), rising a quarter place above it.
   const dot = change.marks.find((m) => m.id === 'obj-0');
   for (const u of [22, 64]) {
@@ -467,6 +538,10 @@ test('tokens: the layout\'s pixels are app.css\'s and design.md\'s', () => {
   assert.match(css, new RegExp(`--ring: ${PX.line}px;`));
   assert.match(css, /--halo: #FFFFFF;\s+\/\* 3px gap/);
   assert.equal(PX.halo, 3);
+  // A move past the stage's edge by the panel's largest padding is clipped (design 6.10).
+  assert.match(css, new RegExp(`\\.panel \\{[^}]*padding: clamp\\(8px, 3vw, ${PX.out}px\\)`));
+  assert.match(design, new RegExp(`מה שזז מתחיל או נגמר ${PX.out}px מעבר לקצה הבמה`));
+  assert.match(design, new RegExp(`היא זזה ${PX.domeShift}px ימינה, בכל מסך`));
   assert.match(design, new RegExp(`גשר של ${PX.bridge}px`));
   assert.match(design, new RegExp(`כיפה קטנה \\(${PX.dome}px\\)`));
   assert.match(design, new RegExp(`תג ההתחלה מעל הנקודה הראשונה, ${PX.chipGap}px מעליה`));

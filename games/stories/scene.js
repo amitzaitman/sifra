@@ -11,10 +11,20 @@
  * What a state draws, in places (planScene): every item has an id (stable across states) and a kind.
  * @typedef {{ kind: string, s: number, k: number, r: number, n: number, rows: number, object: string, items: Record<string, any>[], leaving: Record<string, any>[] }} Plan
  */
+/**
+ * A move's start (from) or end (to), added to the mark's box: x and y, and a share of the stage's
+ * content box [of its width, of its height] (CSS: stage[0] * 100cqw). The drawing is centred in the
+ * stage and fills it only on the axis that limits u, so a move measured from the drawing alone
+ * could start or end inside the panel; measured from the stage, it starts and ends past the panel's clip.
+ * @typedef {{ x: Len, y: Len, stage: [number, number] }} Offset
+ */
 /** @typedef {{ id: string, kind: string, layer: string, box: Box, [key: string]: any }} Mark a drawn mark (layoutScene) */
 /** @typedef {{ dw: Len, dh: Len, n: number, rows: number, marks: Mark[] }} Layout */
 
-/** Pixel tokens of the round (design 6.6, 6.10, 7.1): app.css --ring is the line; the digit floor. */
+/**
+ * Pixel tokens of the round (design 6.6, 6.10, 7.1): app.css --ring is the line; the digit floor;
+ * out, the panel's largest padding (app.css .panel), so a move past the stage's edge by it is clipped.
+ */
 export const PX = {
   line: 3, ringGap: 2, track1: 8, halo: 3, tick: 4, bracketGap: 6, dome: 28, domeShift: 1.5, bridge: 4,
   chipGap: 6, chipPad: 6, arc: 8, out: 16, hug: 17, digit: { k: 0.45, min: 14 }, tap: 8, tapEdge: 2,
@@ -359,11 +369,16 @@ export function layoutScene(plan, set) {
     marks.push(m);
     return m;
   };
-  /** @type {(id: string, b: Box) => void} */
-  const halo = (id, b) => void mark(`${id}-halo`, 'halo', 'halo', grow(b, set.halo), { of: id });
+  /** @type {(id: string, b: Box) => Mark} */
+  const halo = (id, b) => mark(`${id}-halo`, 'halo', 'halo', grow(b, set.halo), { of: id });
   /** @type {(id: string, role: string, boxes: Box[], layer?: string) => void} */
   const line = (id, role, boxes, layer = 'lines') => boxes.forEach((b, i) => mark(`${id}-${i}`, 'line', layer, b, { role, group: id }));
-  const enter = (/** @type {Box} */ b) => ({ x: add(sub(dw, b.x), set.out), y: px(0) });
+  // An arrival starts out past the stage's right edge, a flown leaver ends out past its top (Offset):
+  // the drawing is centred in the stage, so from the drawing's middle the stage's edge is half the stage away.
+  /** @type {(b: Box) => Offset} */
+  const enter = (b) => ({ x: sub(add(mul(dw, 0.5), set.out), b.x), y: px(0), stage: [0.5, 0] });
+  /** @type {(b: Box) => Offset} */
+  const flyUp = (b) => ({ x: px(0), y: sub(mul(dh, 0.5), add(bottom(b), set.out)), stage: [0, -0.5] });
 
   // A run of places in row pieces: [{ row, c0, c1 }], and as slabs of a region, the band between two rows joined.
   /** @type {(from: number, to: number) => { row: number, c0: number, c1: number }[]} */
@@ -431,9 +446,10 @@ export function layoutScene(plan, set) {
       halo(id, domeBox);
       mark(id, 'dome', 'dome', domeBox, { mark: '?', on: kind === 'basket' ? 'bracket' : 'wrap' });
     } else if (item.kind === 'lid') {
-      halo(id, lidBox);
+      // Its halo moves with it, by the same offset, and starts past the clip too.
+      const h = halo(id, lidBox);
       const m = mark(id, 'lid', 'covers', lidBox, { place, mark: item.mark });
-      if (item.enter) m.from = enter(lidBox);
+      if (item.enter) h.from = m.from = enter(h.box);
       if (item.mark) mark(`${id}-q`, 'qmark', 'covers', grow(lidBox, mul(lidBox.w, -0.25)), { of: id });
     } else if (item.kind === 'cover') {
       // The stretched cover over the dome's places (design 7.3): a piece per row, the '?' on its first
@@ -488,7 +504,7 @@ export function layoutScene(plan, set) {
   }
   for (const item of plan.leaving) {
     const b = item.shape === 'balloon' ? { ...disc(item.place, 'balloon'), h: /** @type {Len} */ ([0.98, 0]) } : disc(item.place, item.shape);
-    mark(item.id, 'object', 'objects', b, { place: item.place, role: item.role, shape: item.shape, leaving: item.exit, to: item.exit === 'up' ? { x: px(0), y: mul(add(bottom(b), set.out), -1) } : null });
+    mark(item.id, 'object', 'objects', b, { place: item.place, role: item.role, shape: item.shape, leaving: item.exit, to: item.exit === 'up' ? flyUp(b) : null });
   }
   return { dw, dh, n, rows, marks };
 }
