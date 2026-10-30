@@ -15,6 +15,7 @@ import { FORMS } from '../data/forms.js';
 import { MODEL_ORDER } from '../data/models.js';
 import { SKILLS } from '../data/skills.js';
 import { SKILLS as SKILLS_MD, parseParams, read } from '../scripts/docs-parse.js';
+import { variants } from '../scripts/lock-rounds.js';
 
 const SEEDS = 200;
 /** The deal's seeds for the shares: the balance's old drift, 16% for 20% on level 5 (architecture 6), is 6 sigma out. */
@@ -53,14 +54,6 @@ function withoutRandom(fn) {
   } finally {
     Math.random = random;
   }
-}
-
-/** The levels as the planner passes them: one per structure (or ask) of a mixed level. */
-function variants(level) {
-  for (const key of ['structure', 'ask']) {
-    if (Array.isArray(level[key])) return level[key].map((value) => ({ ...level, [key]: value }));
-  }
-  return [level];
 }
 
 /**

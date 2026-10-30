@@ -1,6 +1,6 @@
 // The rounds lock (architecture 4.1): for each registered game, its meta.version and a sha256 of
 // each level's rounds, seeds 1-50. Run: npm run lock. tests/lock.test.js rebuilds it in memory.
-// Refuses to write when a level's rounds changed and the version did not, or a locked level id is gone.
+// Refuses to write when a level's rounds changed and the version did not, or a locked game or level id is gone.
 import { createHash } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -64,8 +64,9 @@ export const lockText = (lock) => `${JSON.stringify(lock, null, 2)}\n`;
 
 /**
  * Where the stored lock and the games now disagree. `version`: a level's rounds changed and the
- * version did not go up (or it went down); `level`: a locked level id is no longer a level (storage
- * keys on it, architecture 2.2); neither is fixed by npm run lock. `stale`: npm run lock fixes it.
+ * version did not go up (or it went down); `level`: a locked game id is no longer a game, or a locked
+ * level id no longer a level (storage keys on both, architecture 2.2); neither is fixed by npm run
+ * lock. `stale`: npm run lock fixes it.
  * @param {Lock} stored
  * @param {Lock} now
  * @returns {Problem[]}
@@ -76,7 +77,7 @@ export function compare(stored, now) {
   for (const [id, was] of Object.entries(stored)) {
     const is = now[id];
     if (!is) {
-      problems.push({ kind: 'stale', text: `${id} is locked but not registered` });
+      problems.push({ kind: 'level', text: `${id} is locked and no game has this id; put it back (a game id stays)` });
       continue;
     }
     for (const level of Object.keys(was.levels)) {

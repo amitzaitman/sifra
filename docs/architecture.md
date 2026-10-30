@@ -506,9 +506,10 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
   scripts/lock-rounds.js (`npm run lock`) writes it; the test rebuilds it in memory, as tests/sync.test.js does data/.
   It fails when a level's rounds changed and the version did not go up (2.1: an attempt's `seed`, `version` and
   `params` rebuild its round, 3.9), or went down; when a locked level id is no longer a level (storage keys on it,
-  2.2, and `indexOf` would put the child back at level 1 without a word); and, saying "run npm run lock", when the
-  lock is stale: the version went up, or a game or a level is new. `npm run lock` refuses to write on the first two,
-  so a level id leaves the lock only by a hand edit. A digest per level, not one per game: a new level changes no
+  2.2, and `indexOf` would put the child back at level 1 without a word), or a locked game id no longer the id in
+  a game's `meta` (the ladder and every attempt key on it); and, saying "run npm run lock", when the lock is stale:
+  the version went up, or a game or a level is new. `npm run lock` refuses to write on the first two, so a game or
+  level id leaves the lock only by a hand edit. A digest per level, not one per game: a new level changes no
   existing round and needs no bump, and the message names the levels that changed. The fixtures are not locked: no
   child's record points at them.
 - `tests/fixtures/`: two small complete games that pass 4.2: `parts` (levels of `num.parts.split` and
@@ -758,7 +759,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 
 - `node --test` finds `tests/**/*.test.js` and not the e2e specs. `check` is the full gate.
 - `npm run lock` rewrites tests/rounds.lock.json (4.1) after a game's version (`meta`, 2.1) goes up, or a game or
-  level is added; it writes nothing while a level's rounds changed without a bump or a locked level id is gone.
+  level is added; it writes nothing while a level's rounds changed without a bump or a locked game or level id is
+  gone.
 - `noUnusedLocals`: an import, variable or function nothing reads fails the typecheck (an import a merge brought
   back, 548c6dd). Unused parameters stay allowed: a game's `render` and `face` keep the contract's signature.
 - The ES2022 lib keeps some APIs newer than Safari 16.4 out (`Object.groupBy`, `Promise.withResolvers`), but its DOM
