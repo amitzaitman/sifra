@@ -265,6 +265,31 @@ test('a double tap on the end screen\'s home button opens home and stays there (
   await expect(page).toHaveURL(/#\/play\/parts$/);
 });
 
+test('every screen opens at its top: a round opened from a home page scrolled down on a landscape phone (3.2, playtest 2026-10-31)', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await open(page, `${INDEX}#/`);
+  const last = page.locator('[data-card]').last();
+  await last.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  await look(page);
+  await last.click();
+  await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+});
+
+test('a card the shell focused shows no ring until a key is pressed; a pointer hides it again (3.2, playtest 2026-10-31)', async ({ page }) => {
+  await open(page, `${INDEX}#/dev/stories/1/1`);
+  const first = page.locator('button[data-index="0"]');
+  await expect(first).toBeFocused();
+  const ring = () => first.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(await ring()).toBe('none');
+  await page.keyboard.press('Shift');
+  expect(await ring()).toBe('solid');
+  await page.mouse.click(2, 2);
+  await first.focus();
+  expect(await ring()).toBe('none');
+});
+
 test('parents page: plain links that open YouTube in a new tab, and the home button', async ({ page }) => {
   await open(page, `${INDEX}#/parents`);
   const links = page.locator('main[data-screen="parents"] a');

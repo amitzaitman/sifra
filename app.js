@@ -4,7 +4,7 @@ import { drawCards } from './shell/cards.js';
 import { cover } from './lib/cover.js';
 import { buildEquation, drawEquation, fitEquation, solveEquation } from './shell/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
-import { dayOf, daysBetween, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
+import { dayOf, daysBetween, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
 import { demoSeed, rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
 import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
@@ -92,6 +92,9 @@ function screen(name, title, attrs = {}) {
   const main = h('main', { 'data-screen': name, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
+  // Every screen opens at its top (3.2): a round, whose story plays at the top of the picture, never
+  // opens where the last screen was scrolled to (a landscape phone, playtest 2026-10-31).
+  if (scrollY || scrollX) scrollTo(0, 0);
   return main;
 }
 
@@ -150,7 +153,26 @@ function play(game) {
   const seed = seedFrom(S.seeds);
   const mix = rng((seed ^ MIX) >>> 0);
   const rounds = planSession(c, S.games, game, today(), SKILLS, rng(seed), mix);
-  nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds });
+  nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds, seen: new Set() });
+}
+
+/** Tries for a round the session has not dealt, as a demo's for a round it does not show (3.3, 3.8). */
+const TRIES = 50;
+
+/**
+ * A round's seed, once, as it starts (3.3): the planned one, plus 1 while its round is one the
+ * session dealt already (exerciseOf: the same answer and numbers), up to TRIES times. A small pool
+ * (a level to 5 has 9 or 10 stories) otherwise deals the same exercise, its answer on the same card,
+ * in most sessions. The seed recorded is the one played, so #/dev shows the round.
+ */
+function apart(session, spec) {
+  if (spec.apart) return;
+  const game = S.byId.get(spec.game);
+  const level = built(game, spec);
+  const key = (seed) => exerciseOf(game.meta.id, game.makeRound(level, rng(seed)));
+  for (let n = 0; n < TRIES && session.seen.has(key(spec.seed)); n++) spec.seed = (spec.seed + 1) >>> 0;
+  session.seen.add(key(spec.seed));
+  spec.apart = true;
 }
 
 function nextRound(session) {
@@ -171,9 +193,11 @@ function nextRound(session) {
       child().games[game.meta.id] = sawDemo(ladder, level.id);
       spec.demo = ['auto'];
       persist();
+      apart(session, spec);
       return demo(game, spec, () => mount(session, spec), session.done.length);
     }
   }
+  apart(session, spec);
   mount(session, spec);
 }
 
@@ -326,9 +350,10 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
  */
 function demo(game, spec, then, done = 0) {
   const level = built(game, spec);
-  const real = game.makeRound(level, rng(spec.seed));
+  // Never the round it shows how to solve (3.8): not the same exercise, in any form or drawing.
+  const real = exerciseOf(game.meta.id, game.makeRound(level, rng(spec.seed)));
   let seed = demoSeed(spec.seed);
-  for (let n = 0; n < 50 && same(game.makeRound(level, rng(seed)), real); n++) seed = (seed + 1) >>> 0;
+  for (let n = 0; n < TRIES && exerciseOf(game.meta.id, game.makeRound(level, rng(seed))) === real; n++) seed = (seed + 1) >>> 0;
   const round = dealt(game, level, seed);
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
@@ -440,6 +465,10 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   root.addEventListener('pointerdown', (e) => S.taps.down(e.timeStamp) && drop(e), { capture: true });
   root.addEventListener('click', (e) => S.taps.click(e.timeStamp, byPointer(e)) && drop(e), { capture: true });
   errorScreen();
+  // The cards' focus ring shows only after keyboard input (3.2, design 10): the shell focuses a card,
+  // and a ring the child did not ask for reads as "this one" (playtest 2026-10-31).
+  addEventListener('keydown', () => document.documentElement.setAttribute('data-keys', ''), { capture: true });
+  addEventListener('pointerdown', () => document.documentElement.removeAttribute('data-keys'), { capture: true });
   const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, newId, { t: S.now().toISOString(), day: today() });
   navigator.storage?.persist?.().catch(() => null);

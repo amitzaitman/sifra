@@ -33,6 +33,8 @@ interface Level {
   min?: number;
   /** false: no dots under the cards' numbers (skills.md, design 6.5) */
   cardDots?: boolean;
+  /** false: the ladder never steps down from this level to the one before it (skills.md, architecture 3.4) */
+  down?: boolean;
   /** the forms makeRound deals, by weight (architecture 2.2); required when `unknown` is an array */
   forms?: LevelForm[];
   /** numbers in the level's range that are never an answer, each for a reason (architecture 4.2) */

@@ -67,10 +67,11 @@ export function step(state, levels, { outcome, kind, session }) {
     go(up);
   } else if (s.fast !== null) {
     // The climb ends. A level reached by a fast promotion may rest on a guess: back one, unmarked.
-    // Stay at the climb's start, at the last level once passed, and after a mixed round (5.6).
+    // Stay at the climb's start, at the last level once passed, after a mixed round (5.6), and at a
+    // level that says down: false (the level below teaches another skill, not one this one needs).
     const start = indexOf(levels, s.fast);
     s.fast = null;
-    if (i > start && !s.passed.includes(played) && kind !== 'mixed') {
+    if (i > start && !s.passed.includes(played) && kind !== 'mixed' && levels[i].down !== false) {
       s.passed = s.passed.filter((id) => id !== levels[i - 1].id);
       go(i - 1);
     }
@@ -80,7 +81,7 @@ export function step(state, levels, { outcome, kind, session }) {
     if (s.streak >= 4) {
       pass(played);
       go(up);
-    } else if (s.window.filter((o) => o !== 'first').length >= 2) go(Math.max(i - 1, 0));
+    } else if (s.window.filter((o) => o !== 'first').length >= 2) go(levels[i].down === false ? i : Math.max(i - 1, 0));
   }
   const at = s.at[played];
   const stuck = Boolean(at && at.n >= 10 && at.sessions >= 2 && at.first / at.n < 0.5);

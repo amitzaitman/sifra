@@ -29,6 +29,21 @@ export function homeOrder(games, skills) {
   return [...games].sort((a, b) => pos(a) - pos(b));
 }
 
+/**
+ * What the child sees of a round, as a key (architecture 3.3, 3.8): its game, its answer and the two
+ * sides of its exercise in either order, so a reversed row (`? = 9 − 3`), another verb or another
+ * drawing of the same exercise is the same, and `3 + 2` is not `2 + 3`; without an exercise, its
+ * picture. A session deals no round twice, and a demo never the round it shows how to solve.
+ * @param {string} game
+ * @param {Round} round
+ * @returns {string}
+ */
+export function exerciseOf(game, round) {
+  const { equation } = round;
+  const sides = equation ? [equation.left, equation.right].map((side) => side.map(String).join(' ')).sort() : round.picture;
+  return JSON.stringify([game, round.answer, sides]);
+}
+
 /** @type {(level: Level) => boolean} a level whose structure or ask the planner picks */
 export const isMixed = (level) => Array.isArray(level.structure) || Array.isArray(level.ask);
 

@@ -125,6 +125,9 @@ main {
 /* The focus ring goes round the shown answer's ring (3-7px out), not over it, and over the empty
    slots beside it (design 6.5). */
 .card.is-shown:focus-visible { position: relative; z-index: 1; outline-offset: 10px; }
+/* A card the shell focused shows no ring until a key is pressed (app.js sets data-keys): a silent
+   child reads a ring as "this one" (playtest 2026-10-31). */
+:root:not([data-keys]) .card:focus-visible { outline: none; }
 
 /* "הַבָּא" (design 6.9): in the cards' place, the arrow after the word. */
 .next {

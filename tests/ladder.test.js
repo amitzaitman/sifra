@@ -183,3 +183,25 @@ test('not stuck in one session, or with half first tries', () => {
   }
   assert.equal(any, false, 'half first tries');
 });
+
+test('down: false: two helped rounds, or the end of a fast climb, keep the child at that level (playtest 2026-10-31)', () => {
+  // The stories' list: three skills one after another; the first level of each says down: false.
+  const story = ['add', 'take', 'whole'].flatMap((s, k) => [0, 1].map((j) => ({ id: `${s}-${j}`, skill: `addsub.meaning.${s}`, demo: false, ...(j === 0 && { down: false }), k })));
+  const run = (state, outcomes) => outcomes.reduce((s, outcome) => step(s, story, { outcome, kind: 'new', session: 1 }).state, state);
+  const at = (id) => ({ ...startLadder(story, id), fast: null });
+  // Two helped rounds at the first level of a skill: it stays, the window emptied.
+  const stay = run(at('take-0'), ['help', 'help']);
+  assert.equal(stay.level, 'take-0');
+  assert.deepEqual(stay.window, []);
+  // At a level that steps down, as before.
+  assert.equal(run(at('take-1'), ['help', 'help']).level, 'take-0');
+  // A fast climb through add to take-0, then a miss there: take-0 stays, add-1 stays passed.
+  const climb = run(startLadder(story), ['first', 'first', 'help']);
+  assert.equal(climb.level, 'take-0');
+  assert.equal(climb.fast, null);
+  assert.deepEqual(climb.passed, ['add-0', 'add-1']);
+  // A climb that ends on a level that steps down goes back one, unmarked, as before.
+  const back = run(startLadder(story), ['first', 'first', 'first', 'help']);
+  assert.equal(back.level, 'take-0');
+  assert.deepEqual(back.passed, ['add-0', 'add-1']);
+});

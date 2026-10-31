@@ -6,7 +6,7 @@ import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import {
-  addDays, dayOf, daysBetween, homeOrder, mastered, nextStep, pickMix, planSession, prereqs, reviews, schedule,
+  addDays, dayOf, daysBetween, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, prereqs, reviews, schedule,
   skillPassed, stuckTarget,
 } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
@@ -321,4 +321,25 @@ test('5.12 walk over games/registry.js: an always-right child opens each game\'s
   }
   assert.ok(offered.every((id) => skillPassed(c, games, id)));
   for (const g of games) assert.deepEqual(played[g.meta.id], g.levels.map((_, i) => i + 1), g.meta.id);
+});
+
+test('exerciseOf: what the child sees, so a reversed row or another verb is the same exercise (architecture 3.3, 3.8)', async () => {
+  const { levels, makeRound } = await import('../games/stories/game.js');
+  const take = levels.find((l) => l.id === 'take-10');
+  const rounds = Array.from({ length: 400 }, (_, i) => makeRound(take, rng(i + 1)));
+  const of = (s, k, f) => rounds.find((r) => r.story.s === s && r.story.k === k && f(r));
+  const [a, b] = [of(9, 3, (r) => r.eqform === 'standard'), of(9, 3, (r) => r.eqform === 'reversed')];
+  assert.ok(a && b);
+  assert.equal(exerciseOf('stories', a), exerciseOf('stories', b));
+  const [fly, pop] = [of(8, 2, (r) => r.story.verb === 'fly'), of(8, 2, (r) => r.story.verb === 'pop')];
+  assert.equal(exerciseOf('stories', fly), exerciseOf('stories', pop));
+  assert.notEqual(exerciseOf('stories', a), exerciseOf('stories', fly));
+  assert.notEqual(exerciseOf('stories', a), exerciseOf('ten-frame', a));
+  // The order of the exercise is the story's: 3 + 2 is not 2 + 3.
+  const add = levels.find((l) => l.id === 'add-5');
+  const adds = Array.from({ length: 400 }, (_, i) => makeRound(add, rng(i + 1)));
+  const [x, y] = [adds.find((r) => r.story.s === 3 && r.story.k === 2), adds.find((r) => r.story.s === 2 && r.story.k === 3)];
+  assert.notEqual(exerciseOf('stories', x), exerciseOf('stories', y));
+  // Without an exercise, the picture tells rounds apart.
+  assert.notEqual(exerciseOf('g', { ...a, equation: null, picture: [1] }), exerciseOf('g', { ...a, equation: null, picture: [2] }));
 });
