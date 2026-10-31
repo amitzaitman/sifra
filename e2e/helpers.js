@@ -216,43 +216,48 @@ export async function expectCalm(page) {
  * Watches the demo's hand (R9, architecture 2.6) from now until a demo screen is solved: on every frame, each tour
  * digit ([data-tour]) under the hand's box; at each tap, the hand's box, the screen's height, whether a hint and
  * a tour were drawn by then, whether the hand was still on its way (a transition running on it), and the index of
- * the answer card under its tip (null for none). handSeen reads it. Call it once the page is open (the auto demo:
- * once its screen shows).
+ * the answer card under its tip (null for none). handSeen reads it. Call it once the page is open, before the demo
+ * starts; for a demo that runs on load (a demo level), with `fromStart` before the page opens: it is then watched
+ * from the page's first script, so a slow machine cannot let the hand's first tap pass before the watch begins.
  * @param {import('@playwright/test').Page} page
+ * @param {{ fromStart?: boolean }} [options]
  */
-export async function watchHand(page) {
-  await page.evaluate(() => {
-    /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
-    const seen = { covered: [], taps: [] };
-    Object.assign(globalThis, { handSeen: seen });
-    const demo = () => document.querySelector('main[data-screen="demo"]');
-    /** @type {(a: DOMRect, b: DOMRect) => boolean} */
-    const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-    const frame = () => {
-      const hand = demo()?.querySelector('[data-hand]')?.getBoundingClientRect();
-      for (const digit of hand ? document.querySelectorAll('[data-tour]') : []) {
-        const box = digit.getBoundingClientRect();
-        if (box.width && box.height && over(hand, box)) seen.covered.push(digit.getAttribute('data-tour') ?? '');
-      }
-      if (!demo()?.hasAttribute('data-solved')) requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-    new MutationObserver((records) => {
-      for (const { target, oldValue } of records) {
-        if (!(target instanceof Element) || !target.matches('[data-hand].is-tapping') || oldValue?.includes('is-tapping')) continue;
-        const box = target.getBoundingClientRect();
-        // The tip is the middle of the hand's top edge (app.js aim()); the tap's pulse has not scaled it yet.
-        const [x, y] = [box.left + box.width / 2, box.top + 1];
-        const card = [...document.querySelectorAll('[data-choices] [data-index]')].find((el) => {
-          const b = el.getBoundingClientRect();
-          return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
-        });
-        seen.taps.push({ left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom), screen: innerHeight,
-          hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')),
-          moving: target.getAnimations().some((a) => 'transitionProperty' in a), card: card ? Number(card.getAttribute('data-index')) : null });
-      }
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
-  });
+export async function watchHand(page, { fromStart = false } = {}) {
+  await (fromStart ? page.addInitScript(handWatch) : page.evaluate(handWatch));
+}
+
+/** watchHand's watch, run in the page (see watchHand). */
+function handWatch() {
+  /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
+  const seen = { covered: [], taps: [] };
+  Object.assign(globalThis, { handSeen: seen });
+  const demo = () => document.querySelector('main[data-screen="demo"]');
+  /** @type {(a: DOMRect, b: DOMRect) => boolean} */
+  const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const frame = () => {
+    const hand = demo()?.querySelector('[data-hand]')?.getBoundingClientRect();
+    for (const digit of hand ? document.querySelectorAll('[data-tour]') : []) {
+      const box = digit.getBoundingClientRect();
+      if (box.width && box.height && over(hand, box)) seen.covered.push(digit.getAttribute('data-tour') ?? '');
+    }
+    if (!demo()?.hasAttribute('data-solved')) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  new MutationObserver((records) => {
+    for (const { target, oldValue } of records) {
+      if (!(target instanceof Element) || !target.matches('[data-hand].is-tapping') || oldValue?.includes('is-tapping')) continue;
+      const box = target.getBoundingClientRect();
+      // The tip is the middle of the hand's top edge (app.js aim()); the tap's pulse has not scaled it yet.
+      const [x, y] = [box.left + box.width / 2, box.top + 1];
+      const card = [...document.querySelectorAll('[data-choices] [data-index]')].find((el) => {
+        const b = el.getBoundingClientRect();
+        return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+      });
+      seen.taps.push({ left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom), screen: innerHeight,
+        hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')),
+        moving: target.getAnimations().some((a) => 'transitionProperty' in a), card: card ? Number(card.getAttribute('data-index')) : null });
+    }
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
 }
 
 /**

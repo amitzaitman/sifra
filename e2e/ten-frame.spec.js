@@ -709,9 +709,9 @@ test('reduced motion: a tap is taken right after a miss, and the hint is there a
 
 for (const level of game.levels.filter((l) => l.demo).map((l) => l.id)) {
   test(`${level}: the demo runs first, writes nothing, and the hand taps the answer; it steps off before the hint and the tour (R9)`, async ({ page }) => {
+    await watchHand(page, { fromStart: true });
     await playAt(page, level, { demoSeen: [] });
     await expect(page.locator('main[data-screen="demo"] [data-hand]')).toBeVisible();
-    await watchHand(page);
     await expect(page.locator('[data-next]')).toBeVisible({ timeout: 15000 });
     await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
     if (level === 'bridge-move') await expect(page.locator('[data-area="equation"] .eq')).toHaveText(/^10\+\d=\d+$/);

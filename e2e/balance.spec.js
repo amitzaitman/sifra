@@ -603,9 +603,9 @@ async function expectDemoShows(page) {
 
 for (const level of ['same', 'missing-right', 'both-sides', 'true-false']) {
   test(`a demo level (${level}) runs its demo first: the pans, the hint and the tour, the hand, the closed picture, nothing written`, async ({ page }) => {
+    await watchHand(page, { fromStart: true });
     await playAt(page, level, { demoSeen: [] });
     await expect(page.locator('main[data-screen="demo"] [data-hand]')).toBeVisible();
-    await watchHand(page);
     await expectDemoShows(page);
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     expect((await stored(page)).child.attempts).toEqual([]);
@@ -691,6 +691,41 @@ test('320px: no sideways scroll on any level, through the hint; R7 holds on ever
 });
 
 /**
+ * The tour checks' screens: two phones held upright, and two on their side, where the balance's picture is 240px tall
+ * (design 5, bug hunt #4).
+ * @type {[number, number][]}
+ */
+const SCREENS = [[320, 568], [360, 568], [568, 320], [844, 390]];
+/**
+ * Scrolls the picture's panel to the middle of the screen: on a phone on its side (320px tall) the cards' tap leaves
+ * it partly below the screen, and elementsFromPoint finds only what is on screen.
+ * @param {import('@playwright/test').Page} page
+ */
+const inView = (page) => page.locator('[data-area="picture"]').evaluate((p) => p.scrollIntoView({ block: 'center' }));
+/**
+ * In the page: every two numbers of the tour in one row (their text boxes share more than half their height) whose
+ * digits, as drawn (condensed), overlap or come closer than 0.5px (a turned phone left 13141516 run together, bug
+ * hunt #11).
+ * @returns {string[]}
+ */
+function tourOverlaps() {
+  const boxes = [...document.querySelectorAll('[data-tour]')].map((d) => {
+    const range = document.createRange();
+    range.selectNodeContents(d);
+    return { n: d.getAttribute('data-tour'), b: range.getBoundingClientRect() };
+  });
+  const out = [];
+  for (const [i, { n, b }] of boxes.entries()) {
+    for (const { n: m, b: c } of boxes.slice(i + 1)) {
+      const y = Math.min(b.bottom, c.bottom) - Math.max(b.top, c.top);
+      const x = Math.min(b.right, c.right) - Math.max(b.left, c.left);
+      if (y > Math.min(b.height, c.height) / 2 && x > -0.5) out.push(`${n} and ${m}: ${x > 0 ? `${x.toFixed(1)}px over each other` : `${(-x).toFixed(1)}px apart`}`);
+    }
+  }
+  return out;
+}
+
+/**
  * What is wrong with the tour's last number n, read in the page (design 7.2, 7.3): it is clearly bigger
  * than the number before it (1.1 times at least: the CSS grows it 1.3, pinned in tests/balance.test.js,
  * but line boxes are whole pixels, 22 against 17 here, so the ratio reads 1.28-1.29 and a pixel of
@@ -763,8 +798,8 @@ function lastNumberProblems(n) {
   return out;
 }
 
-test('the tour\'s last number: bigger than the one before it, clear of it and of the cube after it, over the ring; its cube no bigger than the others (design 7.2, 7.3)', async ({ page }) => {
-  test.setTimeout(90000);
+test('the tour\'s last number: bigger than the one before it, clear of it and of the cube after it, over the ring; its cube no bigger than the others, upright and sideways (design 5, 7.2, 7.3; bug hunt #4)', async ({ page }) => {
+  test.setTimeout(180000);
   // The tour's end state, drawn at once.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // Two digits: 6 + 11 = ? + 5, 12 + 3 = ? + 2 and ? + 2 = 14 count the unknown to 12 or 13, the
@@ -774,10 +809,10 @@ test('the tour\'s last number: bigger than the one before it, clear of it and of
   // disc under each number): 6 + 4 = 10 and 1 + 8 = 9, on both pans.
   const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 1071],
     ['missing-symbols-20', 360], ['missing-symbols-20', 545], ['true-false', 2], ['true-false', 3]];
-  for (const width of [320, 360]) {
-    await page.setViewportSize({ width, height: 568 });
+  for (const [width, height] of SCREENS) {
+    await page.setViewportSize({ width, height });
     for (const [level, seed] of rounds) {
-      const where = `${width}px ${level} ${seed}`;
+      const where = `${width}×${height} ${level} ${seed}`;
       const { round } = await devAt(page, level, seed);
       const last = round.model === 'cards' ? total(round.answer.right) : round.answer;
       for (const i of wrongOf(round)) {
@@ -786,6 +821,7 @@ test('the tour\'s last number: bigger than the one before it, clear of it and of
       }
       await expect(page.locator('[data-tour]').last(), where).toHaveText(String(last));
       await expect(page.locator('[data-hint] .bl-ring.is-tour'), where).not.toHaveCount(0);
+      await inView(page);
       await expect.poll(() => page.evaluate(lastNumberProblems, last), where).toEqual([]);
     }
   }
@@ -831,23 +867,24 @@ function twoDigitProblems() {
   return out;
 }
 
-test('two-digit tour numbers stay inside their cube, condensed, at 14px at least; the last grows in height only, on the unknown and on a known cube (design 4, 7.3)', async ({ page }) => {
-  test.setTimeout(90000);
+test('two-digit tour numbers stay inside their cube, condensed, at 14px at least; the last grows in height only, on the unknown and on a known cube, upright and sideways (design 4, 5, 7.3; bug hunt #4)', async ({ page }) => {
+  test.setTimeout(180000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // On the unknown: 6 + 11 = ? + 5 (10 to 12), 12 + 3 = ? + 2, ? + 2 = 14, 16 + 3 = ? + 8, 1 + ? = 13,
   // ? = 12 + 4 (13 to 16). On known cubes, 10 last: 6 + 4 = 10 and 3 + 7 = 10 (both pans), and same-as 3 + 7.
   const rounds = [['both-sides-symbols', 2], ['both-sides-symbols', 34], ['both-sides-symbols', 30], ['missing-symbols-20', 1071],
     ['missing-symbols-20', 360], ['missing-symbols-20', 545], ['true-false', 2], ['true-false', 4], ['same', 4]];
-  for (const width of [320, 360]) {
-    await page.setViewportSize({ width, height: 568 });
+  for (const [width, height] of SCREENS) {
+    await page.setViewportSize({ width, height });
     for (const [level, seed] of rounds) {
       const { round } = await devAt(page, level, seed);
       for (const i of wrongOf(round)) {
         await card(page, i).click();
         await unlocked(page);
       }
-      const where = `${width}px ${level} ${seed}`;
+      const where = `${width}×${height} ${level} ${seed}`;
       await expect(page.locator('[data-tour]').last(), where).toHaveText(/^\d\d$/);
+      await inView(page);
       expect(await page.evaluate(twoDigitProblems), where).toEqual([]);
     }
   }
@@ -1723,26 +1760,32 @@ test('a phone on its side: the balance\'s picture is as tall as on a 320px phone
   for (const [width, height] of [[568, 320], [844, 390]]) {
     await page.setViewportSize({ width, height });
     const where = (what) => `${width}×${height} ${what}`;
-    // 4 rows at rest: 13 + 5 = ? + 12 (level 8), 10 + 3 = 11 + ? (level 11), 19 = 3 + ? (level 6, a tour to 16).
+    // 4 rows at rest: 13 + 5 = ? + 12 (level 8), 10 + 3 = 11 + ? (level 11), 19 = 3 + ? (level 6, a tour to 16). The cubes
+    // as large at rest, with the hint and in the tour; every tour number inside its cube, none run into the next.
     for (const [level, seed] of [['both-sides-symbols', 9], ['relational', 1], ['missing-symbols-20', 9]]) {
-      await picturedAt(page, level, seed);
-      expect(await cubeSize(page), where(`${level} ${seed}: a cube at rest, px`)).toBeGreaterThanOrEqual(17.5);
-      expect(await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth), where('no sideways scroll')).toBeLessThanOrEqual(0);
+      const at = (what) => where(`${level} ${seed}: ${what}`);
+      const { round } = await picturedAt(page, level, seed);
+      expect(await cubeSize(page), at('a cube at rest, px')).toBeGreaterThanOrEqual(17.5);
+      expect(await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth), at('no sideways scroll')).toBeLessThanOrEqual(0);
+      const wrong = wrongOf(round);
+      for (const [k, i] of wrong.entries()) {
+        await card(page, i).click();
+        await unlocked(page);
+        if (k !== wrong.length - 2) continue;
+        await expect(page.locator('[data-hint]'), at('the hint')).toHaveCount(1);
+        expect(await cubeSize(page), at('a cube with the hint, px')).toBeGreaterThanOrEqual(17.5);
+      }
+      await expect(page.locator('[data-hint] .bl-ring.is-tour'), at('the tour')).not.toHaveCount(0);
+      expect(await cubeSize(page), at('a cube in the tour, px')).toBeGreaterThanOrEqual(17.5);
+      const fits = await page.evaluate(() => [...document.querySelectorAll('.bl-stack > .bl-cube > .bl-digit > .bl-fit')].map((f) => {
+        const [d, c] = [f.getBoundingClientRect(), f.closest('.bl-cube').getBoundingClientRect()];
+        return d.left >= c.left - 0.5 && d.right <= c.right + 0.5;
+      }));
+      if (level === 'missing-symbols-20') expect(fits.length, at('two-digit numbers in the tour')).toBeGreaterThan(0);
+      expect(fits.every(Boolean), at('each inside its cube')).toBe(true);
+      expect(await page.evaluate(tourOverlaps), at('tour numbers run together')).toEqual([]);
+      expect(await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth), at('no sideways scroll in the tour')).toBeLessThanOrEqual(0);
     }
-    // The tour of 19 = 3 + ?: 1 to 16 on the unknown's cubes, the cubes as large, every number inside its cube.
-    const { round } = await picturedAt(page, 'missing-symbols-20', 9);
-    for (const i of wrongOf(round)) {
-      await card(page, i).click();
-      await unlocked(page);
-    }
-    await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
-    expect(await cubeSize(page), where('a cube in the tour, px')).toBeGreaterThanOrEqual(17.5);
-    const fits = await page.evaluate(() => [...document.querySelectorAll('.bl-stack > .bl-cube > .bl-digit > .bl-fit')].map((f) => {
-      const [d, c] = [f.getBoundingClientRect(), f.closest('.bl-cube').getBoundingClientRect()];
-      return d.left >= c.left - 0.5 && d.right <= c.right + 0.5;
-    }));
-    expect(fits.length, where('two-digit numbers in the tour')).toBeGreaterThan(0);
-    expect(fits.every(Boolean), where('each inside its cube')).toBe(true);
     // 10 + ? = 18's 28 (overflow): 8 rows of ghosts, 9.4px or more.
     const big = await picturedAt(page, 'missing-symbols-20', 25);
     await card(page, big.round.choices.findIndex((c) => c.value === 28)).click();
@@ -1824,8 +1867,10 @@ test('a turned phone: the thumbs keep inside their cards, and a tour\'s squeezed
   expect((await squeezed()).every((d) => d.sx === '1.000')).toBe(true);
   await page.setViewportSize({ width: 844, height: 390 });
   await expect.poll(async () => Math.min(...(await squeezed()).map((d) => d.room))).toBeGreaterThanOrEqual(0);
+  expect(await page.evaluate(tourOverlaps), 'turned: tour numbers run together').toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(async () => (await squeezed()).every((d) => d.sx === '1.000')).toBe(true);
+  expect(await page.evaluate(tourOverlaps), 'turned back: tour numbers run together').toEqual([]);
 });
 
 test('a turned phone: an end screen played sideways keeps its eight thumbs inside their cards (design 5; bug hunt #11)', async ({ page }) => {

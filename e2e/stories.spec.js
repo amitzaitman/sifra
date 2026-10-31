@@ -284,11 +284,21 @@ const glyphProblems = (page, where) => draw(page).evaluate((d, at) => {
 }, where);
 
 /**
+ * The room WebKit gets over Chromium for a digit's ink below its box's middle (not above it), px. GLYPH.pad (0.02em)
+ * was measured in Chromium, where the ink's middle is within 1px of the box's (-0.96 to +0.58px; a grown digit to
+ * +1.35px). WebKit draws the same digits 0.3 to 1.8px lower (+0.17 to +1.52px; a grown digit +1.69px; 1024×1366 and
+ * 390×844, 2026-10-31), so no one pad keeps both engines within 1px: one that lifts WebKit's ink 0.6px puts
+ * Chromium's 1.6px above. The iPhone draws with Core Text, neither of these: the owner's check on the device looks at
+ * the digits' middle (device-checks.md). As ringInset in e2e/balance.spec.js.
+ */
+const inkLow = () => (test.info().project.name === 'webkit' ? 1 : 0);
+
+/**
  * The ink of each two-digit number and of the tour's grown last digit on an object, read from the
  * page's pixels (the digit alone, black on white): inside its disc, a rectangle in a circle, its
  * corners 1px clear (design 6.10; tests/stories.test.js holds the same with GLYPH's measured ink),
- * and its middle within 1px of the box's, up and down (GLYPH.pad; playtest 2026-10-31). Also the
- * texts it read, so a test can tell that it read the digits it is there for.
+ * and its middle within 1px of the box's, up and down (GLYPH.pad; playtest 2026-10-31); in WebKit up to
+ * 2px below (inkLow). Also the texts it read, so a test can tell that it read the digits it is there for.
  * @param {import('@playwright/test').Page} page
  * @param {string} where
  * @param {string} [which] the glyphs to read: by default the wide and the grown digits
@@ -348,7 +358,8 @@ async function inkProblems(page, where, which = '.st-digit:is(.is-two, .is-grow)
     // A grown digit grows from its middle, and is drawn at its grown size: an offset grows with it,
     // to 1.35px measured (a 20.2px '6' grown 1.3 at 390×844), so 1.5px there.
     const low = (ys[0] + ys[1]) / 2;
-    if (Math.abs(low) > (geo.sy === 1 ? 1 : 1.5)) out.push(`${at}: its ink's middle ${low.toFixed(2)}px ${low > 0 ? 'below' : 'above'} the box's`);
+    const room = geo.sy === 1 ? 1 : 1.5;
+    if (low < -room || low > room + inkLow()) out.push(`${at}: its ink's middle ${low.toFixed(2)}px ${low > 0 ? 'below' : 'above'} the box's`);
   }
   await style.evaluate((s) => s.remove());
   return { out, read };
@@ -884,9 +895,9 @@ for (const id of ['add-5', 'take-5', 'whole-5']) {
 
 for (const id of stories.levels.filter((l) => l.demo).map((l) => l.id)) {
   test(`a demo level (${id}) runs its demo first: the story, the hand, the solved picture, nothing written`, async ({ page }) => {
+    await watchHand(page, { fromStart: true });
     await playAt(page, id, { demoSeen: [] });
     await expect(page.locator('main[data-screen="demo"] [data-hand]')).toBeVisible();
-    await watchHand(page);
     await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
     await expect(page.locator('[data-next]')).toBeVisible();
     await expect(page.locator('[data-tour]').last()).toHaveText(String((await roundOf(page)).round.answer));

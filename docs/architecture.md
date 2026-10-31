@@ -880,6 +880,15 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `expectThumbsDrawn`: no `[data-thumb]` empty or `data-broken` (a thumb that throws no longer reaches the error
   screen, 3.9), on home and each game's end screen.
   e2e/fixture.html is index.html with the fixture games (the story fixture only with `?story`, 4.1).
+- A test does not race the machine: what must still be running when it looks is held, not timed (a loaded CI runner
+  failed both of these, 2026-10-31). `watchHand(page, { fromStart: true })`, called before the page opens, watches a
+  demo that runs on load from the page's first script; begun after the load, a slow page let the hand's first tap
+  pass unseen (2 taps of 3). The locked-card test (4.6) holds the display's animations (`animation-play-state:
+  paused` in the picture, so the lock, which ends with them, stays) while the finger is down, then lets them go.
+  Where the engines draw a pixel or so apart, the room is named and explained once: `ringInset` (balance),
+  `offRoom` (ten-frame), `inkLow` (stories: WebKit draws the digits 0.3 to 1.8px lower than Chromium, so their ink's
+  middle may be up to 2px below the box's there, 1px in Chromium; no one `GLYPH.pad` keeps both within 1px). The
+  iPhone draws with Core Text, neither engine here: its look is the owner's check (docs/device-checks.md).
 - Every spec imports `test` and `expect` from e2e/helpers.js, never from `@playwright/test` (a code scan, 4.4).
   Its `test` has one automatic fixture, `errors`: every page of the test's context is watched, and an uncaught
   error (`pageerror`) or a `console.error()` in any of them fails the test when it ends, with the page's URL and
@@ -962,10 +971,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   hands its focus to the first live card, or to "הַבָּא" after the solve; the picture asked for after that solve has
   no cover.
 - balance.spec.js since the bug hunt: the jumps on a missing part (each mark on its place, the blink and the ring,
-  arcs, no ring over a cube or a mark); at 568×320 and 844×390 the cubes at rest and in a two-digit tour 17.5px or
-  more, ghosts at 8 rows 9.4px or more, jump marks with their digits inside, chips 5px off the pole, no sideways
-  scroll; turned from 568×320 to 320×568 home's thumbs and an end screen's eight inside their cards, and a tour's
-  squeezed numbers measured again at 844×390 and back to 1 at 390×844. ten-frame.spec.js: the solved thumbs with 0
+  arcs, no ring over a cube or a mark); at 568×320 and 844×390 the cubes 17.5px or more at rest, with the hint and in
+  the tour (levels 6, 8 and 11 at 4 rows), every two-digit tour number inside its cube and no two numbers of a row
+  run together, ghosts at 8 rows 9.4px or more, jump marks with their digits inside, chips 5px off the pole, no
+  sideways scroll; the two-digit and last-number tour checks at 568×320 and 844×390 as well as 320 and 360 wide (the
+  picture scrolled to the middle of the screen first: elementsFromPoint sees only what is on it); turned from
+  568×320 to 320×568 home's thumbs and an end screen's eight inside their cards, and a tour's squeezed numbers
+  measured again at 844×390 and back to 1 at 390×844, none run together. ten-frame.spec.js: the solved thumbs with 0
   at four sizes (the 0 at 14px inside its ring's hole), the leftover-only display's removed marks with no gold pixel
   (a Pixel 7 and 320×568 at dpr 2), and level 10's description following the counters to the full ten.
 
@@ -1124,7 +1136,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
     their end), then let go, and the picture comes back to rest with the dome down and none of its places on screen;
     at step 3 the cover never comes down between the display and the tour (a MutationObserver counts covers put
     down); at 1024×1366 and 390×844 every digit's and chip's ink within 1px of its box's middle up and down (1.5px
-    for the tour's grown digit), read from the pixels; a balloon's knot narrows downward and its string is 2px; a
+    for the tour's grown digit; in WebKit 1px more below, `inkLow`, 4.5), read from the pixels; a balloon's knot narrows downward and its string is 2px; a
     session at level 1 deals eight different exercises, all helped, and stays at level 1 (`down: false`).
   - A turned phone (2026-10-31, with the balance's bug hunt #11): the unit is solved in CSS from the stage and
     view.js measures no size, so nothing is measured again; the tests hold that. A tour (9 + 1's `10` in the basket,

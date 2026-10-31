@@ -476,6 +476,9 @@ test('a locked card does not sink under the finger; held until the lock ends, it
   await look(page);
   const { round, answerAt } = await roundOf(page);
   const [first, second] = round.choices.flatMap((c, i) => (i === answerAt ? [] : [i]));
+  // The display's animations are held, so the cards stay locked however slow the machine (the lock ends when they
+  // do, lib/settle.js); 150 ms of a finger on a card would show its sink (--t-press, 100 ms).
+  const hold = await page.addStyleTag({ content: '[data-area="picture"] * { animation-play-state: paused !important; }' });
   await page.locator(`button[data-index="${first}"]`).click();
   await expect(page.locator('[data-choices]')).toHaveAttribute('data-locked', '');
   const other = page.locator(`button[data-index="${second}"]`);
@@ -486,6 +489,7 @@ test('a locked card does not sink under the finger; held until the lock ends, it
   await page.waitForTimeout(150);
   await expect(page.locator('[data-choices]')).toHaveAttribute('data-locked', '');
   expect(await moved()).toBe('none');
+  await hold.evaluate((s) => s.remove());
   await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
   await expect.poll(moved).toBe('matrix(1, 0, 0, 1, 0, 3)');
   await page.mouse.up();
