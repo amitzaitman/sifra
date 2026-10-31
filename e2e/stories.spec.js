@@ -235,11 +235,13 @@ const glyphProblems = (page, where) => draw(page).evaluate((d, at) => {
  * The ink of each two-digit number and of the tour's grown last digit on an object, read from the
  * page's pixels (the digit alone, black on white): inside its disc, a rectangle in a circle, its
  * corners 1px clear (design 6.10; tests/stories.test.js holds the same with GLYPH's measured ink).
+ * Also the texts it read, so a test can tell that it read the digits it is there for.
  * @param {import('@playwright/test').Page} page
  * @param {string} where
  */
 async function inkProblems(page, where) {
   const out = [];
+  const read = [];
   const digits = await page.locator('[data-area="picture"] .st-digit:is(.is-two, .is-grow)').all();
   const style = await page.addStyleTag({ content: '[data-ink] [data-area="picture"] { background: #fff !important; } [data-ink] [data-area="picture"] * { visibility: hidden !important; } [data-ink] [data-ink-at] { visibility: visible !important; color: #000 !important; text-shadow: none !important; } [data-ink] [data-ink-at]::before { display: none !important; }' });
   for (const digit of digits) {
@@ -278,6 +280,7 @@ async function inkProblems(page, where) {
       }
       return { x0, y0, x1, y1, w: c.width, h: c.height };
     }, png.toString('base64'));
+    read.push(geo.text);
     const at = `${where}: "${geo.text}" on a ${geo.w.toFixed(2)}px disc`;
     if (ink.x1 < 0) { out.push(`${at}: no ink`); continue; }
     const k = ink.w / clip.width;
@@ -288,13 +291,14 @@ async function inkProblems(page, where) {
     if (far > geo.w / 2 - 1) out.push(`${at}: its ink (${(xs[1] - xs[0]).toFixed(1)} × ${(ys[1] - ys[0]).toFixed(1)}) reaches ${far.toFixed(2)}px from the middle, ${(geo.w / 2 - 1).toFixed(2)} allowed`);
   }
   await style.evaluate((s) => s.remove());
-  return out;
+  return { out, read };
 }
 
 /**
  * A round's wrong cards in the order given, then the answer, each step checked (glyphProblems, and
  * inkProblems at the first miss and in the tour). With reduced motion: the first miss shows its
- * display, a later one the hint, the third the tour.
+ * display, a later one the hint, the third the tour. Also the digits whose ink was read, at the
+ * first miss and in the tour.
  * @param {import('@playwright/test').Page} page
  * @param {any} round
  * @param {string[]} rules
@@ -302,6 +306,8 @@ async function inkProblems(page, where) {
 async function glyphsThrough(page, round, rules) {
   const key = `${round.story.s} ${round.structure === 'change-take' ? '−' : '+'} ${round.story.k}`;
   const out = [...await glyphProblems(page, `${key} at rest`)];
+  /** @type {string[][]} */
+  const inked = [];
   for (const [m, rule] of rules.entries()) {
     const i = round.choices.findIndex((c) => c.rule === rule);
     await card(page, i).click();
@@ -309,12 +315,16 @@ async function glyphsThrough(page, round, rules) {
     if (m === 0) await expect(draw(page)).toHaveAttribute('data-display', RULES[rule].display);
     const where = `${key}, card ${round.choices[i].value} (${rule})`;
     out.push(...await glyphProblems(page, where));
-    if (m === 0 || m === 2) out.push(...await inkProblems(page, where));
+    if (m === 0 || m === 2) {
+      const ink = await inkProblems(page, where);
+      out.push(...ink.out);
+      inked.push(ink.read);
+    }
   }
   await card(page, round.choices.findIndex((c) => !c.rule)).click();
   await expect(page.locator('[data-next]')).toBeVisible();
   out.push(...await glyphProblems(page, `${key} solved`));
-  return out;
+  return { out, inked };
 }
 
 test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11 (u 22.3px) and the tour\'s 10; 6 + ? = 10\'s jumps, chips and covers; 6 − 3\'s jumps back', async ({ page }) => {
@@ -324,14 +334,21 @@ test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11
   // The narrowest state with digits (architecture 4.9): 10 and 11 on dots of 22.3px.
   const basket = await devAt(page, 'whole-10', storySeed('whole-10', 9, 1));
   expect(basket.round.choices.map((c) => c.rule)).toEqual(['op.other', 'given.part', null, 'slip.near']);
-  problems.push(...await glyphsThrough(page, basket.round, ['slip.near', 'op.other', 'given.part']));
+  const nine = await glyphsThrough(page, basket.round, ['slip.near', 'op.other', 'given.part']);
+  problems.push(...nine.out);
   // Level 3: the chips 6 and 10, the fixed dome's '?', the jumps from 1 (k + 1 = 5), the stretched cover's '?', the tour on the lifted places.
   const change = await devAt(page, 'add-change', storySeed('add-change', 6, 4));
-  problems.push(...await glyphsThrough(page, change.round, ['count.start-included', 'given.whole', 'given.part']));
+  const six = await glyphsThrough(page, change.round, ['count.start-included', 'given.whole', 'given.part']);
+  problems.push(...six.out);
   // Take: counting back from the last leaver (6, 5, 4), landing on the first outline.
   const take = await devAt(page, 'take-10', seedOf('take-10', (r) => r.story.s === 6 && r.story.k === 3));
-  problems.push(...await glyphsThrough(page, take.round, ['count.start-included', 'op.other', 'given.whole']));
+  const back = await glyphsThrough(page, take.round, ['count.start-included', 'op.other', 'given.whole']);
+  problems.push(...back.out);
   expect(problems).toEqual([]);
+  // The ink was read where it is tight: 10 and 11 in the count-up, the tour's grown last digit.
+  expect(nine.inked, '9 + 1').toEqual([['10', '11'], ['10']]);
+  expect(six.inked, '6 + ? = 10').toEqual([[], ['4']]);
+  expect(back.inked, '6 − 3').toEqual([[], ['3']]);
 });
 
 // ---------- The event: the story first, then its '?'; the exercise built with it (design 6.10, architecture 2.4) ----------
@@ -406,11 +423,13 @@ for (const [id, seed, structure] of /** @type {[string, () => number, string?][]
       at = await now(page);
     }
     // The first phase, the still 'before', has nothing that moves and ends at once; so may the last,
-    // where nothing new enters (the basket's). Each phase that builds a token is held until step().
+    // where nothing new enters (the basket's). The morph, and each phase that builds a token, are held
+    // until step(): every round here has one, so the loop above ran at least once.
     const phases = phasesOf(round).slice(1);
     expect(seen).toEqual(phases.filter((p) => seen.includes(p)));
-    const builds = phases.filter((p, i) => JSON.stringify(builtAt(round, p)) !== JSON.stringify(builtAt(round, phasesOf(round)[i])));
-    expect(seen).toEqual(expect.arrayContaining(builds));
+    const held = phases.filter((p, i) => p === 'event:M' || JSON.stringify(builtAt(round, p)) !== JSON.stringify(builtAt(round, phasesOf(round)[i])));
+    expect(held.length, 'a phase that moves').toBeGreaterThan(0);
+    expect(seen).toEqual(expect.arrayContaining(held));
     expect(await now(page)).toMatchObject({ phase: null, busy: null, shown: all, boxes: first.boxes, q: true });
   });
 }

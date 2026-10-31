@@ -1,8 +1,8 @@
 # sifra: architecture for milestone 1
 
-For agents. The engineering contract for milestone 1 (`decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, two
-games (`ten-frame`, `balance`), tests and CI. The shell is built first, on branch `app/shell`; the two games are then
-built in parallel against sections 2 and 7. Where this file and a pedagogy or design doc disagree, the doc wins: stop
+For agents. The engineering contract for milestone 1 (`decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, three
+games (`ten-frame` and `balance`, the milestone's first plan, then `stories`), tests and CI. The shell is built first,
+on branch `app/shell`; the first two games are then built in parallel against sections 2 and 7. Where this file and a pedagogy or design doc disagree, the doc wins: stop
 and report. Section 6 lists the gaps in the docs that this file closes. Sizes measured on today's code (pixels,
 bytes, line counts) are not copied here, as they go stale: where a test measures one, the text names the test. A
 figure that says why a choice was made, as it was measured then, stays. Read with it: [rules.md](rules.md),
@@ -908,9 +908,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
     middle (a stretched cover's `?` on its first place), by `elementFromPoint` with every painted node taking hits;
     and the ink of each two-digit number and of the tour's grown last digit, read from the page's pixels (the digit
     alone, black on white, in a screenshot of its disc and 8px round it), inside its disc as a rectangle in a circle
-    with its corners 1px clear. A Range rect is the font's content box (about 1.2em), not its ink: at the floor
-    the corners of `10`'s rect leave the 22.3px disc by 0.7px while its ink keeps 1.5px from the edge, so the circle
-    reads pixels and the Range rect only the box.
+    with its corners 1px clear; the test pins which digits that read (`10` and `11` in the count-up, the tour's grown
+    `10`, `4` and `3`), so a renamed class cannot leave it reading none. A Range rect is the font's content box
+    (about 1.2em), not its ink: at the floor the corners of `10`'s rect leave the 22.3px disc by 0.7px while its ink
+    keeps 1.5px from the edge, so the circle reads pixels and the Range rect only the box.
   - Every rule's display, on each level (each story of the mixed one), at a round chosen in Node so that together
     they deal all five rules and all four displays (a test checks that); each wrong card on a fresh load with
     reduced motion: the card goes and its slot keeps its box, `[data-display]` is its rule's (with `[data-hint]` on
@@ -922,9 +923,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
     reversed with its morph; the basket's morph; the mixed take): at each phase the row shows `builtAt`'s tokens,
     the start's number from the first, a token once shown stays, `aria-busy` while one is hidden, the row and every
     token keep their boxes, and the exercise's `?` only once the picture has its own. The still first phase, and a
-    last one where nothing enters (the basket's rest), end at once and cannot be held; every phase that builds a
-    token is. A wrong tap during the event finishes it and gets its display, logged as a miss; a right one solves on
-    a first try; with reduced motion the end at once and a tap taken right after a miss.
+    last one where nothing enters (the basket's rest), end at once and cannot be held; the morph, and every phase that
+    builds a token, are (the basket's morph builds none, so each round has at least one held phase). A wrong tap
+    during the event finishes it and gets its display, logged as a miss; a right one solves on a first try; with
+    reduced motion the end at once and a tap taken right after a miss.
   - R6 [browser]: the start yellow in add and take (and the mixed take), an arrival `--role-added` with a solid
     `--role-added-edge` edge, a leaver's outline a solid `--role-removed` border with no fill, the basket's second
     part `--role-part-2` with the part edge, level 3's unknown magenta once solved, and `expectRoleColours` on each.
