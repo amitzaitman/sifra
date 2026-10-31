@@ -56,8 +56,8 @@ start.js              static server from AlefBet: node start.js [port]; fails if
 tests/                node:test (section 4), with three fixture games in tests/fixtures/ and rounds.lock.json (4.1);
                       game 3 adds stories.test.js (4.1)
 e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js and its wait drive.js (4.8),
-                      <id>.spec.js per game (ten-frame, balance, stories: 4.7; the stories' calibration, glyphs and
-                      event: 4.9)
+                      fixtures.spec.js (the fixture games through the real shell, 3.9, 4.7), <id>.spec.js per game
+                      (ten-frame, balance, stories: 4.7; the stories' calibration, glyphs and event: 4.9)
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
 ```
 
@@ -324,7 +324,8 @@ meaning (from the mount).
 - Everything mathematical has the attribute `dir="ltr"` and `data-math` (R7). Elements the child is meant to tap in
   the picture have `data-target`, so they are not counted as off-target taps.
 - game.css: every selector starts with `[data-game="<id>"]`; keyframe names start with the id; no CSS nesting.
-- A helper both games need stays in each game folder in milestone 1; moving it to lib/ is a later, separate step.
+- A helper a second game needs moves to lib/ as it is, in a step of its own (CLAUDE.md "Shared code"), keeping the scans of
+  4.4, as lib/weights.js did (2026-10-30). A game branch does not edit lib/ (section 7).
 - **Linear marks, the pattern for new games** (game 3 first; the ten-frame and the balance keep their own layouts).
   A picture of many small marks is laid out in one module that imports nothing (stories: scene.js), as boxes whose
   every coordinate, size, stroke and font is a length `[a, b]` = a·u + b px, u the size of one object. The drawing
