@@ -123,7 +123,11 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   draws (`displays`, and `canShow(round, choice)` when it exports one; architecture 2.1) and fits the picture (the
   game's `budget(round, choice)`, when it exports one; a real error that does not fit gives way to the next rule in
   the skill's list, a slip among them; architecture 4.2); a rule of the skill's list that the level's picture cannot
-  draw on some of its 200 seeds is in the level's `undrawn`, and every rule there is one (architecture 2.2);
+  draw on some of its 200 seeds is in the level's `undrawn`, and every rule there is one (architecture 2.2); a real
+  error the round could offer that is on no card has its side of the answer full with cards of rules before it, but
+  for a slip that crossed the answer when the place moved down (`checkLeftOut`, architecture 4.2); over 5000 seeds no
+  card holds the answer in 80% of a level's rounds or more, unless the level says why in `samePlace` (R4, the
+  answer's place; architecture 2.2);
   `keyword.*` present in text levels with inconsistent wording, absent in levels without text.
 - **R4 [auto], build and estimate rounds:** for every rule in the skill's list that has a formula,
   `classify(round, rules[r](round)) === r`; `classify(round, answer) === 'correct'`. Clock wind

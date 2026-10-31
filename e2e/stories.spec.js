@@ -1,8 +1,8 @@
 // The stories through the real shell (architecture 4.7, 4.9): the browser's unit and marks against
 // scene.js, the glyphs inside their discs and chips and on top, the event that builds the exercise
 // (a tap during it is an attempt like any other), R6's role colours, every rule's display on every
-// level, and the game spec's list: a first try, three misses to the tour, the 3-option levels, every
-// demo, a session to the end screen.
+// level, and the game spec's list: a first try, three misses to the tour, the first levels' four cards,
+// every demo, a session to the end screen.
 import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
 import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
@@ -32,8 +32,12 @@ function seedOf(id, ok, structure) {
   for (let seed = 1; seed < 5000; seed++) if (ok(stories.makeRound(level, rng(seed)))) return seed;
   throw new Error(`no ${id} round`);
 }
-/** @type {(id: string, s: number, k: number, structure?: string) => number} */
-const storySeed = (id, s, k, structure) => seedOf(id, (r) => r.story.s === s && r.story.k === k, structure);
+/**
+ * The first seed of a level with this story, and with these rules on its cards where a test needs them:
+ * the answer's place varies the cards of one story (lib/place.js, decisions.md 2026-10-31).
+ * @type {(id: string, s: number, k: number, structure?: string, rules?: string[]) => number}
+ */
+const storySeed = (id, s, k, structure, rules = []) => seedOf(id, (r) => r.story.s === s && r.story.k === k && rules.every((rule) => r.choices.some((c) => c.rule === rule)), structure);
 
 let visits = 0;
 /**
@@ -185,7 +189,7 @@ for (const vp of /** @type {[number, number][]} */ ([[320, 568], [568, 320], [39
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     for (const c of CALIBRATED) {
-      const { round } = await devAt(page, c.id, storySeed(c.id, c.s, c.k));
+      const { round } = await devAt(page, c.id, storySeed(c.id, c.s, c.k, undefined, ['op.other']));
       const where = (/** @type {string} */ state) => `${c.id} ${c.s}, ${c.k} ${state}`;
       expect(await calibrate(page, round, 'rest', vp, c.rest), where('at rest')).toEqual([]);
       // op.other first, its display; with reduced motion a later miss skips its display: the hint, then the tour.
@@ -413,16 +417,16 @@ test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11
   await page.setViewportSize({ width: 568, height: 320 });
   const problems = [];
   // The narrowest state with digits (architecture 4.9): 10 and 11 on dots of 22.3px.
-  const basket = await devAt(page, 'whole-10', storySeed('whole-10', 9, 1));
+  const basket = await devAt(page, 'whole-10', storySeed('whole-10', 9, 1, undefined, ['op.other', 'given.part', 'slip.near']));
   expect(basket.round.choices.map((c) => c.rule)).toEqual(['op.other', 'given.part', null, 'slip.near']);
   const nine = await glyphsThrough(page, basket.round, ['slip.near', 'op.other', 'given.part']);
   problems.push(...nine.out);
   // Level 3: the chips 6 and 10, the fixed dome's '?', the jumps from 1 (k + 1 = 5), the stretched cover's '?', the tour on the lifted places.
-  const change = await devAt(page, 'add-change', storySeed('add-change', 6, 4));
+  const change = await devAt(page, 'add-change', storySeed('add-change', 6, 4, undefined, ['count.start-included', 'given.whole', 'given.part']));
   const six = await glyphsThrough(page, change.round, ['count.start-included', 'given.whole', 'given.part']);
   problems.push(...six.out);
   // Take: counting back from the last leaver (6, 5, 4), landing on the first outline.
-  const take = await devAt(page, 'take-10', seedOf('take-10', (r) => r.story.s === 6 && r.story.k === 3));
+  const take = await devAt(page, 'take-10', storySeed('take-10', 6, 3, undefined, ['count.start-included', 'op.other', 'given.whole']));
   const back = await glyphsThrough(page, take.round, ['count.start-included', 'op.other', 'given.whole']);
   problems.push(...back.out);
   expect(problems).toEqual([]);
@@ -824,7 +828,7 @@ for (const id of ['add-change', 'take-10', 'mixed-10']) {
 
 test('level 3, step 3: from the display straight to the tour, the cover never coming down between two lifts (playtest 2026-10-31)', async ({ page }) => {
   // 4 + ? = 7: given.part 4, given.whole 7, op.other 11; the third, op.other, lifts the dome.
-  const { round, answerAt } = await devAt(page, 'add-change', storySeed('add-change', 4, 3));
+  const { round, answerAt } = await devAt(page, 'add-change', storySeed('add-change', 4, 3, undefined, ['given.part', 'given.whole', 'op.other']));
   await expect(page.locator('[data-event]')).toHaveCount(0);
   const [a, b, c] = ['given.part', 'given.whole', 'op.other'].map((rule) => round.choices.findIndex((ch) => ch.rule === rule));
   for (const i of [a, b]) {
@@ -848,27 +852,33 @@ test('level 3, step 3: from the display straight to the tour, the cover never co
   await expect(page.locator('[data-next]')).toBeVisible();
 });
 
+// The first level of each skill deals four cards too (decisions.md 2026-10-31, "מקום התשובה"): its real
+// errors all fall on one side of the answer, so a slip on the other side moves the answer's card.
 for (const id of ['add-5', 'take-5', 'whole-5']) {
-  test(`${id}, 3 options: dots on the cards; the first miss keeps its display and brings the hint, the second the tour, to the answer`, async ({ page }) => {
+  test(`${id}, 4 options: dots on the cards; the first miss keeps its display, the second brings the hint, the third the tour, to the answer`, async ({ page }) => {
     const { round, answerAt } = await playAt(page, id);
+    expect(round.choices).toHaveLength(4);
     for (const [i, { value }] of round.choices.entries()) await expect(card(page, i).locator('i')).toHaveCount(value);
     const wrong = wrongOf(round);
     await card(page, wrong[0]).click();
-    await expectHint(page, round);
     await unlocked(page);
     await expect(page.locator(`[data-display="${RULES[round.choices[wrong[0]].rule].display}"]`)).toBeVisible();
-    // The display stays with the hint to the next tap: a minute changes nothing.
+    await expect(draw(page)).not.toHaveAttribute('data-hint');
+    // The display stays to the next tap: a minute changes nothing.
     await expectCalm(page);
     const html = await page.locator('main').innerHTML();
     await page.clock.runFor(60000);
     expect(await page.locator('main').innerHTML()).toBe(html);
     await card(page, wrong[1]).click();
+    await expectHint(page, round);
     await unlocked(page);
     await expect(page.locator('[data-display]'), 'the second runs and leaves').toHaveCount(0);
+    await card(page, wrong[2]).click();
+    await unlocked(page);
     await expect(page.locator('[data-tour]')).toHaveText(tourOf(round));
     await card(page, answerAt).click();
     await expect(page.locator('[data-next]')).toBeVisible();
-    expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 3, help: ['hint', 'tour'] });
+    expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 4, help: ['hint', 'tour'] });
   });
 }
 

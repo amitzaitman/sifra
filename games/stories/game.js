@@ -3,11 +3,12 @@
 // contract is docs/architecture.md section 2; the geometry is scene.js.
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
+import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { lidAt, planScene, rowsFor } from './scene.js';
 import { DISPLAYS, renderScene } from './view.js';
 
-export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 2, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 3, css: new URL('game.css', import.meta.url).href };
 
 /** A third of the rounds reversed (R8): the last level of each one-structure skill. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -30,12 +31,12 @@ const basket = { ...scene, skill: 'addsub.meaning.part-whole', structure: 'part-
 // so 2 is never the answer of levels 1 and 6.
 /** The level table of pedagogy 6.4; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
-  { id: 'add-5', ...add, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 1, 2], undrawn: ['op.other'] },
+  { id: 'add-5', ...add, unknown: 'result', max: 5, look: 'objects', demo: true, down: false, exclude: [0, 1, 2], undrawn: ['op.other'] },
   { id: 'add-10', ...add, unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0, 1, 2, 3, 4, 5], undrawn: ['op.other'] },
   { id: 'add-change', ...add, unknown: 'change', max: 10, look: 'dots', demo: true, cardDots: false, forms: third, exclude: [0, 10] },
-  { id: 'take-5', ...take, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 5] },
+  { id: 'take-5', ...take, unknown: 'result', max: 5, look: 'objects', demo: true, down: false, exclude: [0, 5] },
   { id: 'take-10', ...take, unknown: 'result', max: 10, look: 'dots', cardDots: false, forms: third, exclude: [0, 10] },
-  { id: 'whole-5', ...basket, max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 1, 2] },
+  { id: 'whole-5', ...basket, max: 5, look: 'objects', demo: true, down: false, exclude: [0, 1, 2] },
   { id: 'whole-10', ...basket, max: 10, look: 'dots', cardDots: false, forms: third, exclude: [0, 1, 2, 3, 4, 5] },
   // Levels 2 and 5 together, visible, in dots from the start: the planner picks the story (R3, R11).
   { id: 'mixed-10', ...scene, skill: 'addsub.meaning.mixed', structure: ['change-add', 'change-take'], unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0], undrawn: ['op.other'] },
@@ -113,29 +114,46 @@ export function budget(round, { value, rule }) {
 /**
  * One wrong choice per rule in the skill's order, each value once; a value the picture cannot draw
  * (canShow: a 0) or the budget refuses is left out and the next rule takes its place; a slip only
- * where no real error gives the value, the answer − 1 first (R4). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
- * so nothing is drawn again and the shares cannot drift. choose stays here: a shared one would change
- * the other games' rounds.
+ * where no real error gives the value (R4). The rng draws the answer's place (lib/place.js): a value
+ * with no room on its side of the answer gives way to the next rule too, and the slip goes to the side
+ * that has room (decisions.md 2026-10-31). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
+ * so nothing is drawn again and the shares cannot drift.
  * @param {Round} round
  * @param {Level} level
+ * @param {Rng} rng
  * @returns {Choice[]}
  */
-function choose(round, level) {
+function choose(round, level, rng) {
   const listed = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
   const isSlip = (/** @type {string} */ id) => id.startsWith('slip.');
   const real = listed.filter((id) => !isSlip(id)).map((id) => rules[id](round));
-  const taken = [round.answer];
-  /** @type {Choice[]} */
-  const wrong = [];
-  for (const id of listed) {
-    if (wrong.length === level.options - 1) break;
-    const value = rules[id](round);
-    const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
-    const pick = candidates.find((v) => Number.isInteger(v) && canShow(round, { value: v, rule: id }) && !taken.includes(v) && (!isSlip(id) || !real.includes(v)) && budget(round, { value: v, rule: id }) === null);
-    if (pick === undefined) continue;
-    taken.push(pick);
-    wrong.push({ value: pick, rule: id });
-  }
+  /** @type {(v: number) => 'below' | 'above'} */
+  const side = (v) => (v < round.answer ? 'below' : 'above');
+  /** @type {(room: { below: number, above: number }, leave: (id: string) => boolean) => Choice[]} */
+  const deal = (room, leave) => {
+    const left = { ...room };
+    const taken = [round.answer];
+    /** @type {Choice[]} */
+    const wrong = [];
+    /** @type {any[]} the values of the rules before this one, dealt or not: a value two rules give is the first's (R4) */
+    const earlier = [];
+    for (const id of listed) {
+      if (wrong.length === level.options - 1) break;
+      const value = rules[id](round);
+      const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
+      const before = [...earlier];
+      earlier.push(...candidates);
+      if (leave(id)) continue;
+      const pick = candidates.find((v) => Number.isInteger(v) && canShow(round, { value: v, rule: id }) && !taken.includes(v) && !before.includes(v)
+        && (!isSlip(id) || !real.includes(v)) && left[side(v)] > 0 && budget(round, { value: v, rule: id }) === null);
+      if (pick === undefined) continue;
+      left[side(pick)] -= 1;
+      taken.push(pick);
+      wrong.push({ value: pick, rule: id });
+    }
+    return wrong;
+  };
+  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng) ?? [];
   if (wrong.length < level.options - 1) throw new Error(`stories: ${level.id} has no ${level.options} cards for ${JSON.stringify(storyOf(round))}`);
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
@@ -159,7 +177,9 @@ function colsOf(round) {
  * (the largest number of a level to 10 is 6-10, a generator rule, not min). No zero. The basket has
  * no second part twice the first (1 + 2: op.other and given.part give one number), and no two equal
  * parts (3 + 3: op.other is 0, a card with nothing to draw, and given.part is the one real error
- * left). No 1 + 1 (given.part and count.start-included both give 1, op.other 0). Level 3 has no
+ * left). No 1 + 1 (given.part and count.start-included both give 1, op.other 0), and no 2 − 1 (its
+ * cards are 3 and 2 only: given.whole and count.start-included both give 2, and a slip to 0 has nothing
+ * to draw; four cards since 2026-10-31, decisions.md "מקום התשובה"). Level 3 has no
  * story whose fixed dome would need a row under the whole's rows (9 + ? = 10).
  * @param {Level} level
  * @returns {Story[]}
@@ -170,7 +190,9 @@ export function poolOf(level) {
   const out = [];
   for (let top = lo; top <= hi; top++) {
     for (let x = 1; x < top; x++) {
-      if (level.structure === 'change-take') out.push({ s: top, k: x, r: top - x, verb: '' });
+      if (level.structure === 'change-take') {
+        if (top > 2) out.push({ s: top, k: x, r: top - x, verb: '' });
+      }
       else if (level.structure === 'part-whole' ? top - x !== 2 * x && top !== 2 * x : level.unknown === 'change' ? lidAt(x) < 5 * Math.ceil(top / 5) : top > 2) out.push({ s: x, k: top - x, r: top, verb: '' });
     }
   }
@@ -207,7 +229,7 @@ export function makeRound(level, rng) {
     answer: change ? k : r, choices: [],
   };
   /** @type {StoryRound} */
-  const dealt = { ...round, choices: choose(round, level) };
+  const dealt = { ...round, choices: choose(round, level, rng) };
   /** @type {StoryRound} */
   const out = { ...dealt, stage: { ...dealt.stage, cols: colsOf(dealt) } };
   return out;

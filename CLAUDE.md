@@ -49,7 +49,7 @@ Pages; a game goes live (its link is shared with children) only after the owner'
 
 - Who imports a module decides where it lives (owner decision 2026-10-14, "להפריד את המעטפת").
 - `lib/` holds only code the games share or will share (`cover.js`; `settle.js`, which also exports `reduced()`;
-  `weights.js`). Its modules import nothing, a game imports each of them, and `lib/` stays under 600 lines. Each
+  `weights.js`; `place.js`, the answer's place among the cards, R4). Its modules import nothing, a game imports each of them, and `lib/` stays under 600 lines. Each
   game keeps its own entering delays (no `lib/motion.js`).
 - `shell/` holds the shell's own modules, the ones only `app.js` (and the tests) import: cards, equation row, ladder,
   planner, rng, store, the double-tap window. They import only `lib/`, `data/` and each other. No game imports

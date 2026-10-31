@@ -211,12 +211,16 @@ function checkForms(level) {
   return problems;
 }
 
+/** The share of a level's rounds at which one card holding the answer fails the deal (R4, decisions.md 2026-10-31). */
+const SAME_PLACE = 0.8;
+
 /**
  * The deal of a level (architecture 4.2): over seeds 1-DEAL every form is dealt and its share is
- * within slack() of its weight in the level's forms; over seeds 1-COVER every whole number of the
- * level's range [min, max] is dealt as an answer (either number of a pair), or the level lists it
- * in exclude, and no excluded number is dealt. A planner-picked structure or ask: per value for the
- * shares, all together for answers.
+ * within slack() of its weight in the level's forms; no card holds the answer in SAME_PLACE of the
+ * rounds or more, unless the level says why in `samePlace` (and then one does); over seeds 1-COVER
+ * every whole number of the level's range [min, max] is dealt as an answer (either number of a
+ * pair), or the level lists it in exclude, and no excluded number is dealt. A planner-picked
+ * structure or ask: per value for the shares and the place, all together for answers.
  * @param {Game} game
  * @param {Level} base
  * @returns {string[]}
@@ -230,10 +234,14 @@ export function checkDeal(game, base) {
     const where = level === base ? '' : ` (${level.structure ?? level.ask})`;
     /** @type {Map<string, number>} */
     const dealt = new Map();
+    /** @type {number[]} rounds by the answer's card */
+    const at = [];
     for (let seed = 1; seed <= DEAL; seed++) {
       const round = game.makeRound(level, rng(seed));
       const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
       dealt.set(pair, (dealt.get(pair) ?? 0) + 1);
+      const card = (round.choices ?? []).findIndex((c) => isDeepStrictEqual(c.value, round.answer));
+      if (card >= 0) at[card] = (at[card] ?? 0) + 1;
       if (seed > COVER) continue;
       const values = [round.answer].flat();
       if (values.every((v) => typeof v === 'number')) values.forEach((v) => answers.add(v));
@@ -251,6 +259,13 @@ export function checkDeal(game, base) {
       }
     }
     for (const pair of dealt.keys()) if (forms.length && !forms.some((f) => pairOf(level, f) === pair)) problems.push(`${pair} is dealt${where} but is no form of the level`);
+    const counts = Array.from(at, (n) => n ?? 0);
+    const most = Math.max(0, ...counts);
+    const card = counts.indexOf(most) + 1;
+    if (most >= SAME_PLACE * DEAL && !base.samePlace) {
+      problems.push(`card ${card} holds the answer in ${(100 * most / DEAL).toFixed(1)}% of ${DEAL} rounds${where}: vary its place (R4), or say why in samePlace`);
+    }
+    if (base.samePlace && most < SAME_PLACE * DEAL) problems.push(`samePlace says why the answer keeps its card, but no card holds it in ${100 * SAME_PLACE}% of the rounds${where}`);
   }
   if (numbers && typeof base.max === 'number') {
     const exclude = base.exclude ?? [];
@@ -325,13 +340,14 @@ export function checkGame(game) {
     for (const [key, type] of Object.entries(REQUIRED)) if (typeof level[key] !== type) fail(`${where}: ${key} must be a ${type}`);
     if (!skillOf(level.skill)) fail(`${where}: skill ${level.skill} is not in skills.md`);
     if (![3, 4].includes(level.options)) fail(`${where}: options must be 3 or 4`);
+    if (level.samePlace !== undefined && !(typeof level.samePlace === 'string' && level.samePlace.trim())) fail(`${where}: samePlace is the reason, in words`);
     if (level.undrawn !== undefined) {
       const listed = skillOf(level.skill)?.rules ?? [];
       const ok = Array.isArray(level.undrawn) && level.undrawn.every((id, j) => listed.includes(id) && level.undrawn.indexOf(id) === j);
       if (!ok) fail(`${where}: undrawn ${show(level.undrawn)}: rules of ${level.skill}'s list, each once`);
     }
     for (const [key, value] of Object.entries(level)) {
-      if (['id', 'skill', 'min', 'forms', 'exclude', 'undrawn'].includes(key)) continue;
+      if (['id', 'skill', 'min', 'forms', 'exclude', 'undrawn', 'samePlace'].includes(key)) continue;
       const param = PARAMS.get(key);
       if (!param) fail(`${where}: ${key} is not a skills.md parameter`);
       else {
@@ -367,6 +383,61 @@ export function checkGame(game) {
       const sameRange = prev.model === level.model && prev.max === level.max && prev.precision === level.precision;
       if (sameRange && LOOKS.indexOf(level.look) < LOOKS.indexOf(prev.look)) fail(`R3: ${level.id}: look ${level.look} comes back after ${prev.look}`);
     });
+  }
+  return problems;
+}
+
+/**
+ * Where a wrong value lies by the cards' order (R4, R7: small to large): -1 left of the answer, 1
+ * right of it, 0 the same; null for values with no order (a judging round's cards). A pair goes by
+ * its first number, then its second.
+ * @param {any} value
+ * @param {any} answer
+ * @returns {number | null}
+ */
+export function sideOf(value, answer) {
+  const key = (v) => (typeof v === 'number' ? [v] : Array.isArray(v) && v.every((x) => typeof x === 'number') ? v : null);
+  const [a, b] = [key(value), key(answer)];
+  if (!a || !b) return null;
+  const i = a.findIndex((x, j) => x !== b[j]);
+  return i < 0 ? 0 : Math.sign(a[i] - b[i]);
+}
+
+/**
+ * R4 and the answer's place (decisions.md 2026-10-31, lib/place.js): the free deal takes the skill's
+ * rules in order, a slip only where no real error fits, and the answer's place moves it one card: the
+ * last real error on one side gives way to the next rule's value on the other (up: a real error, else
+ * a slip; down: a slip, the free deal's other real errors kept). So a real error the round could offer
+ * (and no rule before it gives) that is on no card has every card on its side of the answer from a
+ * rule before it; the one card from a later rule there may be a slip that crossed the answer for
+ * another real error on no card, when this one comes after every real error on a card (the place
+ * moved down). Cards with no order (judging): no slip while a real error fits.
+ * @param {Game} game
+ * @param {Round} round
+ * @param {string[]} order the skill's rules, in the order the round deals them
+ * @returns {string[]}
+ */
+export function checkLeftOut(game, round, order) {
+  const problems = [];
+  const wrong = round.choices.filter((c) => c.rule !== null);
+  const isSlip = (rule) => rule.startsWith('slip.');
+  const rank = (rule) => order.indexOf(rule);
+  const valuesOf = (predicted) => (predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf) ? predicted.oneOf : [predicted]);
+  const onCard = (v) => round.choices.some((c) => isDeepStrictEqual(c.value, v));
+  /** @type {{ id: string, value: any }[]} the real errors on no card the round could offer, in the order */
+  const out = [];
+  for (const id of order.filter((r) => !isSlip(r) && game.rules[r] && RULES[r])) {
+    const values = valuesOf(game.rules[id](round));
+    if (values.some(onCard)) continue;
+    const tie = (v) => order.slice(0, rank(id)).some((q) => game.rules[q] && predicts(game.rules[q](round), v));
+    for (const value of values) if (offerable(value, id, round, game) && !tie(value)) out.push({ id, value });
+  }
+  for (const { id, value } of out) {
+    const side = sideOf(value, round.answer);
+    const crossed = (c) => isSlip(c.rule) && side !== null && wrong.every((w) => isSlip(w.rule) || rank(w.rule) < rank(id))
+      && out.some((o) => sideOf(o.value, round.answer) === -side);
+    const later = wrong.find((c) => (side === null ? isSlip(c.rule) : sideOf(c.value, round.answer) === side && rank(c.rule) > rank(id)) && !crossed(c));
+    if (later) problems.push(`R4: ${later.rule} is offered, but ${id} gives ${show(value)}, a real error not on a card`);
   }
   return problems;
 }
@@ -473,16 +544,7 @@ export function checkRound(game, level, index, round) {
   }
   const real = wrong.filter((c) => !c.rule.startsWith('slip.')).length;
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
-  // R4: slip.* only when no known error fits: beside a slip, every real rule of the skill that the game
-  // has is on a card already (any of its values, for "or"), or gives nothing the round could offer.
-  const slip = wrong.find((c) => c.rule.startsWith('slip.'));
-  for (const id of slip ? listed.filter((r) => !r.startsWith('slip.') && game.rules[r] && RULES[r]) : []) {
-    const predicted = game.rules[id](round);
-    const values = predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf) ? predicted.oneOf : [predicted];
-    if (values.some((v) => choices.some((c) => isDeepStrictEqual(c.value, v)))) continue;
-    const free = values.find((v) => offerable(v, id, round, game));
-    if (free !== undefined) fail(`R4: ${slip.rule} is offered, but ${id} gives ${show(free)}, a real error not on a card`);
-  }
+  problems.push(...checkLeftOut(game, round, order));
   const values = choices.map((c) => c.value);
   if (values.every((v) => typeof v === 'number') && values.some((v, i) => i > 0 && v <= values[i - 1])) fail(`R4: numbers not ascending: ${show(values)}`);
   for (const a of judging ? [...round.answer.left, ...round.answer.right] : [round.answer].flat()) {
@@ -682,6 +744,43 @@ test('the deal checks catch forms and answers that do not match the level', () =
   // Answers: every number of the range, or listed in exclude, and nothing listed that is dealt.
   assert.match(checkDeal(parts, { ...level, exclude: [0] }).join('\n'), /^10 never dealt as an answer/m);
   assert.match(checkDeal(parts, { ...level, exclude: [0, 10, 3] }).join('\n'), /exclude lists 3, but it is dealt/);
+});
+
+test('the deal checks catch an answer that keeps its card: 80% of the rounds on one card fails, unless samePlace says why (R4, decisions.md 2026-10-31)', () => {
+  const level = parts.levels[1];
+  assert.deepEqual(checkDeal(parts, level), []);
+  // The cards as they come, the answer always last: the old balance level 1 and ten-frame levels 10-12.
+  const last = { ...parts, makeRound: (l, r) => {
+    const round = parts.makeRound(l, r);
+    return { ...round, choices: [...round.choices.filter((c) => c.rule !== null), round.choices.find((c) => c.rule === null)] };
+  } };
+  assert.match(checkDeal(last, level).join('\n'), /card 4 holds the answer in 100\.0% of 5000 rounds: vary its place \(R4\), or say why in samePlace/);
+  assert.deepEqual(checkDeal(last, { ...level, samePlace: 'a test of the opt-out' }), []);
+  assert.match(checkDeal(parts, { ...level, samePlace: 'a test of the opt-out' }).join('\n'), /samePlace says why the answer keeps its card, but no card holds it in 80%/);
+  const reason = (samePlace) => checkGame({ ...parts, levels: parts.levels.map((l, i) => (i === 1 ? { ...l, samePlace } : l)) }).join('\n');
+  assert.doesNotMatch(reason('the answer is a relation, always last'), /samePlace/);
+  assert.match(reason(true), /samePlace is the reason, in words/);
+  assert.match(reason(' '), /samePlace is the reason, in words/);
+});
+
+test('R4 with the answer\'s place: a real error on no card leaves room only to rules before it on its side, but for a slip that crossed for another (lib/place.js)', () => {
+  const order = SKILLS.find((s) => s.id === 'num.parts.split').rules;
+  /** 3 + ? = 7 (answer 4): given.whole 7 and op.other 10 over it, given.part 3 under it, slips 3 and 5. */
+  const round = structuredClone(parts.makeRound(parts.levels[1], rng(1)));
+  Object.assign(round, { equation: { left: [3, '+', '?'], right: [7] }, answer: 4 });
+  round.picture = [{ role: 'whole', count: 7, shown: 'tag' }, { role: 'part', count: 3, shown: 'items' }, { role: 'unknown', count: 4, shown: 'covered' }];
+  const cards = (...wrong) => ({ ...round, choices: [{ value: 4, rule: null }, ...wrong.map(([value, rule]) => ({ value, rule }))].sort((a, b) => a.value - b.value) });
+  const left = (...wrong) => checkLeftOut(parts, cards(...wrong), order).join('\n');
+  // The free deal, and the answer moved down: given.part, the last real error under it, gives way to a slip over it.
+  assert.equal(left([7, 'given.whole'], [3, 'given.part'], [10, 'op.other']), '');
+  assert.equal(left([7, 'given.whole'], [5, 'slip.near'], [10, 'op.other']), '');
+  // A slip on given.part's side, 3 under the answer: a slip in place of a real error that fits.
+  assert.match(left([7, 'given.whole'], [10, 'op.other'], [2, 'slip.near']), /slip\.near is offered, but given\.part gives 3, a real error not on a card/);
+  // op.other, a later rule, and a slip over the answer while given.whole is on no card there.
+  assert.match(left([3, 'given.part'], [10, 'op.other'], [5, 'slip.near']), /is offered, but given\.whole gives 7, a real error not on a card/);
+  assert.equal(sideOf([2, 5], [2, 3]), 1);
+  assert.equal(sideOf(3, 4), -1);
+  assert.equal(sideOf({ left: [1], right: [1] }, 2), null);
 });
 
 test('R2: the first level of a structure keeps the ceiling of its §4.6 row, not a grade', () => {

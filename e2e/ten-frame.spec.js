@@ -62,6 +62,13 @@ async function devAt(page, id, ok = () => true) {
   return { round, seed, answerAt: round.choices.findIndex((c) => c.rule === null) };
 }
 
+/**
+ * A round's cards hold these rules: the answer's place varies which real errors a round shows (R4,
+ * lib/place.js), so a test that taps a rule's card asks for it.
+ * @type {(...rules: string[]) => (round: Round) => boolean}
+ */
+const holds = (...rules) => (round) => rules.every((rule) => round.choices.some((c) => c.rule === rule));
+
 /** The panel holds the whole drawing, and nothing scrolls sideways (320px, design 5, 7.1). */
 async function expectInPanel(page) {
   const panel = await page.locator('[data-area="picture"]').boundingBox();
@@ -242,7 +249,7 @@ test('making ten with the empty cells bracketed, card 10 first: the tray\'s ring
     await page.setViewportSize({ width, height });
     // The run starts in the top row (the dome on the tray's top edge), and in the lower row.
     for (const part of [1, 4, 8, 9]) {
-      const { round } = await devAt(page, 'ten-empty', (r) => r.equation.left[0] === part);
+      const { round } = await devAt(page, 'ten-empty', (r) => r.equation.left[0] === part && holds('given.whole')(r));
       await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
       await unlocked(page);
       await expect(page.locator('[data-display="flash"] .tf-ring.is-tray')).toBeVisible();
@@ -450,7 +457,7 @@ test('a split frame (levels 1-2): the whole\'s outline and the tour\'s nest on t
       expect(await page.evaluate(tagOnTop), where).toEqual([]);
     }
     // 10 first: the tag blinks with its ring inside its edge, with and without the hint (3 cards).
-    for (const [level, ok] of [['split-10', (r) => r.equation.left[0] === 2 && r.answer > 0], ['split-5', (r) => r.choices.some((c) => c.rule === 'given.whole')]]) {
+    for (const [level, ok] of [['split-10', (r) => r.equation.left[0] === 2 && r.answer > 0 && holds('given.whole')(r)], ['split-5', (r) => r.choices.some((c) => c.rule === 'given.whole')]]) {
       const { round } = await devAt(page, level, ok);
       await card(page, round.choices.findIndex((c) => c.rule === 'given.whole')).click();
       await unlocked(page);
@@ -948,6 +955,39 @@ test('bundles at 320px: the digits above the sticks stay apart, above the outlin
   }
 });
 
+// Two frames, a count one past the counters (slip.near over the sum; the answer's place, decisions.md 2026-10-31):
+// 1 to the sum on the counters, the next number on a ghost in the second frame's next cell, ringed in the cell,
+// the same size as the two-digit numbers before it (design 7.3); fixed frames and level 10 before a move.
+for (const level of ['bridge-frames', 'bridge-move']) {
+  test(`${level} at 320px: a count-up one past the counters lands on a ghost in the second frame's next cell (design 7.3)`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 320, height: 568 });
+    const { round } = await devAt(page, level, (r) => r.choices.some((c) => c.rule === 'slip.near' && c.value === r.answer + 1));
+    const [a, , b] = round.equation.left.length === 3 ? round.equation.left : round.equation.right;
+    await card(page, round.choices.findIndex((c) => c.rule === 'slip.near')).click();
+    await unlocked(page);
+    const shown = page.locator('[data-display="count-up"]');
+    const digits = await textBoxes(shown.locator('.tf-digit'));
+    expect(digits.map((d) => d.text)).toEqual(Array.from({ length: a + b + 1 }, (_, j) => String(j + 1)));
+    expectApart(digits);
+    expect(digits.at(-1).size, 'the last as big as the two-digit numbers before it').toBeCloseTo(digits.at(-2).size, 0);
+    await expect(shown.locator('.tf-ghost')).toHaveCount(1);
+    await expect(shown.locator('.tf-ring')).toHaveCount(1);
+    // The ghost stands in the second frame's cell after its counters, and its digit and ring on it.
+    const cells = await page.locator('[data-area="picture"] .tf-base .tf-cell').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    const ghost = await shown.locator('.tf-ghost').boundingBox();
+    const centre = (r) => [r.x + r.width / 2, r.y + r.height / 2];
+    const [gx, gy] = centre(ghost);
+    expect(cells.findIndex((c) => gx > c.left && gx < c.right && gy > c.top && gy < c.bottom)).toBe(10 + b);
+    const ring = await shown.locator('.tf-ring').boundingBox();
+    expect(Math.hypot(centre(ring)[0] - gx, centre(ring)[1] - gy)).toBeLessThan(0.5);
+    expect(Math.hypot(digits.at(-1).left + (digits.at(-1).right - digits.at(-1).left) / 2 - gx, (digits.at(-1).top + digits.at(-1).bottom) / 2 - gy)).toBeLessThan(cells[0].width / 4);
+    expect(await page.evaluate(ringsBare)).toEqual([]);
+    expect(await page.evaluate(ringInCell)).toEqual([]);
+    await expectInPanel(page);
+  });
+}
+
 /**
  * Pixels of the part's yellow or its edge left beside shown sticks and their bundle, at the
  * screen's own device pixels: a veil that stays on a layer of its own after its motion is snapped
@@ -1194,6 +1234,9 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     ['split-10', (r) => r.equation.right[0] === 10 && value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['ten-cover', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['bridge-frames', (r) => value(r, 'bridge.whole-second') > 12, ['bridge.whole-second']],
+    // A count one past the counters (slip.near over the sum, decisions.md 2026-10-31): its ghost in the second frame's next cell.
+    ['bridge-frames', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
+    ['bridge-move', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['bridge-move', (r) => value(r, 'bridge.whole-second') > 12, ['bridge.whole-second']],
     // The count that stops at ten: the counters left over keep a ring each, in their cells.
     ['bridge-frames', () => true, ['bridge.stopped-at-ten']],
@@ -1218,7 +1261,7 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     await page.setViewportSize({ width, height: 568 });
     for (const [level, ok, cards] of states) {
       await page.goto('about:blank');   // two states may share a round
-      const { round, answerAt } = await devAt(page, level, ok);
+      const { round, answerAt } = await devAt(page, level, (r) => ok(r) && (cards === 'tour' || holds(...cards)(r)));
       if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
       if (cards === 'tour') await toTheTour(page, round, answerAt);
       for (const rule of cards === 'tour' ? [] : cards) {
@@ -1231,7 +1274,7 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
       // is read on the part's rings, which keep 1.2px to spare; a ghost's ring has 0.2px (see ringsBare).
       const here = `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`;
       if (level.startsWith('bridge-')) expect(await page.evaluate(ringsBare), here).toEqual([]);
-      if (level.startsWith('bridge-') ? cards.includes('bridge.stopped-at-ten') : /^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), here).toEqual([]);
+      if (level.startsWith('bridge-') ? cards.includes('bridge.stopped-at-ten') || cards.includes('slip.near') : /^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), here).toEqual([]);
     }
     // On a bond the dots stand too close for a ring each: what does not fit is one group in one
     // outline per part, its line halfway between dots, a pixel or more off each (also where the
@@ -1444,7 +1487,7 @@ function zeroProblems() {
 test('a ring with 0 holds its 0, and no cover is left on it: the tour\'s grown 0 on a bond and on a frame, and the empty-plate display (design 7.1, 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const rounds = [['split-pairs', (r) => r.answer[0] === 0 && r.answer[1] === 8], ['split-pairs', (r) => r.answer[0] === 7 && r.answer[1] === 0],
-    ['split-10', (r) => r.answer === 0], ['ten-empty', (r) => r.answer === 0]];
+    ['split-10', (r) => r.answer === 0], ['ten-empty', (r) => r.answer === 0]].map(([level, ok]) => [level, (r) => ok(r) && holds('zero.counted-as-one')(r)]);
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const [level, ok] of rounds) {
@@ -1479,7 +1522,7 @@ test('the bond\'s stems end on the circles: none shows inside the empty part\'s 
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
     for (const ok of [(r) => r.answer[0] === 0, (r) => r.answer[1] === 0]) {
-      const { round } = await devAt(page, 'split-pairs', ok);
+      const { round } = await devAt(page, 'split-pairs', (r) => ok(r) && holds('zero.counted-as-one')(r));
       await card(page, round.choices.findIndex((c) => c.rule === 'zero.counted-as-one')).click();
       await unlocked(page);
       await expect(page.locator('[data-display="empty-plate"] .tf-ring.is-zero')).toBeVisible();
@@ -2275,7 +2318,7 @@ for (const [w, h, dpr] of [[320, 568], [390, 844], [390, 844, 3], [844, 390], [7
     test(`count-up on a disc at ${w}x${h}: the 10 apart, on white, its counter's shade round it (design 7.1)`, async ({ page, browserName }) => {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: w, height: h });
-      const { round } = await devAt(page, 'bridge-frames', (r) => r.equation.left.join() === '7,+,6');
+      const { round } = await devAt(page, 'bridge-frames', (r) => r.equation.left.join() === '7,+,6' && holds('bridge.stopped-at-ten')(r));
       await card(page, round.choices.findIndex((c) => c.rule === 'bridge.stopped-at-ten')).click();
       await unlocked(page);
       await quiet(page);
@@ -2601,7 +2644,7 @@ for (const [w, h] of [[320, 568], [360, 640], [390, 844], [412, 915]]) {
     // [level, sum, light counters moved up after the hint (level 10: the first frame then fills)]
     for (const [level, sum, move] of [['bridge-move', '7,+,6', true], ['bridge-move', '8,+,8', true], ['bridge-frames', '7,+,6'], ['bridge-frames', '8,+,9'], ['bridge-frames', '9,+,9']]) {
       await page.goto('about:blank');
-      const { round } = await devAt(page, level, (r) => r.equation.left.join() === sum);
+      const { round } = await devAt(page, level, (r) => r.equation.left.join() === sum && holds('bridge.whole-second', 'bridge.stopped-at-ten')(r));
       const [a, , b] = round.equation.left;
       // The misses whose displays lie in the cells only, so the picture holds the hint's lines and nothing on the rim.
       for (const rule of ['bridge.whole-second', 'bridge.stopped-at-ten']) {

@@ -5,6 +5,7 @@ import { cover } from '../../lib/cover.js';
 import { settle } from '../../lib/settle.js';
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
+import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
 import { pictureOf } from './picture.js';
@@ -13,7 +14,7 @@ import { KINDS, displayOf, draws, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 3,
+  version: 4,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -156,7 +157,8 @@ export const displays = [...new Set(Object.values(KINDS).flatMap((k) => Object.k
 /**
  * Whether the round's picture can draw a wrong choice's display (architecture 2.1): its kind has a
  * drawing for it (help.js), and the drawing has what it needs. Counting on from a bundle starts at
- * its 10, so a value under 10 has no count-up; a frame's empty plate is its empty unknown (0).
+ * its 10, so a value under 10 has no count-up; the two frames' count goes one past their counters at
+ * most; a frame's empty plate is its empty unknown (0).
  * choose() deals no other choice.
  * @param {Round} round
  * @param {Choice} choice
@@ -167,6 +169,8 @@ export function canShow(round, { value, rule }) {
   const { kind, data } = pictureOf(round);
   if (!display || !draws(kind, display)) return false;
   if (kind === 'bundles' && display === 'count-up') return value >= 10;
+  // The two frames' count lands on a counter, or on one ghost past the last (help.js).
+  if (kind === 'bridge' && display === 'count-up') return value <= data.a + data.b + 1;
   if (kind === 'frame' && display === 'empty-plate') return data.unknown === 0;
   return true;
 }
@@ -180,8 +184,9 @@ const options = (v) => (v === null || v === undefined ? [] : v.oneOf ?? [v]);
 
 /**
  * The choices (R4): the answer, then one wrong value per rule in the skill's order (skills.md),
- * so a slip only comes when no known error is left; never a value an earlier rule predicts, nor
- * one whose display the round's picture cannot draw (canShow).
+ * so a slip only comes when no known error is left or to vary the answer's place (lib/place.js:
+ * the rng draws the place, and a rule whose value has no room on its side gives way to the next);
+ * never a value an earlier rule predicts, nor one whose display the round's picture cannot draw (canShow).
  * Numbers ascending, pairs by their first then second number (R4, R7: small to large, left to right).
  * @param {Round & { stage: Stage }} round
  * @param {Level} level
@@ -190,21 +195,33 @@ const options = (v) => (v === null || v === undefined ? [] : v.oneOf ?? [v]);
  */
 function choose(round, level, rng) {
   const order = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
-  const taken = [round.answer];
-  const wrong = [];
   const whole = pair(round) ? round.answer[0] + round.answer[1] : null;
   const ok = (v) => (Array.isArray(v) ? v.every((x) => Number.isInteger(x) && x >= 0) && v[0] + v[1] !== whole && String(v.join('')).length <= 4
     : Number.isInteger(v) && v >= 0 && String(v).length <= 4);
-  for (const [i, id] of order.entries()) {
-    if (wrong.length === level.options - 1) break;
-    const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
-    const fits = options(rules[id](round)).filter((v) => ok(v) && canShow(round, { value: v, rule: id }) && !taken.some((t) => same(t, v)) && !earlier.some((e) => same(e, v)));
-    if (!fits.length) continue;
-    const value = fits.length > 1 ? rng.pick(fits) : fits[0];
-    taken.push(value);
-    wrong.push({ value, rule: id });
-  }
   const key = (v) => (Array.isArray(v) ? v[0] * 100 + v[1] : v);
+  /** @type {(v: any) => 'below' | 'above'} */
+  const side = (v) => (key(v) < key(round.answer) ? 'below' : 'above');
+  /** @type {(room: { below: number, above: number }, leave: (id: string) => boolean) => Choice[]} */
+  const deal = (room, leave) => {
+    const left = { ...room };
+    const taken = [round.answer];
+    /** @type {Choice[]} */
+    const wrong = [];
+    for (const [i, id] of order.entries()) {
+      if (wrong.length === level.options - 1) break;
+      if (leave(id)) continue;
+      const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
+      const fits = options(rules[id](round)).filter((v) => ok(v) && canShow(round, { value: v, rule: id }) && !taken.some((t) => same(t, v))
+        && !earlier.some((e) => same(e, v)) && left[side(v)] > 0);
+      if (!fits.length) continue;
+      const value = fits.length > 1 ? rng.pick(fits) : fits[0];
+      left[side(value)] -= 1;
+      taken.push(value);
+      wrong.push({ value, rule: id });
+    }
+    return wrong;
+  };
+  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng) ?? [];
   return [{ value: round.answer, rule: null }, ...wrong].sort((x, y) => key(x.value) - key(y.value));
 }
 

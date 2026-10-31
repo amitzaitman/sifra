@@ -762,11 +762,24 @@ export const BRIDGE = {
       });
       return [];
     },
-    /** The count stops at ten; the counters left over blink and stay ringed. */
+    /**
+     * The count stops at ten (or one short); the counters left over blink and stay ringed. One more
+     * than the counters (a slip over the sum): the extra digit lands on a ghost in the second frame's
+     * next place, in a ring (design 7.3), the same size as the two-digit numbers before it.
+     */
     'count-up'(pic, root, { value }) {
       const { counters, boxes } = bridgeNow(pic);
       const n = Math.min(value, counters.length);
-      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, n, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
+      const all = Math.max(n, value);
+      for (let j = 0; j < n; j++) digit(root, boxes[j], String(j + 1), stagger(j, all, 120), j < 9 ? 'on-disc' : 'on-disc is-two');
+      if (value > counters.length) {
+        const box = slot(pic, 10 + pic.bottom.length);
+        const delay = stagger(n, all, 120);
+        ghost(root, box, delay);
+        digit(root, box, String(value), delay, 'on-disc is-two');
+        ring(root, box, delay, CELL_GHOST_RING);
+        return [];
+      }
       const left = counters.slice(value);
       left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part in-cell'));
       return blink(pic, left);

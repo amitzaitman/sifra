@@ -10,7 +10,7 @@ const pans = { structure: 'equation', model: 'balance', look: 'dots', terms: fal
 /** @type {Level[]} */
 export const levels = [
   // exclude (architecture 4.2): both numbers are 1 or more, and differ, and neither is twice the other.
-  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', look: 'objects', demo: true, options: 3, exclude: [0, 1, 2, 3] },
+  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', look: 'objects', demo: true, exclude: [0, 1, 2, 3] },
   { id: 'right', ...pans, skill: 'eq.sign.missing', unknown: 'right-part', demo: true, exclude: [0, 10] },
   { id: 'left', ...pans, skill: 'eq.sign.missing', unknown: 'left-part', exclude: [0, 10] },
   { id: 'either', ...pans, skill: 'eq.sign.missing', unknown: ['right-part', 'left-part'], look: 'symbols', forms: [{ unknown: 'right-part', w: 1 }, { unknown: 'left-part', w: 1 }], exclude: [0, 10] },
@@ -72,7 +72,7 @@ export function makeRound(level, rng) {
     picture: symbols ? [] : groups, helpPicture: symbols ? groups : null, equation, text: '', terms: [],
     answer: unknown === 'result-right' ? a + b : b, choices: [],
   };
-  round.choices = choose(round, level.options, rules, ORDER[level.skill]);
+  round.choices = choose(round, level.options, rules, ORDER[level.skill], rng);
   return round;
 }
 

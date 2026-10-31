@@ -299,28 +299,39 @@ test('the help ladder: display, then chips and the cover\'s outline, then the to
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', wrong: wrong.map((i) => round.choices[i].rule), help: ['hint', 'tour'] });
 });
 
-test('a 3-option level (same-as): piles on the cards; the first miss brings the hint, the second the tour, counting on to the answer', async ({ page }) => {
+test('same-as: four piles on the cards, each in its card at 320px; the help ladder to the tour, counting on to the answer (decisions.md 2026-10-31)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   const { round, answerAt } = await playAt(page, 'same');
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'left');
   await expect(page.locator('[data-area="equation"] .eq > *')).toHaveCount(0);
+  expect(round.choices).toHaveLength(4);
   for (const [i, { value }] of round.choices.entries()) {
     await expect(card(page, i).locator('.bl-pile i')).toHaveCount(value);
     await expect(card(page, i)).toHaveAttribute('aria-label', String(value));
+    // The pile's rows of five inside the card's 4px padding, as card dots are (design 6.5).
+    const [box, pile] = [await card(page, i).boundingBox(), await card(page, i).locator('.bl-pile').boundingBox()];
+    expect(pile.x, `pile ${value}`).toBeGreaterThanOrEqual(box.x + 4 - 0.5);
+    expect(pile.x + pile.width, `pile ${value}`).toBeLessThanOrEqual(box.x + box.width - 4 + 0.5);
+    const cubes = await card(page, i).locator('.bl-pile i').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().y));
+    expect(new Set(cubes.slice(0, 5).map(Math.round)).size, 'five in a row').toBe(1);
   }
   const wrong = wrongOf(round);
   await card(page, wrong[0]).click();
+  await unlocked(page);
+  await expect(page.locator(`[data-display="${RULES[round.choices[wrong[0]].rule].display}"]`)).toBeVisible();
+  await expect(page.locator('[data-hint]')).toHaveCount(0);
+  await card(page, wrong[1]).click();
   await expect(page.locator('[data-hint]')).toBeVisible();
   await expect(page.locator('.bl-chip')).toHaveText([String(round.answer), '?']);
   await unlocked(page);
-  // A first miss: its display stays with the hint (R5).
-  await expect(page.locator(`[data-display="${RULES[round.choices[wrong[0]].rule].display}"]`)).toBeVisible();
-  await card(page, wrong[1]).click();
+  await card(page, wrong[2]).click();
   await unlocked(page);
   await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
   await card(page, answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
-  expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 3, help: ['hint', 'tour'] });
+  expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 4, help: ['hint', 'tour'] });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 
 test('judging: the cards read left to right on one line, two by two; the hint gives each live card a small balance; the tour counts both sides', async ({ page }) => {
@@ -552,15 +563,18 @@ test('reduced motion: a tap is taken right after a miss, and the hint comes at o
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', wrong: wrong.slice(0, 2).map((i) => round.choices[i].rule) });
 });
 
-test('reduced motion on a 3-option level: the first miss shows its display\'s final state, then the hint', async ({ page }) => {
+// Level 1 has four piles since 2026-10-31 (decisions.md, "מקום התשובה"); the 3-option ladder is the ten-frame's level 1.
+test('reduced motion on the piles (same-as): the first miss shows its display\'s final state, the second the hint, the third the tour', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { round } = await devAt(page, 'same', 5);
-  const [i, j] = wrongOf(round);
+  const [i, j, k] = wrongOf(round);
   await card(page, i).click();
   await expect(page.locator(`[data-display="${RULES[round.choices[i].rule].display}"]`)).toBeVisible();
-  await expect(page.locator('[data-hint]')).toHaveCount(1);
+  await expect(page.locator('[data-hint]')).toHaveCount(0);
   await card(page, j).click();
+  await expect(page.locator('[data-hint]')).toHaveCount(1);
   await expect(page.locator('[data-display]')).toHaveCount(0);
+  await card(page, k).click();
   await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
 });
 

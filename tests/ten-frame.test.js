@@ -392,9 +392,13 @@ test('doubles and 5 + 5: about one round in five, where given.part gives the ans
       if (lvl.options === 4) assert.ok([r.answer - 1, r.answer + 1].includes(r.choices.find((c) => c.rule === 'slip.near').value));
     }
     // The other rounds keep the given part's card (with nothing under the cover the part is the
-    // whole, and given.whole, first in the list, tags it).
+    // whole, and given.whole, first in the list, tags it), or it gave way to a slip across the answer,
+    // to move the answer's place (R4; decisions.md 2026-10-31).
     for (const r of all.filter((x) => !double(x) && x.answer !== 0)) {
-      assert.ok(r.choices.some((c) => c.rule === 'given.part'), `${id}: ${JSON.stringify(r.equation)} keeps the given part`);
+      const part = count(r, 'part');
+      const slip = r.choices.find((c) => c.rule === 'slip.near')?.value;
+      const crossed = slip !== undefined && Math.sign(slip - r.answer) === -Math.sign(part - r.answer);
+      assert.ok(r.choices.some((c) => c.rule === 'given.part') || crossed, `${id}: ${JSON.stringify(r.equation)} keeps the given part`);
     }
     if (lvl.skill === 'num.parts.make-ten') {
       assert.ok(doubles.every((r) => r.answer === 5), `${id}: 5 + 5 is the only double of ten`);

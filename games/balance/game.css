@@ -181,8 +181,9 @@
 [data-game="balance"] .bl-set .is-slow > .bl-twin { animation-duration: 1000ms; }
 
 /* Cards: a pile in ink; judging cards two by two, one line each (R7). */
-[data-game="balance"] .bl-pile { display: flex; flex-wrap: wrap-reverse; gap: 3px; width: 72px; }
-[data-game="balance"] .bl-pile i { width: 12px; height: 12px; border-radius: 3px; background: var(--ink); }
+/* Rows of five in a card's 58px at 320px with four cards (design 6.5): 5 x 9px and 4 gaps of 3px. */
+[data-game="balance"] .bl-pile { display: flex; flex-wrap: wrap-reverse; gap: 3px; width: 57px; }
+[data-game="balance"] .bl-pile i { width: 9px; height: 9px; border-radius: 2px; background: var(--ink); }
 [data-game="balance"] .cards:has(.bl-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 [data-game="balance"] .card:has(.bl-card) { height: var(--target); container-type: inline-size; }
 [data-game="balance"]:has(.bl-scene[data-judge]) .choices { min-height: calc(var(--target) * 2 + var(--gap)); }

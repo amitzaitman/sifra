@@ -1,5 +1,6 @@
 // Fixture game for the shell's tests (not in games/registry.js): the parts of a number, standing
 // in for ten-frame. Small, but it keeps the whole contract of docs/architecture.md section 2.
+import { SKILLS } from '../../../data/skills.js';
 import { pickWeighted } from '../../../lib/weights.js';
 import { choose, count, render as draw } from '../kit.js';
 
@@ -25,7 +26,8 @@ export const rules = {
   'zero.counted-as-one': (r) => (r.answer === 0 ? 1 : null),
   'slip.near': (r) => ({ oneOf: [r.answer - 1, r.answer + 1] }),
 };
-const ORDER = ['given.whole', 'given.part', 'op.other', 'zero.counted-as-one', 'slip.near'];
+/** @type {(skill: string) => string[]} the skill's list (skills.md) as far as the fixture has its rules: the story fixture's is another skill's */
+const orderOf = (skill) => SKILLS.find((s) => s.id === skill).rules.filter((id) => rules[id]);
 /** The displays of its rules (RULES), each drawn as a ghost row (kit.js). */
 export const displays = ['flash', 'overflow', 'empty-plate', 'count-up'];
 
@@ -54,7 +56,7 @@ export function makeRound(level, rng) {
     picture: symbols ? [] : groups, helpPicture: symbols ? groups : null, text: '', terms: [], answer, choices: [],
     equation: eqform === 'reversed' ? { left: [whole], right: sum } : { left: sum, right: [whole] },
   };
-  round.choices = choose(round, level.options, rules, ORDER);
+  round.choices = choose(round, level.options, rules, orderOf(level.skill), rng);
   return round;
 }
 

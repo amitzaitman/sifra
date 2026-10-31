@@ -2,10 +2,11 @@
 // left to right (R7). A level per row of the 6.3 table.
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
+import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { DISPLAYS, displayRows, drawable, drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 4, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 5, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
 // No dots under the cards' numbers: the pans show each number in rows of five, and the dots would let
@@ -27,7 +28,7 @@ const symbols = {
 /** The level table of pedagogy 6.3; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
   // The pile on the right is 5 or more, two different parts on the left.
-  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', max: 10, look: 'objects', options: 3, demo: true, exclude: [0, 1, 2, 3, 4] },
+  { id: 'same', ...pans, skill: 'eq.sign.same-as', unknown: 'result-right', max: 10, look: 'objects', demo: true, exclude: [0, 1, 2, 3, 4] },
   { id: 'missing-right', ...missing, unknown: 'right-part', demo: true, cardDots: true, exclude: [10] },
   { id: 'missing-left', ...missing, unknown: 'left-part', exclude: [0, 10] },
   // c = a + ? and ? = a + b, half each.
@@ -170,34 +171,51 @@ export function budget(round, { value, rule }) {
  * One wrong choice per rule in the skill's order, each value once, slips only where no real error
  * gives the value; ascending. A value whose display does not fit (budget: no drawing on this round,
  * canShow, or more than MAX_ROWS rows) is left out, and the next rule takes its place, like the
- * ten-frame's canShow. null when there are not enough, or fewer than two real errors where the
- * skill lists two (R4). In a reversed form the equal.* rules come first (depth 4.9, eq.sign.missing; architecture 4.2).
+ * ten-frame's canShow. The rng draws the answer's place (lib/place.js, R4): a value with no room on
+ * its side of the answer gives way to the next rule too, and the slip goes to the side that has room,
+ * either side (decisions.md 2026-10-31). null when there are not enough, or fewer than two real errors
+ * where the skill lists two (R4). In a reversed form the equal.* rules come first (depth 4.9, eq.sign.missing; architecture 4.2).
  * @param {Round} round
  * @param {Level} level
+ * @param {Rng} rng
  * @returns {Choice[] | null}
  */
-function choose(round, level) {
+function choose(round, level, rng) {
   const listed = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
   const order = reversedForm(round) ? [...listed.filter(isEqual), ...listed.filter((id) => !isEqual(id))] : listed;
   const isSlip = (id) => id.startsWith('slip.');
   const real = order.filter((id) => !isSlip(id)).map((id) => rules[id](round));
-  const taken = [round.answer];
-  /** @type {Choice[]} */
-  const wrong = [];
-  for (const id of order) {
-    if (wrong.length === level.options - 1) break;
-    const value = rules[id](round);
-    const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
-    const ok = (v) => Number.isInteger(v) && v >= 0 && String(v).length <= 4 && !taken.includes(v) && (!isSlip(id) || !real.includes(v))
-      && budget(round, { value: v, rule: id }) === null;
-    const pick = candidates.find(ok);
-    if (pick === undefined) continue;
-    taken.push(pick);
-    wrong.push({ value: pick, rule: id });
-  }
-  if (wrong.length < level.options - 1) return null;
-  if (real.length >= 2 && wrong.filter((c) => !isSlip(c.rule)).length < 2) return null;
-  return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
+  /** @type {(v: number) => 'below' | 'above'} */
+  const side = (v) => (v < round.answer ? 'below' : 'above');
+  /** @type {(room: { below: number, above: number }, leave: (id: string) => boolean) => Choice[] | null} */
+  const deal = (room, leave) => {
+    const left = { ...room };
+    const taken = [round.answer];
+    /** @type {Choice[]} */
+    const wrong = [];
+    /** @type {any[]} the values of the rules before this one, dealt or not: a value two rules give is the first's (R4) */
+    const earlier = [];
+    for (const id of order) {
+      if (wrong.length === level.options - 1) break;
+      const value = rules[id](round);
+      const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
+      const before = [...earlier];
+      earlier.push(...candidates);
+      if (leave(id)) continue;
+      const ok = (v) => Number.isInteger(v) && v >= 0 && String(v).length <= 4 && !taken.includes(v) && !before.includes(v) && (!isSlip(id) || !real.includes(v))
+        && left[side(v)] > 0 && budget(round, { value: v, rule: id }) === null;
+      const pick = candidates.find(ok);
+      if (pick === undefined) continue;
+      left[side(pick)] -= 1;
+      taken.push(pick);
+      wrong.push({ value: pick, rule: id });
+    }
+    if (wrong.length < level.options - 1) return null;
+    if (real.length >= 2 && wrong.filter((c) => !isSlip(c.rule)).length < 2) return null;
+    return wrong;
+  };
+  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng);
+  return wrong && [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
 
 /** @typedef {{ unknown: string, eqform: string }} Form */
@@ -352,7 +370,7 @@ export function makeRound(level, rng) {
       model: level.model, eqform: form.eqform, picture: symbols ? [] : made.groups, helpPicture: symbols ? made.groups : null, equation: made.equation, text: '', terms: [],
       answer: made.answer, choices: [],
     };
-    const choices = choose(round, level);
+    const choices = choose(round, level, rng);
     if (choices) return { ...round, choices };
   }
   throw new Error(`balance: no round for level ${level.id}`);

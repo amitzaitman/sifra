@@ -23,6 +23,30 @@ function roundOf(id, s, k, eqform = 'standard', structure = undefined) {
   throw new Error(`no ${id} round ${s}, ${k}, ${eqform}`);
 }
 const cards = (round) => round.choices.map((c) => c.value);
+/** @type {Map<string, any[]>} a level's rounds over seeds 1-6000, by level, structure, story and form */
+const DEALT = new Map();
+/**
+ * Every card set a level deals with this story, each once, as [value, rule] lists in the cards' order:
+ * the rng draws the answer's place (lib/place.js, decisions.md 2026-10-31), so one story has up to three.
+ * @type {(id: string, s: number, k: number, eqform?: string, structure?: string) => any[][][]}
+ */
+function setsOf(id, s, k, eqform = 'standard', structure = undefined) {
+  const at = `${id}/${structure ?? ''}`;
+  if (!DEALT.has(at)) {
+    const passed = structure ? { ...level(id), structure } : level(id);
+    for (let seed = 1; seed <= 6000; seed++) {
+      const r = stories.makeRound(passed, rng(seed));
+      const key = `${at}/${r.story.s},${r.story.k}/${r.eqform}`;
+      if (!DEALT.has(key)) DEALT.set(key, []);
+      DEALT.get(key).push(r);
+    }
+    DEALT.set(at, []);
+  }
+  const rounds = DEALT.get(`${at}/${s},${k}/${eqform}`) ?? [];
+  assert.ok(rounds.length >= 20, `${id} ${s}, ${k}: ${rounds.length} rounds`);
+  const seen = [...new Set(rounds.map((r) => JSON.stringify(r.choices.map((c) => [c.value, c.rule]))))];
+  return seen.sort().map((t) => JSON.parse(t));
+}
 
 // ---------- R6 [unit] (rules.md R6, design 6.10) ----------
 
@@ -101,28 +125,42 @@ test('the generator: every story of each pool, a third reversed where the level 
       if (passed.structure === 'change-take') assert.deepEqual([...verbs].sort(), ['fly', 'pop']);
     }
   }
-  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [9, 35, 34, 10, 35, 7, 30]);
-  // No 1 + 1 (its cards would be 1 twice and a 0), and no equal parts in the basket (decisions.md 2026-10-31).
+  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [9, 35, 34, 9, 35, 7, 30]);
+  // No 1 + 1 (its cards would be 1 twice and a 0), no 2 − 1 (two wrong cards only, 3 and 2: level 4 has
+  // four cards since 2026-10-31), and no equal parts in the basket (decisions.md 2026-10-31).
   assert.ok(!stories.poolOf(level('add-5')).some((p) => p.s === 1 && p.k === 1));
+  assert.ok(!stories.poolOf(level('take-5')).some((p) => p.s === 2));
   for (const id of ['whole-5', 'whole-10']) assert.ok(!stories.poolOf(level(id)).some((p) => p.s === p.k), id);
   // Level 3 deals no 9 + ? = 10 (design 6.10: no room for the dome after four dots in the second row).
   assert.ok(!stories.poolOf(level('add-change')).some((p) => p.s === 9));
 });
 
-test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips only where nothing real is left', () => {
-  assert.deepEqual(cards(roundOf('add-10', 4, 3)), [1, 4, 6, 7]);
-  assert.deepEqual(cards(roundOf('take-10', 9, 4)), [4, 5, 9, 13]);
-  // 4 + ? = 7: count.start-included gives 4 too, and given.part, first in the list, keeps it.
-  assert.deepEqual(roundOf('add-change', 4, 3).choices, [{ value: 3, rule: null }, { value: 4, rule: 'given.part' }, { value: 7, rule: 'given.whole' }, { value: 11, rule: 'op.other' }]);
+test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips only where nothing real is left or to move the answer', () => {
+  // 4 + 3: the skill's order puts the answer last; the last real error under it, count.start-included's 6,
+  // gives way to a slip over it in the other place (decisions.md 2026-10-31, "מקום התשובה").
+  assert.deepEqual(setsOf('add-10', 4, 3), [
+    [[1, 'op.other'], [4, 'given.part'], [6, 'count.start-included'], [7, null]],
+    [[1, 'op.other'], [4, 'given.part'], [7, null], [8, 'slip.near']],
+  ]);
+  // 9 − 4: no slip fits on either side (4 is given.part's, 6 count.start-included's), so one place.
+  assert.deepEqual(setsOf('take-10', 9, 4), [[[4, 'given.part'], [5, null], [9, 'given.whole'], [13, 'op.other']]]);
+  // 4 + ? = 7: count.start-included gives 4 too, and given.part, first in the list, keeps it; moved
+  // up, the last real error over the answer (that 4) gives way to a slip under it.
+  assert.deepEqual(setsOf('add-change', 4, 3), [
+    [[2, 'slip.near'], [3, null], [7, 'given.whole'], [11, 'op.other']],
+    [[3, null], [4, 'given.part'], [7, 'given.whole'], [11, 'op.other']],
+  ]);
   // 6 + ? = 9: op.other's 15 needs five rows.
   const six = roundOf('add-change', 6, 3);
-  assert.deepEqual(cards(six), [3, 4, 6, 9]);
+  assert.ok(setsOf('add-change', 6, 3).some((set) => set.map(([v]) => v).join() === '3,4,6,9'));
+  assert.ok(setsOf('add-change', 6, 3).every((set) => !set.some(([, rule]) => rule === 'op.other')));
   assert.equal(rowsFor(six, 'overflow', 15), 5);
   assert.match(stories.budget(six, { value: 15, rule: 'op.other' }), /5 rows, 4 at most/);
-  assert.deepEqual(roundOf('add-5', 1, 2).choices.map((c) => c.rule), ['op.other', 'count.start-included', null]);
+  // Four cards on the first levels too (decisions.md 2026-10-31): 1 + 2 has two real errors, and the slip over the answer.
+  assert.deepEqual(setsOf('add-5', 1, 2), [[[1, 'op.other'], [2, 'count.start-included'], [3, null], [4, 'slip.near']]]);
   // No card is 0 (playtest 2026-10-31): where op.other is 0 (2 + 2, 3 + 3) the next rule takes its place.
-  assert.deepEqual(roundOf('add-5', 2, 2).choices, [{ value: 2, rule: 'given.part' }, { value: 3, rule: 'count.start-included' }, { value: 4, rule: null }]);
-  assert.deepEqual(roundOf('add-10', 3, 3).choices.map((c) => c.rule), ['given.part', 'count.start-included', null, 'slip.near']);
+  assert.deepEqual(setsOf('add-5', 2, 2), [[[2, 'given.part'], [3, 'count.start-included'], [4, null], [5, 'slip.near']]]);
+  assert.deepEqual(setsOf('add-10', 3, 3), [[[3, 'given.part'], [5, 'count.start-included'], [6, null], [7, 'slip.near']]]);
   assert.equal(stories.canShow(roundOf('add-10', 3, 3), { value: 0, rule: 'op.other' }), false);
   for (const base of stories.levels) {
     for (const passed of variants(base)) {
@@ -132,16 +170,20 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
   // given.part: the start in add and in the basket, the change in take, whatever the form.
   assert.equal(stories.rules['given.part'](roundOf('take-10', 7, 3, 'reversed')), 3);
   assert.equal(stories.rules['given.part'](roundOf('whole-10', 3, 4, 'reversed')), 3);
-  // Where the slips are (decisions.md 2026-10-30, 2026-10-31): level 2 and the mixed add in 10 of 35, every round of level 7, nowhere else.
+  // Where a slip is on the cards of every round of a story, so where nothing real is left for a card
+  // (decisions.md 2026-10-30, 2026-10-31): 5 of 9 stories of level 1 and every one of level 6 (four
+  // cards there since 2026-10-31), 10 of 35 of level 2 and the mixed add, every story of level 7.
+  // Elsewhere a slip only comes to move the answer.
   for (const base of stories.levels) {
     for (const passed of variants(base)) {
-      const slips = stories.poolOf(passed).filter(({ s, k }) => roundOf(base.id, s, k, 'standard', passed === base ? undefined : passed.structure).choices.some((c) => c.rule === 'slip.near')).length;
-      const want = { 'add-10': 10, 'whole-10': 30, 'mixed-10': passed.structure === 'change-add' ? 10 : 0 }[base.id] ?? 0;
+      const structure = passed === base ? undefined : passed.structure;
+      const slips = stories.poolOf(passed).filter(({ s, k }) => setsOf(base.id, s, k, 'standard', structure).every((set) => set.some(([, rule]) => rule === 'slip.near'))).length;
+      const want = { 'add-5': 5, 'add-10': 10, 'whole-5': 7, 'whole-10': 30, 'mixed-10': passed.structure === 'change-add' ? 10 : 0 }[base.id] ?? 0;
       assert.equal(slips, want, `${base.id} ${passed.structure}`);
     }
   }
-  // op.other leaves level 3 in 7 of its 34 stories (2s + r over 20), and no other level.
-  const capped = stories.poolOf(level('add-change')).filter(({ s, k }) => !roundOf('add-change', s, k).choices.some((c) => c.rule === 'op.other'));
+  // op.other leaves level 3 in 7 of its 34 stories (2s + r over 20); elsewhere only where it is 0 (s = k: nothing to draw).
+  const capped = stories.poolOf(level('add-change')).filter(({ s, k }) => setsOf('add-change', s, k).every((set) => !set.some(([, rule]) => rule === 'op.other')));
   assert.deepEqual(capped.map(({ s, r }) => 2 * s + r > 20), Array(7).fill(true));
 });
 
@@ -490,9 +532,10 @@ test('a round of fewer than five columns stands in the middle of the drawing, th
     assert.ok(Math.abs((hi - lo) / pitch - (c - 1)) < 1e-9, `${key}: its places span ${c} columns`);
     assert.ok(Math.abs((lo + hi) / 2 - dw / 2) < 1e-9, `${key}: ${c} columns, off the middle by ${((lo + hi) / 2 - dw / 2).toFixed(2)}px`);
   }
-  // Only the stories to 5 have fewer: 1 + 2 (and its cards) in three columns.
-  assert.ok(counts[3] > 0 && counts[4] > 0, JSON.stringify(counts));
-  assert.equal(roundOf('add-5', 1, 2).stage.cols, 3);
+  // Only the stories to 5 have fewer: 1 + 2 (and its cards, whose slip 4 counts a fourth place since
+  // level 1 has four cards, decisions.md 2026-10-31) in four columns.
+  assert.ok(counts[4] > 0, JSON.stringify(counts));
+  assert.equal(roundOf('add-5', 1, 2).stage.cols, 4);
 });
 
 test('rows: the story\'s and the places a display fills past them; the budget says no exactly above 4; a digit display needs 3 at most', () => {

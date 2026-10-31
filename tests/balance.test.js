@@ -243,6 +243,36 @@ test('same-as: every total from 5 to 10 comes up, about alike', () => {
   for (let c = 5; c <= 10; c++) assert.ok((seen.get(c) ?? 0) >= 15, `${c} came up ${seen.get(c) ?? 0} times in 200`);
 });
 
+test('same-as deals four piles: a part, the difference and a slip over or under the answer, so the answer is not always the largest (decisions.md 2026-10-31)', () => {
+  const at = [0, 0, 0, 0];
+  for (const round of rounds('same')) {
+    const [a, b] = round.picture.filter((g) => g.role === 'part').map((g) => g.count);
+    const where = JSON.stringify(round.picture.map((g) => g.count));
+    assert.deepEqual(round.choices.map((c) => c.rule).filter(Boolean).sort(), ['given.part', 'op.other', 'slip.near'], where);
+    assert.equal(round.choices.find((c) => c.rule === 'given.part').value, a, where);
+    assert.equal(round.choices.find((c) => c.rule === 'op.other').value, Math.abs(a - b), where);
+    assert.ok([round.answer - 1, round.answer + 1].includes(round.choices.find((c) => c.rule === 'slip.near').value), where);
+    at[round.choices.findIndex((c) => c.rule === null)] += 1;
+  }
+  // The answer is the third or the fourth pile, each in about half the rounds.
+  assert.deepEqual([at[0], at[1]], [0, 0]);
+  assert.ok(at[2] >= 70 && at[3] >= 70, JSON.stringify(at));
+});
+
+test('slip.near goes either side of the answer (#16): on levels 7 and 8 each side holds a quarter of the slip cards or more', () => {
+  for (const id of ['both-sides', 'both-sides-symbols']) {
+    const sides = { under: 0, over: 0 };
+    for (let seed = 1; seed <= 2000; seed++) {
+      const round = balance.makeRound(level(id), rng(seed));
+      const slip = round.choices.find((c) => c.rule === 'slip.near');
+      if (slip) sides[slip.value < round.answer ? 'under' : 'over'] += 1;
+    }
+    const all = sides.under + sides.over;
+    assert.ok(all >= 200, `${id}: ${all} slip cards`);
+    assert.ok(sides.under >= all / 4 && sides.over >= all / 4, `${id}: ${JSON.stringify(sides)}`);
+  }
+});
+
 test('the zero round: 1 is zero.counted-as-one, and nothing else is offered twice', () => {
   const zeros = rounds('missing-right').filter((r) => r.answer === 0);
   assert.ok(zeros.length >= 10, `${zeros.length} rounds with answer 0 in 200`);

@@ -41,6 +41,8 @@ interface Level {
   exclude?: number[];
   /** rules of the skill's list whose display this level's picture cannot draw on some round, each for a reason (architecture 2.2) */
   undrawn?: string[];
+  /** why one card holds the answer in 80% of the level's rounds or more (R4, architecture 2.2); none does today */
+  samePlace?: string;
   [param: string]: any;
 }
 

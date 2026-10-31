@@ -1,31 +1,49 @@
 // What the two fixture games share: choosing tagged wrong answers, and a plain drawing of groups
 // with the shell's cover. Test code: real games keep their own helpers in their own folders.
 import { cover } from '../../lib/cover.js';
+import { place } from '../../lib/place.js';
 import { settle } from '../../lib/settle.js';
 
 /**
  * The choices of a round: the answer, then one wrong value per rule in the skill's order (real
- * errors first, slips only on values no real error predicts), each value once; ascending.
+ * errors first, slips only on values no real error predicts), each value once, with the answer's
+ * place drawn by the rng (lib/place.js, R4); ascending.
  * @param {Round} round
  * @param {number} options
  * @param {Record<string, (round: Round) => any>} rules
  * @param {string[]} order the skill's rule order (skills.md), limited to the game's rules
+ * @param {Rng} rng
  * @returns {Choice[]}
  */
-export function choose(round, options, rules, order) {
-  const taken = [round.answer];
-  const wrong = [];
+export function choose(round, options, rules, order, rng) {
   const predicted = order.filter((id) => !id.startsWith('slip.')).map((id) => rules[id](round));
-  for (const id of order) {
-    if (wrong.length === options - 1) break;
-    const value = rules[id](round);
-    const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
-    const ok = (v) => Number.isInteger(v) && v >= 0 && !taken.includes(v) && (!id.startsWith('slip.') || !predicted.includes(v));
-    const pick = candidates.find(ok);
-    if (pick === undefined) continue;
-    taken.push(pick);
-    wrong.push({ value: pick, rule: id });
-  }
+  /** @type {(v: number) => 'below' | 'above'} */
+  const side = (v) => (v < round.answer ? 'below' : 'above');
+  /** @type {(room: { below: number, above: number }, leave: (rule: string) => boolean) => Choice[]} */
+  const deal = (room, leave) => {
+    const left = { ...room };
+    const taken = [round.answer];
+    /** @type {Choice[]} */
+    const wrong = [];
+    /** @type {any[]} the values of the rules before this one, dealt or not (R4: a tie is the first rule's) */
+    const earlier = [];
+    for (const id of order) {
+      if (wrong.length === options - 1) break;
+      const value = rules[id](round);
+      const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
+      const before = [...earlier];
+      earlier.push(...candidates);
+      if (leave(id)) continue;
+      const ok = (v) => Number.isInteger(v) && v >= 0 && !taken.includes(v) && !before.includes(v) && (!id.startsWith('slip.') || !predicted.includes(v)) && left[side(v)] > 0;
+      const pick = candidates.find(ok);
+      if (pick === undefined) continue;
+      left[side(pick)] -= 1;
+      taken.push(pick);
+      wrong.push({ value: pick, rule: id });
+    }
+    return wrong;
+  };
+  const wrong = place(options, deal, (c) => side(c.value) === 'below', rng) ?? [];
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
 
@@ -106,7 +124,9 @@ export function render(host, round, { signal, mode, solved }, label, displays) {
       host.querySelector('[data-display]')?.remove();
       const shown = el('div', 'fx-display');
       shown.dataset.display = display;
-      for (let i = 0; i < Math.min(amount(value), 20); i++) shown.append(el('span', 'fx-ghost'));
+      // A 0 (a slip under an answer of 1, since the answer's place varies): one empty place, so the display shows.
+      const n = Math.min(amount(value), 20);
+      for (let i = 0; i < Math.max(1, n); i++) shown.append(el('span', n ? 'fx-ghost' : 'fx-ghost fx-empty'));
       host.append(shown);
       await settle(shown, signal);
       if (step >= 2 && !signal.aborted && !host.querySelector('[data-hint]')) {
