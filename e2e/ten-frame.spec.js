@@ -1482,11 +1482,11 @@ test('the bond\'s tour at 320px: the outline round the counted dots cuts none of
  * ring's hole (inside its border and any inner halo), so nothing of the ring paints over it.
  * @returns {string[]}
  */
-function zeroProblems() {
+function zeroProblems(root = '[data-area="picture"]') {
   const out = [];
   const ctx = document.createElement('canvas').getContext('2d');
-  const rings = [...document.querySelectorAll('[data-area="picture"] .tf-ring.is-zero')];
-  for (const digit of document.querySelectorAll('[data-area="picture"] .tf-digit')) {
+  const rings = [...document.querySelectorAll(`${root} .tf-ring.is-zero`)];
+  for (const digit of document.querySelectorAll(`${root} .tf-digit`)) {
     if (digit.textContent !== '0') continue;
     const range = document.createRange();
     range.selectNodeContents(digit);
@@ -1551,6 +1551,69 @@ test('a ring with 0 holds its 0, and no cover is left on it: the tour\'s grown 0
     }
   }
 });
+
+test('an end screen\'s solved thumb with 0: the ring is wide enough round the 0\'s 14px, with a thin line, so it reads as 0 (design 4, 7.1; bug hunt #10)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // split-10 and ten-empty at seed 7: both answer 0, so the solved thumb rings an empty place with 0.
+  for (const [width, height] of [[320, 568], [390, 844], [568, 320], [1024, 1366]]) {
+    await page.setViewportSize({ width, height });
+    await page.clock.install({ time: NOW });
+    await page.goto(`${INDEX}?w=${width}#/dev/${ID}/1/1`);
+    await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+    const drawn = await page.evaluate(async (levels) => {
+      const game = await import('/games/ten-frame/game.js');
+      const { rng } = await import('/shell/rng.js');
+      const shelf = Object.assign(document.createElement('div'), { className: 'end-thumbs' });
+      document.querySelector('main').append(shelf);
+      for (const [n, seed] of levels) {
+        const host = Object.assign(document.createElement('div'), { className: 'thumb' });
+        Object.assign(host.dataset, { thumb: '', game: 'ten-frame', solved: '' });
+        shelf.append(host);
+        const round = game.makeRound(game.levels[n - 1], rng(seed));
+        game.render(host, round, { signal: new AbortController().signal, mode: 'thumb', solved: true, setEquation() {}, build() {}, relabel() {}, onAttempt() {} });
+      }
+      return shelf.querySelectorAll('.tf-ring.is-zero').length;
+    }, [[number('split-10'), 7], [number('ten-empty'), 7]]);
+    const where = `${width}×${height}`;
+    expect(drawn, `${where}: two rings with 0`).toBe(2);
+    expect(await page.evaluate(zeroProblems, '.end-thumbs'), where).toEqual([]);
+    const sizes = await page.locator('.end-thumbs .tf-digit').evaluateAll((ds) => ds.filter((d) => d.textContent === '0').map((d) => parseFloat(getComputedStyle(d).fontSize)));
+    expect(sizes.length, where).toBe(2);
+    expect(Math.min(...sizes), `${where}: the 0's size, px`).toBeGreaterThanOrEqual(14);
+  }
+});
+
+for (const [name, size] of [['a Pixel 7', null], ['320×568 at dpr 2', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2 }]]) {
+  test.describe(`the removed marks on ${name}`, () => {
+    if (size) test.use(size);
+    test(`the leftover-only display\'s removed marks are hollow outlines with no gold fringe (design 7.1; bug hunt #19), ${name}`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const { round } = await devAt(page, 'bridge-move', (r) => r.choices.some((c) => c.rule === 'bridge.leftover-only'));
+      await card(page, round.choices.findIndex((c) => c.rule === 'bridge.leftover-only')).click();
+      await unlocked(page);
+      const marks = page.locator('[data-display] .tf-gone');
+      await expect(marks.first()).toBeVisible();
+      await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished.catch(() => null))));
+      const gold = [];
+      for (const mark of await marks.all()) {
+        const png = (await mark.screenshot()).toString('base64');
+        gold.push(await page.evaluate(async (data) => {
+          const img = new Image();
+          img.src = `data:image/png;base64,${data}`;
+          await img.decode();
+          const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height }).getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const d = ctx.getImageData(0, 0, img.width, img.height).data;
+          let n = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] - d[i + 2] > 75 && d[i + 1] - d[i + 2] > 35) n += 1;
+          return n;
+        }, png));
+      }
+      expect(gold.length).toBeGreaterThan(0);
+      expect(gold, 'gold pixels in each removed mark').toEqual(gold.map(() => 0));
+    });
+  });
+}
 
 test('the bond\'s stems end on the circles: none shows inside the empty part\'s ring, its 0 alone there (empty-plate, design 7.1)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

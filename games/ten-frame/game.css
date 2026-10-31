@@ -143,7 +143,11 @@
 [data-game="ten-frame"] .tf-place { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--surface); }
 [data-game="ten-frame"] .tf-place.is-target { border-color: var(--role-part-edge); background: none; }
 [data-game="ten-frame"] .tf-place.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
-[data-game="ten-frame"] .tf-gone { border: 3px solid var(--role-removed); border-radius: 50%; background: var(--surface); }
+/* Like the veil: a 0.5px rim covers the counter's antialiased edge, and the mark is not held on a layer of its own
+   (its entry fills backwards only), which drew it about 1px off the counter: no gold fringe round it (design 7.1;
+   bug hunt #19). */
+[data-game="ten-frame"] .tf-gone { border: 3px solid var(--role-removed); border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 0.5px var(--role-removed); }
+[data-game="ten-frame"] .tf-gone.tf-enter { animation-fill-mode: backwards; }
 [data-game="ten-frame"] .tf-ring { border: 3px solid var(--role-added-edge); border-radius: calc(var(--u) * 0.3); box-shadow: 0 0 0 3px var(--halo), inset 0 0 0 3px var(--halo); }
 [data-game="ten-frame"] .tf-ring.is-round { border-radius: 50%; }
 /* Round a part (a yellow disc or circle) a ring has no inner halo, so the part keeps its 3px edge
@@ -154,6 +158,13 @@
 /* A ring with 0 on a frame's empty place stands on the counter's place, inside the cell and the
    hint's 4px ring round it: it crosses nothing, so it has no halo, which would cut that ring. */
 [data-game="ten-frame"] .tf-ring.is-zero.is-inset { box-shadow: none; }
+/* In a thumb a place is 13-18px and the 0 keeps its 14px floor: the ring with 0 is at least 18px round its place,
+   centred, with a 1.5px line, so a white gap stays round the 0 (design 4, 7.1; pedagogy 5.10; bug hunt #10). */
+[data-game="ten-frame"][data-thumb] .tf-ring.is-zero {
+  --zr: max(calc(var(--dx) * var(--u)), 18px);
+  width: var(--zr); height: var(--zr); border-width: 1.5px;
+  left: calc((var(--x) + var(--dx) / 2) * var(--u)); top: calc((var(--y) + var(--dy) / 2) * var(--u)); translate: -50% -50%;
+}
 /* A ring around a thing's own box, in pixels at every unit: its inner halo is a 3px gap off the
    thing, then its 3px line, so the thing keeps its edge and its size (design 7.1). */
 [data-game="ten-frame"] .tf-ring.is-around {
