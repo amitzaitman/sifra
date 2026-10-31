@@ -35,19 +35,23 @@ let S = null;
 
 const today = () => dayOf(S.now());
 const child = () => childOf(S.store);
-/** Writes the store now; a solved round's write waits for its closing (S.unsaved, 3.9). */
+/** Reads storage again (3.9): another tab may have written since this one read or wrote. */
+const reread = () => refresh(S.store, S.newId, { t: S.now().toISOString(), day: today() });
+/**
+ * Writes the store. A solved round waits for its closing (S.pending, 3.9): it is applied here, on storage read
+ * again, so a write by another tab during the closing is kept, and then written.
+ */
 const persist = () => {
-  S.unsaved = false;
+  const apply = S.pending;
+  S.pending = null;
+  if (apply) {
+    reread();
+    apply();
+  }
   return save(S.store);
 };
-/**
- * Reads storage again before a write (3.9): another tab may have written since. A write still waiting for its
- * closing goes first, so the read never drops it.
- */
-const sync = () => {
-  if (S.unsaved) persist();
-  return refresh(S.store, S.newId, { t: S.now().toISOString(), day: today() });
-};
+/** Reads storage again before a write (3.9); a solved round still waiting for its closing is applied and written. */
+const sync = () => (S.pending ? persist() : reread());
 /** Records a change under the finger, on the clock events are stamped with (shell/taps.js). */
 const changed = () => S.taps.changed(new Event('change').timeStamp);
 const event = (e) => capped(child().events, { t: S.now().toISOString(), day: today(), ...e }, CAPS.events);
@@ -93,7 +97,7 @@ const control = (name, label, onclick, props = {}) =>
   h('button', { type: 'button', class: `ctl btn ctl-${name}`, 'data-control': true, 'aria-label': label, html: svg(name), onclick, ...props });
 const homeButton = (props = {}) => control('home', T.home, () => { location.hash = '#/'; }, { 'data-home': true, ...props });
 
-/** The adults' screens: they keep text selection and the browser's menu (app.css). */
+/** The adults' screens: they keep text selection and the browser's menu. The one list: screen() marks them data-adult for app.css. */
 const ADULT = new Set(['parents', 'dev', 'export']);
 /**
  * A press and hold on a child's screen opens no menu: Android Chrome's link menu on a home card comes with
@@ -110,7 +114,8 @@ function screen(name, title, attrs = {}) {
   S.ctl = new AbortController();
   S.thumbs.length = 0;
   changed();
-  const main = h('main', { 'data-screen': name, oncontextmenu: ADULT.has(name) ? null : noMenu, ...attrs }, h('h1', { class: 'sr-only' }, title));
+  const adult = ADULT.has(name);
+  const main = h('main', { 'data-screen': name, 'data-adult': adult, oncontextmenu: adult ? null : noMenu, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
   // Every screen opens at its top (3.2): a round, whose story plays at the top of the picture, never
@@ -242,37 +247,41 @@ function mount(session, spec) {
     } });
 }
 
-/** A solved counted round: the ladder (3.4), the review schedule (3.5), a stuck return (3.7), then the attempt (3.9). */
+/**
+ * A solved counted round: the ladder (3.4), the review schedule (3.5), a stuck return (3.7), then the attempt (3.9).
+ * Taken at the solve, applied once the closing has run (persist): a long log's write would hold up the card's
+ * "correct" (design 6.5), and applied on storage read again then, a write by another tab during the closing stays.
+ */
 function finish(session, spec, level, round, outcome) {
-  sync();
-  const [c, game, day, rec] = [child(), S.byId.get(spec.game), today(), spec.record];
-  const [id, before, last] = [game.meta.id, c.games[game.meta.id], c.skills[level.skill]?.last];
-  let [passed, stuck] = [null, false];
-  // Another tab may have moved this game's ladder since the round began (3.9): only a ladder still at the round's level steps.
-  if (spec.kind !== 'review' && before?.level === level.id) {
-    ({ state: c.games[id], passed, stuck } = step(before, game.levels, { outcome, kind: spec.kind, session: session.n }));
-  }
-  schedule(c.skills, level.skill, { day, kind: spec.kind, outcome, passed: passed !== null });
-  if (stuck) {
-    const to = stuckTarget(c, S.games, game, spec.index, SKILLS);
-    const [tid, target] = [to.game.meta.id, to.game.levels[to.index]];
-    c.games[tid] = moveTo(c.games[tid] ?? startLadder(to.game.levels), target.id, true);
-    const at = { game: tid, level: to.index + 1, skill: target.skill };
-    event({ type: 'stuck', game: id, level: spec.index + 1, skill: level.skill, to: at, missing: to.missing });
-    session.game = to.game;
-  }
-  // After the stuck return, so levelAfter is where the game's ladder now stands. Copies: the
-  // saved attempt never changes after the solve.
-  const number = (ladder) => (ladder ? indexOf(game.levels, ladder.level) + 1 : null);
-  capped(c.attempts, {
-    t: S.now().toISOString(), day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id,
-    skill: level.skill, seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome,
-    wrong: [...rec.wrong], firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: [...rec.help], demo: [...(spec.demo ?? [])],
-    taps: { ...rec.taps }, options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]),
-    sinceDays: last ? daysBetween(last, day) : null,
-  }, CAPS.attempts);
-  // Written once the closing has run (solve, 3.9): a long log's write would hold up the card's "correct" (design 6.5).
-  S.unsaved = true;
+  // Copies, at the solve: the saved attempt never changes after it.
+  const [now, rec] = [S.now(), spec.record];
+  const copy = { wrong: [...rec.wrong], firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: [...rec.help],
+    demo: [...(spec.demo ?? [])], taps: { ...rec.taps } };
+  S.pending = () => {
+    const [c, game, t, day] = [child(), S.byId.get(spec.game), now.toISOString(), dayOf(now)];
+    const [id, before, last] = [game.meta.id, c.games[game.meta.id], c.skills[level.skill]?.last];
+    let [passed, stuck] = [null, false];
+    // Another tab may have moved this game's ladder since the round began (3.9): only a ladder still at the round's level steps.
+    if (spec.kind !== 'review' && before?.level === level.id) {
+      ({ state: c.games[id], passed, stuck } = step(before, game.levels, { outcome, kind: spec.kind, session: session.n }));
+    }
+    schedule(c.skills, level.skill, { day, kind: spec.kind, outcome, passed: passed !== null });
+    if (stuck) {
+      const to = stuckTarget(c, S.games, game, spec.index, SKILLS);
+      const [tid, target] = [to.game.meta.id, to.game.levels[to.index]];
+      c.games[tid] = moveTo(c.games[tid] ?? startLadder(to.game.levels), target.id, true);
+      const at = { game: tid, level: to.index + 1, skill: target.skill };
+      event({ t, day, type: 'stuck', game: id, level: spec.index + 1, skill: level.skill, to: at, missing: to.missing });
+      session.game = to.game;
+    }
+    // After the stuck return, so levelAfter is where the game's ladder now stands.
+    const number = (ladder) => (ladder ? indexOf(game.levels, ladder.level) + 1 : null);
+    capped(c.attempts, {
+      t, day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id, skill: level.skill,
+      seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome, ...copy,
+      options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]), sinceDays: last ? daysBetween(last, day) : null,
+    }, CAPS.attempts);
+  };
 }
 
 /** Mounts a round screen and runs it (2.5): cards, misses and help steps, the closing, "הַבָּא". A demo locks the cards. */
@@ -377,8 +386,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     try {
       await Promise.all([settle(eqArea, signal), view.solve?.()]);
     } finally {
-      // The attempt is written once the closing has run, also when the round is left (3.9).
-      if (S.unsaved) persist();
+      // The attempt is applied and written once the closing has run, also when the round is left (3.9).
+      if (S.pending) persist();
     }
     if (signal.aborted) return;
     label();
@@ -553,7 +562,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
     store = null;
   }
   const ordered = homeOrder(games, SKILLS);
-  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [], unsaved: false, newId: null,
+  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [], pending: null, newId: null,
     seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]), taps: tapWindow() };
   // A tap within 300 ms of a new screen or of "הַבָּא" appearing never acts on what the change put
   // under the finger (design 6.9): event times, no timer, nothing locked; the next tap is taken.
@@ -568,7 +577,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   S.newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   S.store = load(store, S.newId, { t: S.now().toISOString(), day: today() });
   // A write waiting for its closing is not lost when the page goes (3.9).
-  const flush = () => { if (S.unsaved) persist(); };
+  const flush = () => { if (S.pending) persist(); };
   addEventListener('pagehide', flush);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   navigator.storage?.persist?.().catch(() => null);

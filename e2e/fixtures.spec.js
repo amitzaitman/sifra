@@ -258,6 +258,28 @@ test('two tabs: each reads the store again before it writes, so neither undoes t
   expect(child.games.parts.streak).toBe(2);
 });
 
+for (const [what, then] of [['the closing ends', null], ['the page goes (pagehide)', 'pagehide']]) {
+  test(`two tabs: another tab's write during the closing is kept when ${what}; the solved round is applied on it (3.9, bug hunt #8)`, async ({ page }) => {
+    // Two visible tabs (iPad split view, a desktop): the other one writes while this one's closing runs.
+    const { answerAt } = await playAt(page, 'parts', 'split-10');
+    // Run in the solving tap, after the shell's own listener: the round is solved and its closing has begun.
+    await card(page, answerAt).evaluate((el, [scale, event]) => el.addEventListener('click', () => {
+      const v = JSON.parse(localStorage.getItem('sifra'));
+      v.children[v.current].games.scale = scale;
+      localStorage.setItem('sifra', JSON.stringify(v));
+      if (event) dispatchEvent(new Event(event));
+    }, { once: true }), [ladderAt('right', { streak: 2 }), then]);
+    await card(page, answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    const { data, child } = await stored(page);
+    expect(Object.keys(data.children)).toEqual([data.current]);
+    expect(child.games.scale, 'the other tab\'s write').toMatchObject({ level: 'right', streak: 2 });
+    expect(child.attempts.map((a) => [a.game, a.levelId, a.outcome])).toEqual([['parts', 'split-10', 'first']]);
+    expect(child.games.parts.streak).toBe(1);
+    expect(child.sessions).toBe(1);
+  });
+}
+
 test('"תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key hands its focus on, to the first live card, or to "הַבָּא" after the solve (design 6.5)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const first = await playAt(page, 'parts', 'split-sym');

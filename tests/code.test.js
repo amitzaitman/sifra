@@ -134,9 +134,12 @@ test('the Safari 16.4 scan catches the features the bug hunt added (S9): each sa
 });
 
 test('a press and hold is a tap on the child\'s screens: no iOS callout, no selection, the prefixed form for Safari 16.4 (bug hunt #17)', () => {
-  const rule = read('app.css').split('\n').find((l) => l.startsWith('main:not([data-screen="parents"])'));
-  assert.ok(rule, 'a rule on main outside the parents page');
+  const rule = read('app.css').split('\n').find((l) => l.startsWith('main:not([data-adult])'));
+  assert.ok(rule, 'a rule on main outside the adults\' screens');
   for (const decl of ['-webkit-touch-callout: none', '-webkit-user-select: none', 'user-select: none']) assert.ok(rule.includes(decl), decl);
+  // One list of the adults' screens: app.js's ADULT marks them data-adult, and no stylesheet names a screen instead.
+  assert.match(read('app.js'), /'data-adult': adult, oncontextmenu: adult \? null : noMenu/);
+  none(scan(site.filter((f) => f.endsWith('.css')), /\[data-screen="?(parents|dev|export)"?\]/, 'an adults\' screen named in a stylesheet'));
 });
 
 test('zoom: no maximum-scale, user-scalable, gesturestart or touchmove (design 10)', () => {

@@ -8,7 +8,7 @@ import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
-import { demoSeedFor, plainDemo } from '../shell/planner.js';
+import { demoSeedFor, pickMix, plainDemo } from '../shell/planner.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
@@ -20,6 +20,50 @@ const SITES = [
 ];
 /** Every level of a site as a #/dev route at seed 1. */
 const levelRoutes = (site) => site.games.flatMap((g) => g.levels.map((_, i) => `#/dev/${g.meta.id}/${i + 1}/1`));
+/**
+ * Every level of a site as a #/dev route at its widest exercise: of seeds 1-400, the round whose row is widest (the
+ * level built as #/dev builds it, a mixed value from the seed). Widths in em, as app.css draws the row: a character
+ * about 0.6, a `?` slot at least 1.3 (.eq-slot) and as wide as its answer, 0.25 between tokens. Seed 1 where no round
+ * has a row. Balance level 8 finds 379, the `10 + 10 = ? + 18` of bug hunt #9.
+ */
+const widestRoutes = (site) => site.games.flatMap((g) => g.levels.map((base, i) => {
+  let [seed, most] = [1, -1];
+  for (let s = 1; s <= 400; s++) {
+    const { equation, answer } = g.makeRound({ ...base, ...pickMix(base, null, rng(s)) }, rng(s));
+    if (!equation) continue;
+    const answers = [answer].flat();
+    let k = 0;
+    const em = (t) => 0.25 + (t === '?' ? Math.max(1.3, 0.6 * String(answers[k++]).length) : 0.6 * String(t).length);
+    const width = [...equation.left, '=', ...equation.right].reduce((sum, t) => sum + em(t), 0);
+    if (width > most) [seed, most] = [s, width];
+  }
+  return `#/dev/${g.meta.id}/${i + 1}/${seed}`;
+}));
+
+/**
+ * A round at the viewport's width keeps main's one column and both 16px gutters, the page has no sideways scroll, and
+ * the equation row fits its box at 28px or more, or wrapped (design 5, 6.4, bug hunt #9).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} where
+ */
+async function expectGutters(page, where) {
+  const m = await page.evaluate(() => {
+    const main = document.querySelector('main');
+    const s = getComputedStyle(main);
+    const content = main.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+    const boxes = [...main.querySelectorAll(':scope > :not(.sr-only)')].map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0);
+    const row = document.querySelector('.eq');
+    return { width: innerWidth, scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth, column: parseFloat(s.gridTemplateColumns),
+      content, left: Math.min(...boxes.map((b) => b.left)), right: Math.max(...boxes.map((b) => b.right)),
+      over: row.scrollWidth - row.clientWidth, font: parseFloat(getComputedStyle(row).fontSize), wrapped: row.classList.contains('is-wrapped') };
+  });
+  expect(m.scroll, `${where}: no sideways scroll`).toBeLessThanOrEqual(0);
+  expect(Math.abs(m.column - m.content), `${where}: the column, px`).toBeLessThan(0.5);
+  expect(m.left, `${where}: left gutter`).toBeGreaterThanOrEqual(16 - 0.5);
+  expect(m.right, `${where}: right gutter`).toBeLessThanOrEqual(m.width - 16 + 0.5);
+  expect(m.over, `${where}: the row fits its box`).toBeLessThanOrEqual(0);
+  expect(m.font >= 28 || m.wrapped, `${where}: 28px or more, or wrapped`).toBe(true);
+}
 
 /**
  * Installs the clock at "today", then opens a URL (architecture 4.5: the clock before every goto).
@@ -454,24 +498,33 @@ test('"הַבָּא" the shell focused shows no ring until a key is pressed, aft
   expect(await ring()).toBe('solid 4px');
 });
 
-test('a press and hold is a tap: no iOS link menu or text selection on the child\'s screens; the parents page and #/dev keep selection (bug hunt #17)', async ({ page }) => {
+test('a press and hold is a tap: no iOS link menu or text selection on the child\'s screens; the parents page, #/dev and the export keep selection (bug hunt #17)', async ({ page }) => {
   const select = (locator) => locator.evaluate((el) => { const s = getComputedStyle(el); return s.userSelect || s.webkitUserSelect; });
+  // Chromium has no touch callout: there it reads as the default.
+  const callout = (locator) => locator.evaluate((el) => getComputedStyle(el).webkitTouchCallout ?? 'default');
   await open(page, `${INDEX}#/`);
   await expect(page.locator('.next-step')).toBeVisible();
   expect(await select(page.locator('.next-step'))).toBe('none');
   expect(await select(page.locator('[data-card]').first())).toBe('none');
+  await expect(page.locator('main')).not.toHaveAttribute('data-adult');
   await page.evaluate(() => { location.hash = '#/play/balance'; });
   await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
   for (const sel of ['.eq', '.card']) expect(await select(page.locator(sel).first()), sel).toBe('none');
-  await page.evaluate(() => { location.hash = '#/parents'; });
-  await expect(page.locator('main[data-screen="parents"]')).toBeVisible();
-  expect(await select(page.locator('main[data-screen="parents"] a').first())).not.toBe('none');
+  await expect(page.locator('main')).not.toHaveAttribute('data-adult');
+  // The adults' screens: app.js's one list marks them data-adult, and app.css keeps their selection and menu.
+  for (const [hash, screen, sel] of [['#/parents', 'parents', 'main a'], ['#/dev', 'dev', 'main a'], ['#/dev/export', 'export', 'main']]) {
+    await page.evaluate((h) => { location.hash = h; }, hash);
+    await expect(page.locator(`main[data-screen="${screen}"]`)).toBeVisible();
+    await expect(page.locator('main'), hash).toHaveAttribute('data-adult', '');
+    expect(await select(page.locator(sel).first()), hash).not.toBe('none');
+    expect(await callout(page.locator(sel).first()), `${hash}: the iOS menu`).not.toBe('none');
+  }
   await page.evaluate(() => { location.hash = '#/dev/balance/1/1'; });
   await expect(page.locator('[data-dev]')).toBeVisible();
   expect(await select(page.locator('[data-dev]'))).toBe('text');
 });
 
-test('a press and hold opens no browser menu on the child\'s screens (Android Chrome\'s link menu is contextmenu); the parents page and #/dev keep it (bug hunt #17)', async ({ page }) => {
+test('a press and hold opens no browser menu on the child\'s screens (Android Chrome\'s link menu is contextmenu); the parents page, #/dev and the export keep it (bug hunt #17)', async ({ page }) => {
   // Whether the page cancelled the contextmenu a long press fires, so the browser shows no menu.
   const cancelled = (locator) => locator.evaluate((el) => !el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
   await open(page, `${INDEX}#/`);
@@ -487,6 +540,9 @@ test('a press and hold opens no browser menu on the child\'s screens (Android Ch
   await page.evaluate(() => { location.hash = '#/dev'; });
   await expect(page.locator('main[data-screen="dev"]')).toBeVisible();
   expect(await cancelled(page.locator('main[data-screen="dev"] a').first()), 'a #/dev link').toBe(false);
+  await page.evaluate(() => { location.hash = '#/dev/export'; });
+  await expect(page.locator('main[data-screen="export"]')).toBeVisible();
+  expect(await cancelled(page.locator('[data-export]')), 'the export button').toBe(false);
 });
 
 test('a locked card does not sink under the finger; held until the lock ends, it sinks, and on release it is taken (design 6.5, bug hunt #18)', async ({ page }) => {
@@ -520,23 +576,25 @@ test('a wide exercise never widens the page\'s column: the gutters stay and the 
     await page.setViewportSize({ width, height });
     await open(page, `${INDEX}?w=${width}#/dev/balance/8/379`);
     await expect(page.locator('[data-choices]')).toBeVisible();
-    const m = await page.evaluate(() => {
-      const main = document.querySelector('main');
-      const s = getComputedStyle(main);
-      const content = main.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
-      const boxes = [...document.querySelectorAll('main > [data-area], main > .bar, [data-choices]')].map((el) => el.getBoundingClientRect());
-      const row = document.querySelector('.eq');
-      return { column: parseFloat(s.gridTemplateColumns), content, left: Math.min(...boxes.map((b) => b.left)), right: Math.max(...boxes.map((b) => b.right)),
-        over: row.scrollWidth - row.clientWidth, font: parseFloat(getComputedStyle(row).fontSize), wrapped: row.classList.contains('is-wrapped') };
-    });
-    const where = `${width}×${height}`;
-    expect(Math.abs(m.column - m.content), `${where}: the column, px`).toBeLessThan(0.5);
-    expect(m.left, `${where}: left gutter`).toBeGreaterThanOrEqual(16 - 0.5);
-    expect(m.right, `${where}: right gutter`).toBeLessThanOrEqual(width - 16 + 0.5);
-    expect(m.over, `${where}: the row fits its box`).toBeLessThanOrEqual(0);
-    expect(m.font >= 28 || m.wrapped, `${where}: 28px or more, or wrapped`).toBe(true);
+    await expectGutters(page, `${width}×${height}`);
   }
 });
+
+for (const site of SITES) {
+  test(`${site.name}: each level's widest exercise at 320×568 keeps both gutters and no sideways scroll, before and after the solve (design 5, 6.4, bug hunt #9)`, async ({ page }) => {
+    test.setTimeout(120000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 320, height: 568 });
+    await open(page, site.path);
+    for (const hash of widestRoutes(site)) {
+      await page.goto(`${site.path}${hash}`);
+      await expect(page.locator('[data-choices]')).toBeVisible();
+      await expectGutters(page, hash);
+      await solve(page);
+      await expectGutters(page, `${hash} solved`);
+    }
+  });
+}
 
 test('a turned phone fits the exercise again: shrunk on the narrow screen, full size back on the wide one (design 5, 6.4)', async ({ page }) => {
   // 10 + 10 = ? + 18 fits at 48px held sideways and needs 31.2px at 320: fitted once, turned, it spilled 8px into each gutter.

@@ -189,8 +189,9 @@ main {
 @keyframes hand-tap { 50% { scale: 0.8; } }
 
 /* A press and hold is a tap on the child's screens: no iOS link menu or preview, no text selection (Safari 16.4 reads
-   only the prefixed user-select). The parents page and #/dev keep selection (bug hunt #17, design 10). */
-main:not([data-screen="parents"]):not([data-screen="dev"]):not([data-screen="export"]) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+   only the prefixed user-select). The adults' screens (app.js ADULT: the parents page, #/dev and its export) keep
+   selection (bug hunt #17, design 10). */
+main:not([data-adult]) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .dev-json { -webkit-user-select: text; user-select: text; }
 
 /* #/dev (a tool for the owner, not a child's screen). */

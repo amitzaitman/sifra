@@ -254,9 +254,10 @@ meaning (from the mount).
    the whole; R5). It resolves when the display has ended and, at step 3, the tour; it does not wait for the
    hint's pulse, which goes on after the cards unlock (design §7.1-§7.2: the cards lock only while a display runs,
    the hint does not lock). At once with reduced motion, and on abort.
-5. Correct: the shell applies the ladder (3.4) and any stuck return (3.7), then records the attempt (3.9; it is
-   written to storage once the closing below has run, also when the round is left, so a long log's write never holds
-   up the card's change, bug hunt #20), marks the
+5. Correct: the shell takes the attempt (3.9) and, once the closing below has run (also when the round is left),
+   reads storage again, applies the ladder (3.4), any stuck return (3.7) and the attempt, and writes them, so a long
+   log's write never holds up the card's change (bug hunt #20) and another tab's write during the closing stays
+   (bug hunt #8); then it marks the
    card, sets `data-solved` on the screen (app.css then shows `[data-role="unknown"]`, `.eq-answer` and any
    `.is-unbuilt` token), shows every token of the equation row itself (`buildEquation(row, null)` in
    shell/equation.js, so the row is no longer `aria-busy`; the game's `build` does nothing from here on; a tap during
@@ -449,16 +450,19 @@ drawn with `mode: 'thumb'` once their host is in the page.
   the solve focuses: on iPhone a link tapped on home leaves Safari's focus state so that it showed the ring (bug hunt
   #7). "תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key hands its focus on before it goes: to "הַבָּא" after the solve, else
   the first live card, so focus never falls to the page (bug hunt #23).
-- A press and hold is a tap on the child's screens (app.css on `main`, all but the parents page, #/dev and the export):
+- A press and hold is a tap on the child's screens (app.css on `main:not([data-adult])`; `screen()` sets
+  `data-adult` on the adults' screens, app.js's one list `ADULT`: the parents page, #/dev and the export):
   `-webkit-touch-callout: none` and `-webkit-user-select: none` (Safari 16.4 reads only the prefixed form), so iOS
   shows no link menu or preview on a home card and selects no text in the equation or a card (bug hunt #17).
   Android Chrome's link menu comes with the `contextmenu` event, which CSS cannot stop: `screen()` cancels it on
-  every child's screen (`noMenu`), all but the round's JSON on #/dev; the adults' screens keep it. A
+  every child's screen (`noMenu`), all but the round's JSON on #/dev; the adults' screens keep it. A new adults'
+  screen goes in `ADULT` alone (tests/code.test.js: no stylesheet names a screen there). A
   locked card (`[data-choices][data-locked]`: a display, a demo, the solve) does not sink under a press; one held
   until the lock ends sinks then and is taken on release (bug hunt #18).
 - main's one column is `minmax(0, 1fr)`, and the equation area and row have `min-width: 0`: a row wider than its box
   overflows it, so `fitEquation` shrinks it to 28px and then wraps it, and nothing widens the column past main's
-  content box (it took both gutters at 320px on balance level 8's `10 + 10 = ? + 18`, bug hunt #9). `fitEquation`
+  content box (it took both gutters at 320px on balance level 8's `10 + 10 = ? + 18`, bug hunt #9; site.spec.js
+  checks each level's widest exercise at 320, 4.6). `fitEquation`
   runs again on every resize of the round's screen, so a turned phone shrinks the row on the narrow screen and gives
   it its full size back on the wide one: fitted once, that row (48px at 568×320) spilled 8px into each gutter when
   turned to 320×568, and one shrunk at 320 stayed 31.2px sideways (the class of bug hunt #11, 2026-10-31).
@@ -638,7 +642,10 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   written, so the half comes back and nothing is lost from memory (bug hunt #21). `navigator.storage.persist()` runs
   once per start.
 - Storage is read again before each write (`refresh` in store.js, bug hunt #8): at each route, at the top of each
-  round, as the entry demo is seen and first in each solved round's record. Another tab of the site (a WhatsApp link
+  round, as the entry demo is seen, and for a solved round once its closing has run, at the write itself (`persist`
+  applies `S.pending`, the round's ladder step, review, stuck return and attempt, on what it has just read; so does
+  the `pagehide` and hidden flush): two visible tabs (iPad split view, a desktop) may write within one closing, and a
+  write applied before the closing undid the other's. Another tab of the site (a WhatsApp link
   opens a new Safari tab, and old tabs keep their state for days) may have written since this one read or wrote;
   `save` writes the whole store, so without it one tab undid the other's progress. A stored text other than the
   last one this tab read or wrote (`raw`) replaces memory, migrated, when this code can read it or it is newer (then
@@ -652,9 +659,9 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   `demo` (the demos shown before the correct tap, in order: `auto` on entry, `how` for the hand; `[]` for none),
   `taps` (off-target, by area), `options`, `levelBefore`, `levelAfter` (the game's level once the round is applied,
   a stuck return that moved this game included), `sinceDays`.
-  The round itself is not stored: seed, `version`, `params` and `answer` rebuild it. The attempt is written once, at
-  the solve, from copies of the round's record, and never changes after it: an off-target tap or the picture button
-  after the solve is not logged.
+  The round itself is not stored: seed, `version`, `params` and `answer` rebuild it. The attempt is taken once, at
+  the solve (its `t` and `day` too), from copies of the round's record, and never changes after it: an off-target
+  tap or the picture button after the solve is not logged.
 - Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`, `<day>` the local day like every
   day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time and `data` the
   stored value as is.
@@ -921,7 +928,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   game writes); a game whose `miss` rejects (replaced the same way) opens the error screen, the one test of the
   `unhandledrejection` listener (a display a game cannot draw throws after the cards lock, 2.1). The bug hunt of
   2026-10-31: "הַבָּא" after a direct load into a demo shows no ring until a key (3.2); a press and hold selects
-  nothing on home and a round, and the parents page and `#/dev` keep selection; a locked card does not sink, and
+  nothing on home and a round, and the parents page, `#/dev` and the export (each `data-adult`) keep selection and
+  the menu; a locked card does not sink, and
   one held until the lock ends sinks and is taken; balance level 8's widest exercise keeps main's column and both
   gutters at 320 and 390, its row shrunk or wrapped, and fitted again when the phone turns (568×320 to 320×568: no
   overflow, 28px or more; back: 48px again; solved too); the equation row is the same atomic node before and after the
@@ -929,8 +937,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   correct), and the attempt is stored by "הַבָּא"; the soft-grey parents link and names have paper behind them.
 - On index.html, looping over the registry (every game: ten-frame, stories and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
-  and "הַבָּא" visible; home with every game's ladder at each level in turn draws every thumb
-  (`expectThumbsDrawn`); 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KiB of same-origin
+  and "הַבָּא" visible; at 320×568 each level's widest exercise (`widestRoutes`: of seeds 1-400, the widest row in em
+  as app.css draws it; balance level 8 finds 379) keeps main's column and both gutters and no sideways scroll, its row
+  fitted (28px or more, or wrapped), before and after the solve (bug hunt #9; red with the fix's CSS taken out);
+  home with every game's ladder at each level in turn draws every thumb (`expectThumbsDrawn`); 64×64 for every `[data-control]` and card; first load of `#/` at most 200 KiB of same-origin
   responses, counted in gzip bytes as GitHub Pages serves them (section 6, "First-load budget"); R7 on every
   `[data-math]` (attribute, computed direction, characters left to right); R10 (animations only on `[data-role]`,
   `page.clock.runFor(60000)` adds nothing, no delay over 0.3 s outside `[data-demo]`, the 60 s test); R1 [browser]
@@ -969,9 +979,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   and a minute between the first tap and the solve); a stuck return in the same game (3.7) logs the level the child
   was moved to as `levelAfter`; a stuck return into another game plays the target's demo and then its rounds in the
   same session, the stuck game keeping its level; two tabs in one context each read the store again before they
-  write, so it holds one child, both ladders and all three attempts (3.9); "תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key
-  hands its focus to the first live card, or to "הַבָּא" after the solve; the picture asked for after that solve has
-  no cover.
+  write, so it holds one child, both ladders and all three attempts (3.9), and another tab's write during the closing
+  stays when the closing ends or the page goes, with the solved round applied on it; "תַּרְאוּ לִי אֶת הַתְּמוּנָה"
+  pressed with a key hands its focus to the first live card, or to "הַבָּא" after the solve; the picture asked for
+  after that solve has no cover.
 - balance.spec.js since the bug hunt: the jumps on a missing part (each mark on its place, the blink and the ring,
   arcs, no ring over a cube or a mark); at 568×320 and 844×390 the cubes 17.5px or more at rest, with the hint and in
   the tour (levels 6, 8 and 11 at 4 rows), every two-digit tour number inside its cube and no two numbers of a row
