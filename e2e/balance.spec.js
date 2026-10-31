@@ -4,7 +4,10 @@
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
 import { rng } from '../shell/rng.js';
-import { test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import {
+  test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, handSeen, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored,
+  watchHand,
+} from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const PART_EDGE = 'rgb(158, 108, 0)';
@@ -561,12 +564,35 @@ test('reduced motion on a 3-option level: the first miss shows its display\'s fi
   await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
 });
 
+/**
+ * R9 (the hunt of 2026-10-31): the demo on screen shows how, as a third miss does: the hand touches the pans left to
+ * right (the turned rows: the cover), steps off, and the hint and the tour are drawn before it taps the answer; a
+ * judging round starts at the hint. The tour's last digit is the answer; no digit is under the hand.
+ * @param {import('@playwright/test').Page} page
+ */
+async function expectDemoShows(page) {
+  const { round } = await roundOf(page);
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { covered, taps } = await handSeen(page);
+  const answer = taps.at(-1);
+  expect(answer.hint && answer.tour, 'the hint and the tour before the hand taps the answer').toBe(true);
+  await expect(page.locator('[data-hint]')).toHaveCount(1);
+  expect(covered, 'tour digits under the hand').toEqual([]);
+  if (round.model === 'cards') expect(taps).toHaveLength(1);
+  else await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+  if (round.model === 'balance') {
+    expect(taps).toHaveLength(3);
+    expect(taps[0].left, 'the left pan, then the right').toBeLessThan(taps[1].left);
+  }
+}
+
 for (const level of ['same', 'missing-right', 'both-sides', 'true-false']) {
-  test(`a demo level (${level}) runs its demo first: the hand, the closed picture, nothing written`, async ({ page }) => {
+  test(`a demo level (${level}) runs its demo first: the pans, the hint and the tour, the hand, the closed picture, nothing written`, async ({ page }) => {
     await playAt(page, level, { demoSeen: [] });
     await expect(page.locator('main[data-screen="demo"] [data-hand]')).toBeVisible();
-    await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
-    await expect(page.locator('[data-next]')).toBeVisible();
+    await watchHand(page);
+    await expectDemoShows(page);
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     expect((await stored(page)).child.attempts).toEqual([]);
     await look(page);
@@ -608,9 +634,10 @@ test('a round after "show me how": the demo, then the same round from the start;
   const [i] = wrongOf(round);
   await card(page, i).click();
   await unlocked(page);
+  await watchHand(page);
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
-  await expect(page.locator('[data-next]')).toBeVisible();
+  await expectDemoShows(page);
   await look(page);
   await page.locator('[data-next]').click();
   const main = page.locator('main[data-screen="round"]');
@@ -622,6 +649,16 @@ test('a round after "show me how": the demo, then the same round from the start;
   await expect(main).toHaveAttribute('data-solved', '');
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', wrong: [round.choices[i].rule], help: ['how'], demo: ['how'] });
 });
+
+for (const level of ['turn', 'missing-symbols', 'relational']) {
+  test(`"show me how" at ${level}: the hand, then the hint and the tour before the answer (R9)`, async ({ page }) => {
+    await devAt(page, level, 1);
+    await watchHand(page);
+    await page.locator('[data-how]').click();
+    await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+    await expectDemoShows(page);
+  });
+}
 
 test('320px: no sideways scroll on any level, through the hint; R7 holds on every [data-math] with the chips shown', async ({ page }) => {
   test.setTimeout(120000);

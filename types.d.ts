@@ -64,7 +64,13 @@ interface Round {
   fact?: number[];
 }
 
-interface Hand { tap(el: Element): Promise<void> }
+/** The demo's hand (architecture 2.6): it taps an element, or steps back to its place off the picture. */
+interface Hand {
+  /** moves onto el (the page scrolls so it and the hand are on screen) and taps */
+  tap(el: Element): Promise<void>;
+  /** back to its place at the foot of the round, off the picture, before a hint or a tour it would cover */
+  rest(): Promise<void>;
+}
 
 /** A wrong tap, as the shell hands it to view.miss (architecture 2.4) */
 interface Miss {

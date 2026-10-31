@@ -356,23 +356,60 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
-  /** @type {Hand} moves the hand onto an element and taps (slower motion is allowed inside [data-demo]) */
-  const api = { async tap(el) {
+  /** @type {Element | null} what the hand points at; null at its place at the foot of the round (app.css .hand) */
+  let target = null;
+  /**
+   * Points the hand's tip at the middle of its target, measured now. After the solve the answer card is gone and
+   * "הַבָּא" stands in its place. Run again on resize: a turned phone moves everything (2.6).
+   */
+  const aim = () => {
+    const el = target?.isConnected ? target : target && r.main.querySelector('[data-next]');
+    if (!el) return;
     const [box, base] = [el.getBoundingClientRect(), hand.parentElement.getBoundingClientRect()];
     const x = Math.round(box.left + box.width / 2 - base.left - hand.offsetLeft - hand.offsetWidth / 2);
     const y = Math.round(box.top + box.height / 2 - base.top - hand.offsetTop);
     hand.style.transform = `translate(${x}px, ${y}px)`;
-    await settle(hand, r.signal);
-    hand.classList.add('is-tapping');
-    await settle(hand, r.signal);
-    hand.classList.remove('is-tapping');
-  } };
+  };
+  addEventListener('resize', aim, { signal: r.signal });
+  /**
+   * Scrolls the page, never the picture's panel, so that what lies from top to bottom (in the screen's pixels) is on
+   * screen: on a phone held sideways the round is taller than the screen (2.6).
+   * @type {(top: number, bottom: number) => void}
+   */
+  const reveal = (top, bottom) => {
+    if (bottom > innerHeight) scrollBy(0, Math.ceil(Math.min(bottom - innerHeight, top)));
+    else if (top < 0) scrollBy(0, Math.floor(top));
+  };
+  /** @type {Hand} the hand taps an element, or steps back off the picture (slower motion is allowed inside [data-demo]) */
+  const api = {
+    async tap(el) {
+      // The element and the hand under its middle are on screen.
+      const box = el.getBoundingClientRect();
+      reveal(box.top, box.top + box.height / 2 + hand.offsetHeight);
+      target = el;
+      aim();
+      await settle(hand, r.signal);
+      hand.classList.add('is-tapping');
+      await settle(hand, r.signal);
+      hand.classList.remove('is-tapping');
+    },
+    async rest() {
+      target = null;
+      if (!hand.style.transform) return;
+      hand.style.transform = '';
+      await settle(hand, r.signal);
+    },
+  };
   (async () => {
     await r.view.demo?.(api);
     if (!r.signal.aborted) await api.tap(r.cards.buttons[r.answerAt]);
     if (r.signal.aborted) return;
-    r.solve(r.answerAt);
+    const solved = r.solve(r.answerAt);
     seen();
+    await solved;
+    // "הַבָּא" stands in the cards' place, where the hand is, and is all on screen (design 6.9).
+    const next = r.signal.aborted ? null : r.main.querySelector('[data-next]')?.getBoundingClientRect();
+    if (next) reveal(next.top, next.bottom);
   })();
 }
 

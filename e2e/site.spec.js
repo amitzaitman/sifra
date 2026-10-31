@@ -11,7 +11,7 @@ import { rng } from '../shell/rng.js';
 import { demoSeedFor, plainDemo } from '../shell/planner.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
-  expectTouchTargets, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
+  expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
 } from './helpers.js';
 
 const SITES = [
@@ -204,6 +204,66 @@ for (const [site, route] of [[FIXTURE, 'parts/1/3'], [INDEX, 'ten-frame/1/3'], [
     expect(plainDemo(shown.round)).toBe(true);
   });
 }
+
+// The demo's hand on a phone held sideways (2.6, the hunt of 2026-10-31), at every level of every game: the round
+// is taller than the screen, so the page scrolls to each tap, the hand and what it taps on screen; the hand steps off
+// the picture before the hint and the tour, so no tour digit is under it; "הַבָּא" is on screen at the end.
+for (const game of Object.values(registry)) {
+  for (const [i, level] of game.levels.entries()) {
+    test(`R9 at 568×320: the hand on screen at every tap, over no tour digit, "הַבָּא" on screen: ${game.meta.id} ${i + 1} (${level.id})`, async ({ page }) => {
+      await page.setViewportSize({ width: 568, height: 320 });
+      await open(page, `${INDEX}#/dev/${game.meta.id}/${i + 1}/1`);
+      await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+      await look(page);
+      await watchHand(page);
+      await page.locator('[data-how]').click();
+      await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 20000 });
+      await expect(page.locator('[data-next]')).toBeInViewport({ ratio: 1 });
+      const { covered, taps } = await handSeen(page);
+      expect(covered, 'tour digits under the hand').toEqual([]);
+      expect(taps.length).toBeGreaterThan(0);
+      for (const tap of taps) expect(tap.top >= 0 && tap.bottom <= tap.screen, `a tap at ${tap.top}-${tap.bottom} on a ${tap.screen}px screen`).toBe(true);
+    });
+  }
+}
+
+/** Turns the phone: a new viewport size, once the page has had its resize event. */
+async function turn(page, size) {
+  const resized = page.evaluate(() => new Promise((done) => addEventListener('resize', () => done(null), { once: true })));
+  await page.setViewportSize(size);
+  await resized;
+}
+
+/** The hand's box once it stops: every animation of the hand run to its end (a held one too). */
+const handAtRest = (page) => page.locator('[data-hand]').evaluate((hand) => {
+  hand.getAnimations().forEach((a) => a.finish());
+  const { left, top, right, bottom, width } = hand.getBoundingClientRect();
+  return { left, top, right, bottom, tip: { x: left + width / 2, y: top } };
+});
+
+test('R9: the hand aims again when the phone turns: mid-demo it stays on the round, off the bar; after it, it points at "הַבָּא" (2.6)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, `${INDEX}#/dev/ten-frame/10/3`);
+  await look(page);
+  await page.locator('[data-how]').click();
+  // Level 10's hand taps counter after counter: held on its way to one, the phone turns.
+  await expect(page.locator('main[data-screen="demo"] [data-hand]')).toHaveAttribute('style', /translate/);
+  await holdHand(page);
+  await turn(page, { width: 844, height: 390 });
+  const hand = await handAtRest(page);
+  const bar = await page.locator('main[data-screen="demo"] header.bar').boundingBox();
+  const demo = await page.locator('[data-demo]').boundingBox();
+  expect(hand.top, 'the hand is below the bar').toBeGreaterThanOrEqual(bar.y + bar.height);
+  expect(hand.left >= demo.x && hand.right <= demo.x + demo.width && hand.bottom <= demo.y + demo.height, 'the hand is on the demo').toBe(true);
+  await holdHand(page, false);
+  await expect(page.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+  // Turned back after the demo: the hand points at "הַבָּא", in the answer card's place.
+  await turn(page, { width: 390, height: 844 });
+  const { tip } = await handAtRest(page);
+  const next = await page.locator('[data-next]').boundingBox();
+  expect(tip.x >= next.x && tip.x <= next.x + next.width && tip.y >= next.y && tip.y <= next.y + next.height,
+    `the hand's tip (${tip.x}, ${tip.y}) is on "הַבָּא" (${next.x}, ${next.y}, ${next.width}×${next.height})`).toBe(true);
+});
 
 // The double-tap window (design 6.9, shell/taps.js): the shell drops a tap that comes within 300 ms
 // of a new screen or of "הַבָּא" appearing, by the events' timeStamps. The page's clock stamps the

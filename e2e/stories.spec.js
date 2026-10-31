@@ -7,7 +7,10 @@ import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
 import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
 import { rng } from '../shell/rng.js';
-import { test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import {
+  test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore, storeWith, stored,
+  watchHand,
+} from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
 const number = (id) => stories.levels.findIndex((l) => l.id === id) + 1;
@@ -873,9 +876,12 @@ for (const id of stories.levels.filter((l) => l.demo).map((l) => l.id)) {
   test(`a demo level (${id}) runs its demo first: the story, the hand, the solved picture, nothing written`, async ({ page }) => {
     await playAt(page, id, { demoSeen: [] });
     await expect(page.locator('main[data-screen="demo"] [data-hand]')).toBeVisible();
+    await watchHand(page);
     await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
     await expect(page.locator('[data-next]')).toBeVisible();
     await expect(page.locator('[data-tour]').last()).toHaveText(String((await roundOf(page)).round.answer));
+    // The hand steps off the picture before the hint and the tour (R9, as in the other games).
+    expect((await handSeen(page)).covered, 'tour digits under the hand').toEqual([]);
     await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)')).toHaveCount(0);
     expect((await stored(page)).child.attempts).toEqual([]);
     await look(page);

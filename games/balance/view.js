@@ -24,8 +24,9 @@ import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, 
  * @property {(display: string, value: any, rule: string, lift: () => void) => Promise<HTMLElement>} show a display (step 1)
  * @property {() => Layer} hint step 2, kept to the end of the round
  * @property {(hint: Layer) => Tour} tour step 3
- * @property {(hand: Hand) => Promise<void>} demo
+ * @property {(hand: Hand, steps: DemoSteps) => Promise<void>} demo the hand's taps, then the hint and the tour (R9)
  */
+/** @typedef {{ hint: () => Promise<void>, tour: () => Promise<void> }} DemoSteps what a demo shows after the hand's taps, as a third miss does */
 
 /** @type {(round: Round) => any[]} */
 const groupsOf = (round) => (round.look === 'symbols' ? round.helpPicture : round.picture) ?? [];
@@ -432,12 +433,22 @@ function balanceScene(host, round, solved, signal) {
       if (!steps.length) put(layer[u], 'bl-zero is-tour', at(span.places[0]), 0).dataset.tour = '0';
       return { steps, pace: 1, ring: () => (steps.length ? rings(layer, u, span.runs, 'is-tour') : []) };
     },
-    /** @param {Hand} hand */
-    async demo(hand) {
-      if (judging) return;
-      if (round.unknown !== 'result-right') return hand.tap(pans[u].lids[0]);
-      await hand.tap(pans.left.stack);
-      if (!signal.aborted) await hand.tap(pans.right.el.querySelector('.bl-bowl'));
+    /**
+     * The demo (R9): the hand touches the pans left to right (R7; an empty pan at its bowl), steps off the picture,
+     * then the hint and the tour as a third miss draws them. A judging round's pans are empty: it starts at the hint.
+     * @param {Hand} hand
+     * @param {DemoSteps} steps
+     */
+    async demo(hand, steps) {
+      /** @type {(side: Side) => Element} */
+      const touch = (side) => (pans[side].cubes.length || pans[side].lids.length ? pans[side].stack : pans[side].el.querySelector('.bl-bowl'));
+      if (!judging) {
+        await hand.tap(touch('left'));
+        if (!signal.aborted) await hand.tap(touch('right'));
+        if (!signal.aborted) await hand.rest();
+      }
+      if (!signal.aborted) await steps.hint();
+      if (!signal.aborted) await steps.tour();
     },
   };
 }
@@ -447,9 +458,10 @@ function balanceScene(host, round, solved, signal) {
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {boolean} solved
+ * @param {AbortSignal} signal
  * @returns {Scene}
  */
-function rowsScene(host, round, solved) {
+function rowsScene(host, round, solved, signal) {
   const data = sidesOf(round, solved);
   const d = drawRows(host, { ...data, rows: 1, cover });
   const { scene, lines } = d;
@@ -529,9 +541,16 @@ function rowsScene(host, round, solved) {
     tour(hint) {
       return { steps: /** @type {Steps} */ (unknowns().map((dot, j) => [dot, j + 1])), pace: 1, ring: () => [put(hint.el, 'bl-ring is-tour', { ...place(0), w: answer })] };
     },
-    /** @param {Hand} hand */
-    async demo(hand) {
+    /**
+     * The demo (R9): the hand touches the cover, steps off, then the hint and the tour.
+     * @param {Hand} hand
+     * @param {DemoSteps} steps
+     */
+    async demo(hand, steps) {
       await hand.tap(d.lids[0]);
+      if (!signal.aborted) await hand.rest();
+      if (!signal.aborted) await steps.hint();
+      if (!signal.aborted) await steps.tour();
     },
   };
 }
@@ -643,7 +662,10 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     if (signal.aborted) return;
     hint ??= step >= 2 ? s.hint() : null;
     if (step < 3) return;
-    // Step 3, the tour: the unknown shows, and each digit is written in turn (R5).
+    await tour();
+  };
+  /** Step 3, the tour (R5): the unknown shows, and each digit is written in turn; then the ring. */
+  const tour = async () => {
     lift();
     for (const n of s.unknowns()) n.classList.add('is-shown');
     const { steps, pace, ring } = s.tour(hint);
@@ -694,7 +716,16 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
       await settle(s.scene, signal);
     },
     async demo(hand) {
-      await s?.demo(hand);
+      if (!s) draw(false);
+      busy = true;
+      // After the hand's taps, the hint and the tour, as a third miss shows them (R9).
+      await s.demo(hand, {
+        hint: async () => {
+          hint ??= s.hint();
+          await settle(s.scene, signal);
+        },
+        tour,
+      });
     },
   };
 }

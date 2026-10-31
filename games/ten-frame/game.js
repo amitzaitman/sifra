@@ -550,7 +550,12 @@ export function render(host, round, ctx) {
     async demo(hand) {
       if (!pic) draw();
       locked = true;
-      await kind().demo(pic, hand, { hint, tour, signal });
+      // The hand steps off the picture before the hint and the tour, so it covers nothing they draw (R9).
+      const aside = (step) => async () => {
+        await hand.rest();
+        if (!signal.aborted) await step();
+      };
+      await kind().demo(pic, hand, { hint: aside(hint), tour: aside(tour), signal });
     },
   };
 }

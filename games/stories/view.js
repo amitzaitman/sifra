@@ -526,6 +526,8 @@ export function renderScene(host, round, ctx) {
         const el = signal.aborted ? null : node(id) ?? (id === 'dome' ? node('dome-top') : null);
         if (el) await hand.tap(el);
       }
+      // The hand steps off the picture: on the cover it would hide the tour's digits under it.
+      if (!signal.aborted) await hand.rest();
       if (signal.aborted) return;
       apply({ ...st, hint: true }, 'hint');
       await settle(draw, signal);

@@ -213,6 +213,47 @@ export async function expectCalm(page) {
 }
 
 /**
+ * Watches the demo's hand (R9, architecture 2.6) from now until a demo screen is solved: on every frame, each tour
+ * digit ([data-tour]) under the hand's box; at each tap, the hand's box, the screen's height, and whether a hint and
+ * a tour were drawn by then. handSeen reads it. Call it once the page is open (the auto demo: once its screen shows).
+ * @param {import('@playwright/test').Page} page
+ */
+export async function watchHand(page) {
+  await page.evaluate(() => {
+    /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean }[] }} */
+    const seen = { covered: [], taps: [] };
+    Object.assign(globalThis, { handSeen: seen });
+    const demo = () => document.querySelector('main[data-screen="demo"]');
+    /** @type {(a: DOMRect, b: DOMRect) => boolean} */
+    const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const frame = () => {
+      const hand = demo()?.querySelector('[data-hand]')?.getBoundingClientRect();
+      for (const digit of hand ? document.querySelectorAll('[data-tour]') : []) {
+        const box = digit.getBoundingClientRect();
+        if (box.width && box.height && over(hand, box)) seen.covered.push(digit.getAttribute('data-tour') ?? '');
+      }
+      if (!demo()?.hasAttribute('data-solved')) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    new MutationObserver((records) => {
+      for (const { target, oldValue } of records) {
+        if (!(target instanceof Element) || !target.matches('[data-hand].is-tapping') || oldValue?.includes('is-tapping')) continue;
+        const box = target.getBoundingClientRect();
+        seen.taps.push({ left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom), screen: innerHeight,
+          hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')) });
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+  });
+}
+
+/**
+ * What watchHand saw.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean }[] }>}
+ */
+export const handSeen = (page) => page.evaluate(() => /** @type {any} */ (globalThis).handSeen);
+
+/**
  * Every thumb on screen is drawn: none left empty, or marked data-broken, by a render that threw
  * (app.js thumb catches it so the screen still opens, architecture 3.9).
  * @param {import('@playwright/test').Page} page
