@@ -358,6 +358,8 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
   /** @type {Element | null} what the hand points at; null at its place at the foot of the round (app.css .hand) */
   let target = null;
+  /** How many times aim() has moved the hand: a tap knows a turn aimed it again on its way. */
+  let aimed = 0;
   /**
    * Points the hand's tip at the middle of its target, measured now. After the solve the answer card is gone and
    * "הַבָּא" stands in its place. Run again on resize: a turned phone moves everything (2.6).
@@ -365,6 +367,7 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
   const aim = () => {
     const el = target?.isConnected ? target : target && r.main.querySelector('[data-next]');
     if (!el) return;
+    aimed++;
     const [box, base] = [el.getBoundingClientRect(), hand.parentElement.getBoundingClientRect()];
     const x = Math.round(box.left + box.width / 2 - base.left - hand.offsetLeft - hand.offsetWidth / 2);
     const y = Math.round(box.top + box.height / 2 - base.top - hand.offsetTop);
@@ -388,7 +391,12 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
       reveal(box.top, box.top + box.height / 2 + hand.offsetHeight);
       target = el;
       aim();
-      await settle(hand, r.signal);
+      // A turn on the way aims it again, which cancels the move, and settle resolves on a cancel: wait for the new one.
+      let n;
+      do {
+        n = aimed;
+        await settle(hand, r.signal);
+      } while (n !== aimed && !r.signal.aborted);
       hand.classList.add('is-tapping');
       await settle(hand, r.signal);
       hand.classList.remove('is-tapping');

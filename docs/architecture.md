@@ -266,7 +266,8 @@ meaning (from the mount).
   demo rests the hand before its hint and its tour, so it covers nothing they draw: the ten-frame in one place for
   every kind (game.js), the balance and the stories in their scenes. The hand aims again on every resize (a turned
   phone moves everything): at what it points at, and after the solve, when the answer card is gone, at "הַבָּא" in its
-  place. After the solve the page scrolls so that "הַבָּא" is all on screen.
+  place. A tap waits until the hand has arrived, also when a turn aimed it again on its way (the new aim cancels the
+  move, and `settle` resolves on a cancel). After the solve the page scrolls so that "הַבָּא" is all on screen.
 - What a demo shows is the game's: the ten-frame's and the stories' hands touch the picture's parts in order, then
   the hint and the tour (step 2 and 3, as a third miss draws them); the balance's touches the pans left to right (R7;
   an empty pan at its bowl, the turned rows at their cover), rests, then the hint and the tour; a judging round's pans

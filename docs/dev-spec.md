@@ -177,8 +177,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   answer (a fixture, ten-frame, balance, stories), shows the round `demoSeedFor` picks: another
   answer, plain. On every frame of a demo no `[data-tour]` digit is under the hand's box (it rests
   before the hint and the tour). At every level at 568×320 the hand is on screen at each tap and
-  "הַבָּא" is all on screen at the end; turned mid-demo the hand stays below the bar, and turned after
-  it its tip is on "הַבָּא". In the balance the hint and the tour are drawn before the hand taps the
+  "הַבָּא" is all on screen at the end; turned mid-demo the hand stays below the bar, turned on its way
+  it taps only once it has stopped on the answer card, and turned after it its tip is on "הַבָּא". In the balance the hint and the tour are drawn before the hand taps the
   answer (architecture 2.6, 4.6, 4.7).
 - **R10 [browser]:** while a round waits, `document.getAnimations()` targets only elements with a
   quantity `data-role`. After `page.clock.runFor(60000)` no new element appears. No element

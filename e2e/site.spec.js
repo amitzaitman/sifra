@@ -222,7 +222,10 @@ for (const game of Object.values(registry)) {
       const { covered, taps } = await handSeen(page);
       expect(covered, 'tour digits under the hand').toEqual([]);
       expect(taps.length).toBeGreaterThan(0);
-      for (const tap of taps) expect(tap.top >= 0 && tap.bottom <= tap.screen, `a tap at ${tap.top}-${tap.bottom} on a ${tap.screen}px screen`).toBe(true);
+      for (const tap of taps) {
+        expect(tap.top >= 0 && tap.bottom <= tap.screen, `a tap at ${tap.top}-${tap.bottom} on a ${tap.screen}px screen`).toBe(true);
+        expect(tap.moving, 'the hand had stopped when it tapped').toBe(false);
+      }
     });
   }
 }
@@ -263,6 +266,32 @@ test('R9: the hand aims again when the phone turns: mid-demo it stays on the rou
   const next = await page.locator('[data-next]').boundingBox();
   expect(tip.x >= next.x && tip.x <= next.x + next.width && tip.y >= next.y && tip.y <= next.y + next.height,
     `the hand's tip (${tip.x}, ${tip.y}) is on "הַבָּא" (${next.x}, ${next.y}, ${next.width}×${next.height})`).toBe(true);
+});
+
+test('R9: a turn while the hand is on its way: it taps once it has reached the answer card\'s new place (2.6)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Level 10's demo has no pans to touch: the hand's first move is to the answer card.
+  await open(page, `${INDEX}#/dev/balance/10/1`);
+  await look(page);
+  await watchHand(page);
+  // The hand is held at the start of its first move, as soon as it sets out.
+  await page.evaluate(() => new MutationObserver((records, observer) => {
+    const hand = records.map((r) => r.target).find((t) => t instanceof HTMLElement && t.matches('[data-hand]') && t.style.transform);
+    if (!(hand instanceof HTMLElement)) return;
+    observer.disconnect();
+    hand.getAnimations().forEach((a) => a.pause());
+    Object.assign(globalThis, { handHeld: true });
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ['style'] }));
+  await page.locator('[data-how]').click();
+  await page.waitForFunction(() => /** @type {any} */ (globalThis).handHeld);
+  const { answerAt } = await roundOf(page);
+  await turn(page, { width: 844, height: 390 });
+  await holdHand(page, false);
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
+  const { taps } = await handSeen(page);
+  expect(taps).toHaveLength(1);
+  expect(taps[0].moving, 'the hand had stopped when it tapped').toBe(false);
+  expect(taps[0].card, 'the hand\'s tip on the answer card when it tapped').toBe(answerAt);
 });
 
 // The double-tap window (design 6.9, shell/taps.js): the shell drops a tap that comes within 300 ms

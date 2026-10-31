@@ -214,13 +214,15 @@ export async function expectCalm(page) {
 
 /**
  * Watches the demo's hand (R9, architecture 2.6) from now until a demo screen is solved: on every frame, each tour
- * digit ([data-tour]) under the hand's box; at each tap, the hand's box, the screen's height, and whether a hint and
- * a tour were drawn by then. handSeen reads it. Call it once the page is open (the auto demo: once its screen shows).
+ * digit ([data-tour]) under the hand's box; at each tap, the hand's box, the screen's height, whether a hint and
+ * a tour were drawn by then, whether the hand was still on its way (a transition running on it), and the index of
+ * the answer card under its tip (null for none). handSeen reads it. Call it once the page is open (the auto demo:
+ * once its screen shows).
  * @param {import('@playwright/test').Page} page
  */
 export async function watchHand(page) {
   await page.evaluate(() => {
-    /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean }[] }} */
+    /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
     const seen = { covered: [], taps: [] };
     Object.assign(globalThis, { handSeen: seen });
     const demo = () => document.querySelector('main[data-screen="demo"]');
@@ -239,8 +241,15 @@ export async function watchHand(page) {
       for (const { target, oldValue } of records) {
         if (!(target instanceof Element) || !target.matches('[data-hand].is-tapping') || oldValue?.includes('is-tapping')) continue;
         const box = target.getBoundingClientRect();
+        // The tip is the middle of the hand's top edge (app.js aim()); the tap's pulse has not scaled it yet.
+        const [x, y] = [box.left + box.width / 2, box.top + 1];
+        const card = [...document.querySelectorAll('[data-choices] [data-index]')].find((el) => {
+          const b = el.getBoundingClientRect();
+          return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+        });
         seen.taps.push({ left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom), screen: innerHeight,
-          hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')) });
+          hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')),
+          moving: target.getAnimations().some((a) => 'transitionProperty' in a), card: card ? Number(card.getAttribute('data-index')) : null });
       }
     }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
   });
@@ -249,7 +258,7 @@ export async function watchHand(page) {
 /**
  * What watchHand saw.
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean }[] }>}
+ * @returns {Promise<{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }>}
  */
 export const handSeen = (page) => page.evaluate(() => /** @type {any} */ (globalThis).handSeen);
 
