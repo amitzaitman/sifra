@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { GAMES } from './all-games.js';
 import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
-import { demoSeedFor, exerciseOf, plainDemo } from '../shell/planner.js';
+import { demoSeedFor, exerciseOf, plainDemo, prereqs } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import { RULES } from '../data/errors.js';
 import { FORMS } from '../data/forms.js';
@@ -363,6 +363,12 @@ export function checkGame(game) {
       const ok = ['addsub.multi.two-digit', 'addsub.multi.column'].includes(level.skill) && levels.slice(0, i).some((l) => l.skill === 'addsub.multi.estimate');
       if (!ok) fail(`${where}: helpEstimate needs a two-digit or column level after an estimate level`);
     }
+    // 3.4: one level down from here is another skill's, one this level does not build on (base and its
+    // met `when`): the step down eases nothing, so the level says down: false (decisions.md 2026-10-31).
+    const below = levels[i - 1];
+    if (below && below.skill !== level.skill && !prereqs(SKILLS, level.skill, level).includes(below.skill) && level.down !== false) {
+      fail(`${where}: down: false is needed: the level below (${below.id}) is ${below.skill}, no prerequisite of ${level.skill} (3.4)`);
+    }
     problems.push(...checkForms(level).map((p) => `${meta.id}: ${where}: ${p}`));
     for (const key of ['structure', 'ask']) {
       if (!Array.isArray(level[key])) continue;
@@ -672,6 +678,11 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }, parts.levels[1]] }).join(), /model frame comes back after tree/);
   assert.match(checkGame({ ...parts, levels: [parts.levels[1], { ...parts.levels[1], id: 'x', look: 'objects' }] }).join(), /look objects comes back/);
   assert.match(checkGame({ ...parts, meta: { ...parts.meta, grades: [1] } }).join(), /meta has no grade/);
+  // down: false (3.4): make-ten builds on split, so 'ten' steps down to split-sym; a skill that does not needs the field.
+  assert.doesNotMatch(checkGame(parts).join('\n'), /down: false/);
+  const teen = { ...parts.levels[3], id: 'teen', skill: 'pv.teens.ten-and', model: 'bundles', min: 10, max: 20 };
+  assert.match(checkGame({ ...parts, levels: [...parts.levels, teen] }).join('\n'), /level 5 \(teen\): down: false is needed: the level below \(ten\) is num\.parts\.make-ten/);
+  assert.doesNotMatch(checkGame({ ...parts, levels: [...parts.levels, { ...teen, down: false }] }).join('\n'), /down: false/);
   // A budget the game sets (architecture 4.2): a wrong choice whose display does not fit.
   const narrow = { ...parts, budget: (r, c) => (c.rule === 'op.other' ? 'too wide' : null) };
   assert.match(checkRound(narrow, level, 1, good).join('\n'), /budget: \d+ \(op\.other\): too wide/);

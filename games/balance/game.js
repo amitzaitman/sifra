@@ -39,9 +39,10 @@ export const levels = [
   { id: 'both-sides-symbols', ...pans, skill: 'eq.sign.both-sides', unknown: 'both-sides', max: 20, look: 'symbols', exclude: [0, 20] },
   // a + b = b + ?: the answer is a, 1 to 5, a row of its own.
   { id: 'turn', ...pans, skill: 'eq.props.commutative', op: 'add', unknown: 'both-sides', max: 10, model: 'set', exclude: [0, 6, 7, 8, 9, 10] },
-  { id: 'true-false', ...pans, skill: 'eq.sign.true-false', model: 'cards', max: 10, demo: true },
+  // down: false on levels 10 and 11: the level below is another skill's, not a prerequisite (architecture 3.4).
+  { id: 'true-false', ...pans, skill: 'eq.sign.true-false', model: 'cards', max: 10, demo: true, down: false },
   // a + b = c + ?: the answer is b, 3 to 9, one or two from it.
-  { id: 'relational', ...pans, skill: 'eq.sign.relational', unknown: 'both-sides', max: 20, exclude: [0, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
+  { id: 'relational', ...pans, skill: 'eq.sign.relational', unknown: 'both-sides', max: 20, down: false, exclude: [0, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
 ];
 
 export const text = [];

@@ -220,3 +220,15 @@ test('the stories: no step down from the first level of take or of the basket to
   assert.equal(s.level, 'take-5');
   assert.deepEqual(s.passed, ['add-5', 'add-10', 'add-change']);
 });
+
+test('the ten-frame and the balance: no step down from a level whose level below is another skill, not a prerequisite (decisions.md 2026-10-31)', async () => {
+  const { levels: frame } = await import('../games/ten-frame/game.js');
+  const { levels: balance } = await import('../games/balance/game.js');
+  for (const [list, ids] of [[frame, ['teen-bundle']], [balance, ['true-false', 'relational']]]) {
+    assert.deepEqual(list.filter((l) => l.down === false).map((l) => l.id), ids);
+    for (const id of ids) {
+      const helped = (s) => step(s, list, { outcome: 'help', kind: 'new', session: 1 }).state;
+      assert.equal(helped(helped({ ...startLadder(list, id), fast: null })).level, id);
+    }
+  }
+});
