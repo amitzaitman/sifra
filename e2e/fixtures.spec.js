@@ -2,7 +2,7 @@
 // game branch writes e2e/<id>.spec.js the same way.
 import { RULES } from '../data/errors.js';
 import * as scale from '../tests/fixtures/scale/game.js';
-import { test, expect, FIXTURE, NOW, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, storeWith, stored } from './helpers.js';
+import { test, expect, FIXTURE, NOW, expectThumbsDrawn, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored } from './helpers.js';
 
 /**
  * Opens a play session of a game whose ladder is at a level (its demo already seen). The seed
@@ -34,6 +34,8 @@ for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
     expect(await row.ariaSnapshot()).toBe(spoken(round.equation, '?'));
     const panel = await page.locator('[data-area="picture"]').boundingBox();
     await page.mouse.click(panel.x + 40, panel.y + 40);
+    // Two seconds of looking before the tap: firstMs and ms are the time from the mount (3.9).
+    await page.clock.runFor(2000);
     await card(page, answerAt).click();
     const main = page.locator('main[data-screen="round"]');
     await expect(main).toHaveAttribute('data-solved', '');
@@ -50,6 +52,14 @@ for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
       game, levelId: level, outcome: 'first', wrong: [], help: [], kind: 'new', options: 4, answer: round.answer,
       taps: { picture: 1, equation: 0, other: 0 }, version: 1, params: expect.objectContaining({ id: level }),
     });
+    // The 300 ms of look() and the 2000 ms run, in whole ms; the installed clock also runs in real time, so no tight
+    // top bound. The first tap is the solve: firstMs and ms are one moment, rounded apart by 1 ms at most.
+    const { firstMs, ms } = await lastAttempt(page);
+    expect(Number.isInteger(ms) && Number.isInteger(firstMs)).toBe(true);
+    expect(ms).toBeGreaterThanOrEqual(2300);
+    expect(ms).toBeLessThan(30000);
+    expect(ms - firstMs).toBeGreaterThanOrEqual(0);
+    expect(ms - firstMs).toBeLessThanOrEqual(1);
   });
 
   test(`${game}: the help ladder: display, hint, then the tour ends on the answer`, async ({ page }) => {
@@ -76,7 +86,11 @@ for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
     await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
     await card(page, answerAt).click();
     await expect(page.locator('[data-next]')).toBeVisible();
-    expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', wrong: wrong.map((i) => round.choices[i].rule), help: ['hint', 'tour'] });
+    const saved = await lastAttempt(page);
+    expect(saved).toMatchObject({ outcome: 'shown', wrong: wrong.map((i) => round.choices[i].rule), help: ['hint', 'tour'] });
+    // firstMs at the first (wrong) tap, after look()'s 300 ms; ms at the solve, after the minute run between them.
+    expect(saved.firstMs).toBeGreaterThanOrEqual(300);
+    expect(saved.ms - saved.firstMs).toBeGreaterThanOrEqual(60000);
   });
 }
 
@@ -170,6 +184,48 @@ test('a stuck return in the same game: levelAfter is the level the child was mov
   expect(child.events.at(-1)).toMatchObject({ type: 'stuck', game: 'parts', level: 2, to: { game: 'parts', level: 1 } });
   expect(child.games.parts.level).toBe('split-5');
   expect(child.attempts.at(-1)).toMatchObject({ levelId: 'split-10', outcome: 'first', levelBefore: 2, levelAfter: 1 });
+});
+
+test('a stuck return into another game: the rest of the session plays the target, the stuck game keeps its level (3.3, 3.7)', async ({ page }) => {
+  // dev-spec A.2: stuck in eq.sign.missing (scale 'right', tenth round, second session, no first
+  // tries) with eq.sign.same-as mastered: the return goes to num.parts.split in parts.
+  const at = { right: { n: 9, first: 0, sessions: 1, lastSession: 1 } };
+  const sameAs = skillState({ last: '2026-10-05', passedDay: '2026-10-01', box: 3, due: '2026-12-01', reviewDays: ['2026-10-02', '2026-10-05'] });
+  await seedStore(page, storeWith({ sessions: 1, games: { scale: ladderAt('right', { passed: ['same'], at }) }, skills: { 'eq.sign.same-as': sameAs } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}?seed=1#/play/scale`);
+  const main = page.locator('main[data-screen="round"], main[data-screen="demo"]');
+  // The passed same-as opens the session with review rounds; the first new round is at 'right'.
+  await expect(main).toBeVisible();
+  while ((await main.getAttribute('data-kind')) === 'review') {
+    await look(page);
+    await card(page, (await roundOf(page)).answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+    await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
+  }
+  await expect(main).toHaveAttribute('data-game', 'scale');
+  await expect(main).toHaveAttribute('data-level', '2');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { child } = await stored(page);
+  expect(child.events.at(-1)).toMatchObject({ type: 'stuck', game: 'scale', level: 2, to: { game: 'parts', level: 1, skill: 'num.parts.split' }, missing: [] });
+  expect(child.games.scale.level).toBe('right');
+  expect(child.games.parts).toMatchObject({ level: 'split-5', hold: 'split-5', demoDue: 'split-5' });
+  expect(child.attempts.at(-1)).toMatchObject({ game: 'scale', levelId: 'right', levelBefore: 2, levelAfter: 2 });
+  await look(page);
+  await page.locator('[data-next]').click();
+  // The target's demo runs once more, then its rounds fill the session.
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-game', 'parts');
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '1');
+  await expect(page.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-game', 'parts');
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-kind', 'new');
 });
 
 test('"show me how" on a symbols level draws the help picture in the demo', async ({ page }) => {

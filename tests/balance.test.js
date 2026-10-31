@@ -242,6 +242,36 @@ test('the formulas are the catalogue\'s, whatever the form (R4); only the choice
   assert.equal(balance.rules['given.whole'](result), null, '? = a + b gives no whole');
 });
 
+test('equal.add-to-equal and equal.compensate-wrong against values worked out by hand, not against the game\'s own formulas (depth 4.9)', () => {
+  /** @type {(id: string, left: string, right: string) => Round} the first round of a level with this exercise, over 3000 seeds */
+  const find = (id, left, right) => {
+    for (let seed = 1; seed <= 3000; seed++) {
+      const r = balance.makeRound(level(id), rng(seed));
+      if (r.equation.left.join(' ') === left && r.equation.right.join(' ') === right) return r;
+    }
+    assert.fail(`${id}: ${left} = ${right} is not dealt in 3000 seeds`);
+  };
+  const values = (r, ids) => Object.fromEntries(ids.map((id) => [id, balance.rules[id](r)]));
+  // a + b = c + ?: compensate-wrong is b + (c - a), add-to-equal the left's sum, copy the b.
+  assert.deepEqual(values(find('relational', '8 + 5', '9 + ?'), ['equal.compensate-wrong', 'equal.add-to-equal', 'equal.copy']),
+    { 'equal.compensate-wrong': 6, 'equal.add-to-equal': 13, 'equal.copy': 5 });
+  // a + b = b + ?: add-to-equal 8, copy the 5 at the unknown's place, add-all 13.
+  assert.deepEqual(values(find('turn', '3 + 5', '5 + ?'), ['equal.add-to-equal', 'equal.copy', 'equal.add-all']),
+    { 'equal.add-to-equal': 8, 'equal.copy': 5, 'equal.add-all': 13 });
+  // a + b = ? + c: add-to-equal 8, add-all 12, copy the 1 at the unknown's place.
+  assert.deepEqual(values(find('both-sides', '1 + 7', '? + 4'), ['equal.add-to-equal', 'equal.add-all', 'equal.copy']),
+    { 'equal.add-to-equal': 8, 'equal.add-all': 12, 'equal.copy': 1 });
+  // Every round, from its exercise alone: add-to-equal is a + b; on relational compensate-wrong is b + (c - a).
+  for (const id of ['both-sides', 'both-sides-symbols', 'turn', 'relational']) {
+    for (let seed = 1; seed <= 300; seed++) {
+      const r = balance.makeRound(level(id), rng(seed));
+      const [a, , b] = r.equation.left;
+      assert.equal(balance.rules['equal.add-to-equal'](r), a + b, `${id} seed ${seed}`);
+      if (id === 'relational') assert.equal(balance.rules['equal.compensate-wrong'](r), b + (r.equation.right[0] - a), `${id} seed ${seed}`);
+    }
+  }
+});
+
 test('same-as: every total from 5 to 10 comes up, about alike', () => {
   const seen = new Map();
   for (const round of rounds('same')) seen.set(round.answer, (seen.get(round.answer) ?? 0) + 1);

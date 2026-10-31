@@ -769,6 +769,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   and the other verb are one exercise); `plainDemo` (0, a double, a pair with 0, a judging card) and `demoSeedFor`
   on made-up rounds (the same answer, the same row with another answer, edge rounds only, nothing else: the first
   demo seed after `TRIES` rounds).
+- balance (tests/balance.test.js): `equal.add-to-equal` and `equal.compensate-wrong` against values worked out by
+  hand on `8 + 5 = 9 + ?`, `3 + 5 = 5 + ?` and `1 + 7 = ? + 4`, and on every round of levels 7-9 and 11 from its
+  exercise alone, not against the game's own formulas (bug hunt #13).
 - store: importing with a storage that throws on any access does not throw; migrate cases, a newer schema of another
   shape included, and a broken value kept whole under `*` in the new child's `repair` event; a broken child mended
   so the planner runs (a ladder without `passed`, a child with only `created`, wrong-typed values, dropped records
@@ -804,6 +807,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   …)`, `--fmin` 14 in rounds and 0 in thumbs (scene.js's fonts, which view.js sets).
 - Site files: no feature on a list of CSS, HTML and JS features newer than Safari 16.4 (`@starting-style`,
   `text-wrap`, `popover`, `modulepreload`, `checkVisibility`, Set methods, and more); a feature found later joins it.
+  The bug hunt of 2026-10-31 (S9) added `contain-intrinsic-*`, `scrollbar-gutter` and `scrollbar-width`, the scroll-
+  and view-driven animations (`animation-timeline`, `scroll-timeline`, `view-timeline`, `animation-range`),
+  `@view-transition`, `URL.canParse`, `URL.parse` and `requestClose`; a test checks each sample matches. Plain
+  `font-size-adjust` is in Safari 16.4 and stays off the list.
 - e2e/*.spec.js: each imports `test` from ./helpers.js and nothing from `@playwright/test` (JSDoc's
   `import('@playwright/test')` types aside), so no spec loses the errors fixture (4.5).
 
@@ -838,8 +845,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   error (`pageerror`) or a `console.error()` in any of them fails the test when it ends, with the page's URL and
   the message. The shell logs what it catches so a screen still opens (a thumb or a next step that throws, 3.9);
   here such an error fails a test. A test whose point is an error lets it through with
-  `errors.allow(/its message/)` (site.spec.js, the broken planner, the broken render and the write to a frozen
-  round). A failed resource load is a console error too: fixture.html links the icon, as
+  `errors.allow(/its message/)` (site.spec.js, the broken planner, the broken render, the write to a frozen
+  round and a game's `miss` that rejects). A failed resource load is a console error too: fixture.html links the icon, as
   index.html does, so the browser does not ask for a missing /favicon.ico.
 
 ### 4.6 site.spec.js
@@ -860,7 +867,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   (its module replaced the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a
   game whose render sorts the round's `choices` (replaced the same way) leaves its thumb `data-broken` and its round
   on the error screen, the one test of the shell's own freeze (2.5: the contract loop freezes its own copy, and no
-  game writes).
+  game writes); a game whose `miss` rejects (replaced the same way) opens the error screen, the one test of the
+  `unhandledrejection` listener (a display a game cannot draw throws after the cards lock, 2.1).
 - On index.html, looping over the registry (every game: ten-frame, stories and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; home with every game's ladder at each level in turn draws every thumb
@@ -898,8 +906,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   edge is not checked here (the ring tests check rings). Today it runs on the pair cards' count-up where the left
   part takes a second row (8 = ? + ?, card 6|1) and on make ten's flash ring round the tray (`given.whole`).
 - fixtures.spec.js also checks the shell's record (3.9): an attempt solved on the first tap, then the picture button
-  and a tap in each area, reads the same after the next round is saved; a stuck return in the same game (3.7) logs
-  the level the child was moved to as `levelAfter`; the picture asked for after that solve has no cover.
+  and a tap in each area, reads the same after the next round is saved; `firstMs` and `ms` are whole ms from the
+  mount (2300 or more after look() and a 2 s run, the first tap the solve within 1 ms; at the help ladder 300 or more,
+  and a minute between the first tap and the solve); a stuck return in the same game (3.7) logs the level the child
+  was moved to as `levelAfter`; a stuck return into another game plays the target's demo and then its rounds in the
+  same session, the stuck game keeping its level; the picture asked for after that solve has no cover.
 
 ### 4.8 The render contract (e2e/contract.spec.js)
 

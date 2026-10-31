@@ -463,6 +463,22 @@ test('an uncaught error shows the error screen with a home button, not a white p
   await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
 });
 
+test('a rejected promise from a game\'s miss shows the error screen, not cards locked for good (2.1, 3.9)', async ({ page, errors }) => {
+  // A miss is async: a display it cannot draw throws after the cards lock, as a rejected promise only
+  // the unhandledrejection listener sees.
+  errors.allow(/no drawing/);
+  await page.route((url) => url.pathname.endsWith('/tests/fixtures/scale/game.js') && !url.search, (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "import { render as draw } from './game.js?real';\nexport * from './game.js?real';\n" +
+      "export function render(host, round, ctx) { const view = draw(host, round, ctx); return Object.assign(Object.create(view), { miss: () => Promise.reject(new Error('no drawing')) }); }\n",
+  }));
+  await open(page, `${FIXTURE}#/dev/scale/2/1`);
+  await look(page);
+  const { answerAt } = await roundOf(page);
+  await page.locator(`button[data-index="${answerAt === 0 ? 1 : 0}"]`).click();
+  await expect(page.locator('main[data-screen="error"] [data-home]')).toBeVisible();
+});
+
 test('a broken stored record is mended on load: home opens, the next step plays, and one repair event keeps what was lost (3.9)', async ({ page }) => {
   // A ladder without `passed` made the next step throw on home, and the error screen's reload threw again.
   await seedStore(page, storeWith({

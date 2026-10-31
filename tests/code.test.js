@@ -110,13 +110,27 @@ test('every e2e spec takes test from e2e/helpers.js, never from @playwright/test
 // WebKit (Playwright's current WebKit) catches them, so this list does. Before using a feature on it,
 // check Safari 16.4 support; add any newer feature found later.
 const NEWER = [
-  ['CSS', /@starting-style|@scope\b|@position-try|\btext-wrap\b|\blight-dark\(|\bfield-sizing\b|\banchor-name\b|\bposition-anchor\b|\banchor\(|:user-(in)?valid|\bview-transition-name\b|\bcontent-visibility\b|\binterpolate-size\b|\bcalc-size\(|\btransition-behavior\b|\btext-box\b|@container\s+style\(|\blinear\(/],
+  ['CSS', /@starting-style|@scope\b|@position-try|\btext-wrap\b|\blight-dark\(|\bfield-sizing\b|\banchor-name\b|\bposition-anchor\b|\banchor\(|:user-(in)?valid|\bview-transition-name\b|\bcontent-visibility\b|\binterpolate-size\b|\bcalc-size\(|\btransition-behavior\b|\btext-box\b|@container\s+style\(|\blinear\(|\bcontain-intrinsic-|\bscrollbar-(gutter|width)\b|\b(animation|scroll|view)-timeline\b|\banimation-range\b|@view-transition\b/],
   ['HTML', /\bpopover\b|rel="modulepreload"|\bfetchpriority\b|<search\b/],
-  ['JS', /\b(showPopover|hidePopover|togglePopover|checkVisibility|startViewTransition|requestIdleCallback|setHTMLUnsafe|moveBefore|withResolvers|groupBy)\b|\bscrollend\b|\.(union|intersection|symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(|\bAbortSignal\.any\b|\bIterator\.from\b|\.(keys|values|entries)\(\)\.(map|filter|take|drop|flatMap|reduce|toArray|forEach|some|every|find)\(/],
+  ['JS', /\b(showPopover|hidePopover|togglePopover|checkVisibility|startViewTransition|requestIdleCallback|setHTMLUnsafe|moveBefore|withResolvers|groupBy)\b|\bscrollend\b|\.(union|intersection|symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(|\bAbortSignal\.any\b|\bIterator\.from\b|\b(canParse|requestClose)\b|\bURL\.parse\(|\.(keys|values|entries)\(\)\.(map|filter|take|drop|flatMap|reduce|toArray|forEach|some|every|find)\(/],
 ];
 
 test('nothing newer than Safari 16.4 in site files (CLAUDE.md target; CI\'s WebKit is newer)', () => {
   none(NEWER.flatMap(([what, pattern]) => scan(site, pattern, `${what} newer than Safari 16.4`)));
+});
+
+test('the Safari 16.4 scan catches the features the bug hunt added (S9): each sample matches its list', () => {
+  const samples = {
+    CSS: ['.a { contain-intrinsic-size: 10px; }', 'html { scrollbar-gutter: stable; }', '.b { scrollbar-width: thin; }', '.c { animation-timeline: view(); }',
+      '.d { scroll-timeline: --x; }', '.e { view-timeline-name: --y; }', '.f { animation-range: entry; }', '@view-transition { navigation: auto; }'],
+    JS: ['URL.canParse(u)', 'dialog.requestClose()', 'URL.parse(u)'],
+  };
+  for (const [what, list] of Object.entries(samples)) {
+    const pattern = NEWER.find(([w]) => w === what)[1];
+    for (const sample of list) assert.match(sample, pattern, `${what}: ${sample}`);
+  }
+  // Safari 16.4 has plain font-size-adjust: not on the list.
+  assert.doesNotMatch('.g { font-size-adjust: 0.5; }', NEWER[0][1]);
 });
 
 test('zoom: no maximum-scale, user-scalable, gesturestart or touchmove (design 10)', () => {
