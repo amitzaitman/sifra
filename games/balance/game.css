@@ -7,6 +7,10 @@
 @property --len { syntax: '<number>'; inherits: true; initial-value: 10; }
 
 [data-game="balance"] .bl-stage { position: absolute; inset: 0; padding: clamp(8px, 3vw, 16px); container-type: size; }
+/* A phone on its side: the shell's 200px panel left 11px cubes at 4 rows and 5px at 8, under the tour's 14px
+   digits and the jumps' marks. 240px gives the 208px stage of 320x568 portrait (18px cubes at 4 rows, 9.5px
+   at 8), and the page scrolls down (design 5, 6.8; bug hunt #4). */
+@media (orientation: landscape) and (max-height: 500px) { [data-game="balance"].panel { height: clamp(240px, 40dvh, 380px); } }
 [data-game="balance"] .bl-stage.is-thumb { inset: auto; left: 50%; top: 50%; width: 300px; height: 170px; padding: 0; transform: translate(-50%, -50%) scale(var(--k, .3)); }
 /* The thumb's gap under the pans clears the 12 degree drop (about 15px here) and the 8px base. */
 [data-game="balance"] .bl-stage.is-thumb .bl-scene { --gt: 8px; --gc: 30px; }
@@ -134,8 +138,10 @@
 [data-game="balance"] .bl-dash.is-start { border-top-left-radius: 50% 80%; }
 [data-game="balance"] .bl-dash.is-end { border-top-right-radius: 50% 80%; }
 [data-game="balance"] .bl-scene.is-open .bl-dash { visibility: hidden; }
-[data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - var(--half)); transform: translateX(-50%); display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
-[data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + var(--half)); }
+/* A chip is centred under its pan; one wider than the pan keeps its inner edge 5px off the pole (the pan's centre
+   is 8px and half a pan from the middle; bug hunt #4). */
+[data-game="balance"] .bl-chip { position: absolute; bottom: 12px; left: calc(50% - 8px); translate: min(calc(-50% - var(--pan) / 2), -100%) 0; display: flex; align-items: center; gap: .2em; height: 36px; padding: 0 10px; border-radius: var(--r-chip); background: var(--surface); box-shadow: inset 0 0 0 2px var(--grid); color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; animation: balance-appear var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .bl-chip[data-pan="right"] { left: calc(50% + 8px); translate: max(calc(var(--pan) / 2 - 50%), 0px) 0; }
 [data-game="balance"] .bl-op { color: var(--ink-soft); }
 [data-game="balance"] .bl-q { color: var(--role-unknown); }
 [data-game="balance"] .bl-digit { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; color: var(--on-unknown); animation: balance-digit 150ms var(--ease); font-variant-numeric: proportional-nums; }

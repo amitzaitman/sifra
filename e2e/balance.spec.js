@@ -1705,6 +1705,107 @@ test('a cover has the dome\'s corners from its height: the fixed one, and each p
   }
 });
 
+/** In the page: the size of a cube on the real pans, px. */
+const cubeSize = (page) => page.locator('.bl-scene > .bl-pan > .bl-stack > .bl-cube').first().evaluate((c) => c.getBoundingClientRect().width);
+/** Opens a #/dev round; in symbols look the picture is asked for, so it is drawn. */
+async function picturedAt(page, level, seed) {
+  const opened = await devAt(page, level, seed);
+  if (opened.round.look === 'symbols') await page.locator('[data-show-picture]').click();
+  await expect(page.locator('.bl-scene')).toBeVisible();
+  return opened;
+}
+
+test('a phone on its side: the balance\'s picture is as tall as on a 320px phone held upright, so cubes, digits, marks and chips keep their sizes (design 5, 6.8; bug hunt #4)', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[568, 320], [844, 390]]) {
+    await page.setViewportSize({ width, height });
+    const where = (what) => `${width}×${height} ${what}`;
+    // 4 rows at rest: 13 + 5 = ? + 12 (level 8), 10 + 3 = 11 + ? (level 11), 19 = 3 + ? (level 6, a tour to 16).
+    for (const [level, seed] of [['both-sides-symbols', 9], ['relational', 1], ['missing-symbols-20', 9]]) {
+      await picturedAt(page, level, seed);
+      expect(await cubeSize(page), where(`${level} ${seed}: a cube at rest, px`)).toBeGreaterThanOrEqual(17.5);
+      expect(await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth), where('no sideways scroll')).toBeLessThanOrEqual(0);
+    }
+    // The tour of 19 = 3 + ?: 1 to 16 on the unknown's cubes, the cubes as large, every number inside its cube.
+    const { round } = await picturedAt(page, 'missing-symbols-20', 9);
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+    expect(await cubeSize(page), where('a cube in the tour, px')).toBeGreaterThanOrEqual(17.5);
+    const fits = await page.evaluate(() => [...document.querySelectorAll('.bl-stack > .bl-cube > .bl-digit > .bl-fit')].map((f) => {
+      const [d, c] = [f.getBoundingClientRect(), f.closest('.bl-cube').getBoundingClientRect()];
+      return d.left >= c.left - 0.5 && d.right <= c.right + 0.5;
+    }));
+    expect(fits.length, where('two-digit numbers in the tour')).toBeGreaterThan(0);
+    expect(fits.every(Boolean), where('each inside its cube')).toBe(true);
+    // 10 + ? = 18's 28 (overflow): 8 rows of ghosts, 9.4px or more.
+    const big = await picturedAt(page, 'missing-symbols-20', 25);
+    await card(page, big.round.choices.findIndex((c) => c.value === 28)).click();
+    await unlocked(page);
+    const ghost = await page.locator('[data-display="overflow"] .bl-ghost').first().evaluate((g) => g.getBoundingClientRect().width);
+    expect(ghost, where('a ghost at 8 rows, px')).toBeGreaterThanOrEqual(9.4);
+    // ? = 8 + 11's 18 (jumps): marks 8 to 18 the cube's size, their digits inside the ring.
+    const jumps = await picturedAt(page, 'missing-symbols-20', 30);
+    await card(page, jumps.round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
+    await unlocked(page);
+    const marks = await page.evaluate(() => [...document.querySelectorAll('[data-display="jumps"] .bl-mark')].map((m) => {
+      const [b, fit] = [m.getBoundingClientRect(), m.querySelector('.bl-fit')];
+      const f = fit?.getBoundingClientRect();
+      return { size: b.width, inside: !f || (f.left >= b.left + 1 && f.right <= b.right - 1) };
+    }));
+    expect(Math.min(...marks.map((m) => m.size)), where('a jump mark, px')).toBeGreaterThanOrEqual(17.5);
+    expect(marks.every((m) => m.inside), where('digits inside the marks')).toBe(true);
+    // 13 + ? = 19 after two misses: the chips under the pans keep 5px off the pole.
+    const chips = await picturedAt(page, 'missing-symbols-20', 10);
+    for (const i of wrongOf(chips.round).slice(0, 2)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    const clear = await page.evaluate(() => {
+      const pole = document.querySelector('.bl-scene > .bl-pole').getBoundingClientRect();
+      return [...document.querySelectorAll('[data-hint] .bl-chip')].map((c) => {
+        const b = c.getBoundingClientRect();
+        return c.dataset.pan === 'left' ? pole.left - b.right : b.left - pole.right;
+      });
+    });
+    expect(clear.length, where('two chips')).toBe(2);
+    expect(Math.min(...clear), where('a chip off the pole, px')).toBeGreaterThanOrEqual(5 - 0.5);
+  }
+});
+
+test('a turned phone: the thumbs keep inside their cards, and a tour\'s squeezed numbers are measured again (design 5; bug hunt #11)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.clock.install({ time: NOW });
+  await page.goto(`${INDEX}#/`);
+  await expectThumbsDrawn(page);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.thumb[data-game="balance"]')].every((t) => {
+    const [b, s] = [t.getBoundingClientRect(), t.querySelector('.bl-stage').getBoundingClientRect()];
+    return s.left >= b.left - 1 && s.right <= b.right + 1 && s.top >= b.top - 1 && s.bottom <= b.bottom + 1;
+  }))).toBe(true);
+  // 19 = 3 + ?'s tour at 390×844, then turned: each two-digit number inside its smaller cube, and back to 1 turned back.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { round } = await picturedAt(page, 'missing-symbols-20', 9);
+  for (const i of wrongOf(round)) {
+    await card(page, i).click();
+    await unlocked(page);
+  }
+  await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+  const squeezed = () => page.evaluate(() => [...document.querySelectorAll('.bl-stack > .bl-cube > .bl-digit')].filter((d) => d.querySelector('.bl-fit')).map((d) => {
+    const [f, c] = [d.querySelector('.bl-fit').getBoundingClientRect(), d.closest('.bl-cube').getBoundingClientRect()];
+    return { sx: d.style.getPropertyValue('--sx'), room: c.width - 3 - f.width };
+  }));
+  expect((await squeezed()).every((d) => d.sx === '1.000')).toBe(true);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect.poll(async () => Math.min(...(await squeezed()).map((d) => d.room))).toBeGreaterThanOrEqual(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => (await squeezed()).every((d) => d.sx === '1.000')).toBe(true);
+});
+
 test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await playAt(page, 'missing-left');

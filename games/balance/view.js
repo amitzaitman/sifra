@@ -48,16 +48,24 @@ const put = (parent, className, box, text) => {
   return node;
 };
 
+/** How to redo each condensed node's squeeze, by node: a turned phone resizes the cubes (bug hunt #11). */
+const refits = new WeakMap();
+
 /**
  * The digits of a two-digit number in a node, condensed across (--sx, `.bl-fit` centres them) so that a number as
- * wide as two tabular digits, 0.68em each, fits `room` px; their height, so the 14px, stays (design 4, 7.3).
- * @type {(node: HTMLElement, n: number, room: number) => void}
+ * wide as two tabular digits, 0.68em each, fits the box's width less `pad` px; their height, so the 14px, stays
+ * (design 4, 7.3). The squeeze is measured again when the picture is resized (renderBalance's observer).
+ * @type {(node: HTMLElement, n: number, box: HTMLElement, pad: number) => void}
  */
-const condense = (node, n, room) => {
+const condense = (node, n, box, pad) => {
   node.textContent = '';
   put(node, 'bl-fit', undefined, n);
-  const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(node).fontSize);
-  node.style.setProperty('--sx', Math.min(1, room / wide).toFixed(3));
+  const fit = () => {
+    const wide = String(n).length * 0.68 * parseFloat(getComputedStyle(node).fontSize);
+    node.style.setProperty('--sx', Math.min(1, (box.offsetWidth - pad) / wide).toFixed(3));
+  };
+  refits.set(node, fit);
+  fit();
 };
 
 // The picture's description (design 6.3): locked templates with nikud.
@@ -322,7 +330,7 @@ function balanceScene(host, round, solved, signal) {
       if (slot >= layout.slots) put(layer[side], 'bl-cube bl-ghost', at(slot));
       const mark = put(layer[side], 'bl-mark', at(slot), first + j);
       // A mark is a white disc with a 2px edge, like a known cube: its digits get the same room, 3px each side.
-      if (first + j > 9) condense(mark, first + j, mark.offsetWidth - 6);
+      if (first + j > 9) condense(mark, first + j, mark, 6);
       return mark;
     }));
   };
@@ -633,8 +641,18 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     if (mode !== 'thumb') return asSolved || reduced() || s.intro();
     // A thumb: the stage at a phone's size, scaled into its host, still.
     s.stage.classList.add('is-thumb');
-    s.stage.style.setProperty('--k', String(Math.min(host.clientWidth / 316, host.clientHeight / 186)));
+    fitThumb();
   };
+  /** A thumb's scale from its host's size, measured again when the host is resized (a turned phone, bug hunt #11). */
+  const fitThumb = () => s?.stage.style.setProperty('--k', String(Math.min(host.clientWidth / 316, host.clientHeight / 186)));
+  // One observer per render: a turned phone resizes the host, the thumb's scale and every squeezed number follow.
+  // Their writes do not change the host's size, so it does not loop (app.js ignores the loop message anyway).
+  const resized = new ResizeObserver(() => {
+    if (mode === 'thumb') fitThumb();
+    host.querySelectorAll('.bl-fit').forEach((f) => refits.get(f.parentElement)?.());
+  });
+  resized.observe(host);
+  signal.addEventListener('abort', () => resized.disconnect(), { once: true });
   if (round.look !== 'symbols' || mode === 'thumb') draw(mode === 'thumb' && solved);
   /** The cover lifts; the open pans show what lies under it. */
   const lift = () => {
@@ -721,7 +739,7 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
         // it. The digits drawn are proportional (1.05em for 11 to 1.38em for 24), so they end up about 2px or
         // more from the edge. On a known cube: less its 2px edge and 1px more each side, so they sit on white
         // inside the edge (design 4, 7.3).
-        if (n > 9) condense(digit, n, target.offsetWidth - (target.dataset.role === 'unknown' ? 4 : 6));
+        if (n > 9) condense(digit, n, target, target.dataset.role === 'unknown' ? 4 : 6);
         return digit;
       });
       await Promise.all(digits.map((digit) => settle(digit, signal)));
