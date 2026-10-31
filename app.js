@@ -185,11 +185,15 @@ function nextRound(session) {
       session.prev = spec.structure ?? spec.ask;
     }
     if (needsDemo(ladder, level)) {
-      child().games[game.meta.id] = sawDemo(ladder, level.id);
       spec.demo = ['auto'];
-      persist();
+      persist();   // the session count
       apart(session, spec);
-      return demo(game, spec, () => mount(session, spec), session.done.length);
+      // Seen once the hand has tapped the answer (3.4): a reload or leaving mid-demo brings it back.
+      const seen = () => {
+        child().games[game.meta.id] = sawDemo(child().games[game.meta.id], level.id);
+        persist();
+      };
+      return demo(game, spec, () => mount(session, spec), session.done.length, seen);
     }
   }
   apart(session, spec);
@@ -341,9 +345,10 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
 
 /**
  * The demo (2.6): a round from the demo seed, cards locked, the help picture drawn in symbols look;
- * the game's steps, then the hand taps the answer. Nothing is written; the bar keeps `done`.
+ * the game's steps, then the hand taps the answer and `seen` runs. Nothing else is written; the bar
+ * keeps `done`.
  */
-function demo(game, spec, then, done = 0) {
+function demo(game, spec, then, done = 0, seen = () => {}) {
   const level = built(game, spec);
   // R9 (3.8): other numbers than the round it shows how to solve, and a plain round.
   const seed = demoSeedFor((s) => game.makeRound(level, rng(s)), spec.seed);
@@ -365,7 +370,9 @@ function demo(game, spec, then, done = 0) {
   (async () => {
     await r.view.demo?.(api);
     if (!r.signal.aborted) await api.tap(r.cards.buttons[r.answerAt]);
-    if (!r.signal.aborted) r.solve(r.answerAt);
+    if (r.signal.aborted) return;
+    r.solve(r.answerAt);
+    seen();
   })();
 }
 

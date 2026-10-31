@@ -171,7 +171,9 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   exercise row, another row (its sides in either order); on a level with `demo: true` it is also
   plain (`plainDemo`): no number of the answer is 0 or a number of the row.
 - **R9 [browser]:** first entry to a level with `demo: true` runs the demo, and no attempt is
-  logged for the demo round. Tapping the hand icon logs help.
+  logged for the demo round. Tapping the hand icon logs help. With the hand held half-way, a reload,
+  or home and then the next step, runs the demo again; `demoSeen` gets the level once the hand has
+  tapped the answer.
 - **R10 [browser]:** while a round waits, `document.getAnimations()` targets only elements with a
   quantity `data-role`. After `page.clock.runFor(60000)` no new element appears. No element
   outside `[data-demo]` has a computed `animation-delay` or `transition-delay` above about 0.3s.

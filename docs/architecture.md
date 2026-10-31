@@ -257,7 +257,8 @@ meaning (from the mount).
   comes from a derived seed (3.8), a plain round with other numbers than the round it shows how to solve; the cards
   stay locked; in `symbols` look the shell calls `view.picture()` at once, so the hand works on the help picture;
   the bar keeps the session's rounds done. `await view.demo?.(hand)`, then the hand taps the answer card and step 5
-  runs; "הַבָּא" leads to the real round. No attempt is written; the next one lists the demo in `demo`.
+  runs; "הַבָּא" leads to the real round. No attempt is written; the next one lists the demo in `demo`. An entry
+  demo counts as seen once the hand has tapped the answer (3.4).
 - It runs on entry to a level with `demo: true` as 3.4 says (never in a review round), and once at any level after a
   stuck return (3.7).
 - The hand button (always in the bar) aborts the round, runs a demo at its level, then mounts the same round again
@@ -480,8 +481,11 @@ lastSession }`; `demoDue` and `hold` are the level of a stuck return (3.7), or n
   Passing the `hold` level sets `hold` to null.
 - **Demo** (R9): a new round runs the demo first when its level has `demo: true`, is not in `demoSeen`, and was not
   just reached by a fast promotion. So the start level's demo runs (nothing is known yet), and after a fast climb
-  ends, the demo of the level where it ended runs when the child gets there again. A demo adds its level to
-  `demoSeen` when it starts.
+  ends, the demo of the level where it ended runs when the child gets there again. The entry demo adds its level
+  to `demoSeen` (and clears a `demoDue` of that level) once the hand has tapped the answer, not when it starts: a
+  reload, home or a closed tab in the middle of it brings it back on the next entry, as R9's watching round. Before
+  2026-10-31 it was added at the start, and a demo left half-way was lost for good; the hand button costs the child
+  the round's first try. Only the entry demo marks it; "show me how" does not.
 
 ### 3.5 Passed, review, mastered
 
@@ -578,7 +582,8 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   home always opens. The catch sees only a synchronous throw, so `render` draws a thumb before it returns (2.4): a
   rejection from a chain a thumb started would reach the error screen, and its home button would land on the same
   thumb again.
-- Written after each solved round, each demo start and each jump. Caps: 4000 attempts and 500 events, oldest first out; on a quota error drop the
+- Written after each solved round, each entry demo's start (the session count) and its tap on the answer
+  (`demoSeen`, 3.4), and each jump. Caps: 4000 attempts and 500 events, oldest first out; on a quota error drop the
   oldest half of the attempts and retry once. `navigator.storage.persist()` runs once per start.
 - An attempt (CLAUDE.md "ready to grow" 3, §5.11): `t`, `day`, `session`, `child`, `game`, `level`, `levelId`,
   `skill`, `seed`, `version`, `params` (the level as passed), `answer`, `kind`, `outcome` (`shown` if the tour ran;
@@ -804,16 +809,18 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - On fixture.html: home (next-step card, every game, no parents link while not `VERIFIED`); next step (empty store:
   first game, level 1; first skill passed: the next one); level kept after reload (one first try climbs to level 2,
   reload shows 2); review (a level passed yesterday opens with `data-kind="review"`); R9 (first entry to a demo level
-  shows `[data-demo]` and writes no attempt; the hand logs `how`); the double tap (3.2), on a paused clock so every
-  tap of a double tap has one time, on every project: on the right card with reduced motion ("הַבָּא" stays), on
-  "הַבָּא" in a session and in `#/dev` (the next round, unanswered: a later wrong tap is its only miss), at the
-  window's edge (a tap on "הַבָּא" and on the next round's card at 299 ms dropped, at 300 ms taken), and on the end
-  screen's home button (home stays); a broken stored record (3.9) opens home, plays the next step and logs one
-  `repair` event with what it lost; a next step that throws (shell/planner.js replaced by a Playwright route) leaves
-  home without its card, the games drawn, and `#/next` goes home; a game whose render throws (its module replaced
-  the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a game whose render
-  sorts the round's `choices` (replaced the same way) leaves its thumb `data-broken` and its round on the error screen,
-  the one test of the shell's own freeze (2.5: the contract loop freezes its own copy, and no game writes).
+  shows `[data-demo]` and writes no attempt; the hand logs `how`; the hand held half-way, a reload and home then the
+  next step each bring the demo back, and `demoSeen` gets the level once the hand has tapped the answer); the double
+  tap (3.2), on a paused clock so every tap of a double tap has one time, on every project: on the right card with
+  reduced motion ("הַבָּא" stays), on "הַבָּא" in a session and in `#/dev` (the next round, unanswered: a later wrong
+  tap is its only miss), at the window's edge (a tap on "הַבָּא" and on the next round's card at 299 ms dropped, at
+  300 ms taken), and on the end screen's home button (home stays); a broken stored record (3.9) opens home, plays the
+  next step and logs one `repair` event with what it lost; a next step that throws (shell/planner.js replaced by a
+  Playwright route) leaves home without its card, the games drawn, and `#/next` goes home; a game whose render throws
+  (its module replaced the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a
+  game whose render sorts the round's `choices` (replaced the same way) leaves its thumb `data-broken` and its round
+  on the error screen, the one test of the shell's own freeze (2.5: the contract loop freezes its own copy, and no
+  game writes).
 - On index.html, looping over the registry (every game: ten-frame, stories and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; home with every game's ladder at each level in turn draws every thumb
@@ -1076,6 +1083,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
 | The demo's round | A plain round with other numbers: another answer and, where both have a row, another row (either order); plain: no 0 in the answer and no answer the row shows; from the demo seed up by 1, 50 tries, else the first with other numbers (3.8, `demoSeedFor` in shell/planner.js). Checked by the generic test for every game at every level. Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "סיבוב ההדגמה") | R9 shows the action on one round and gives the child a round "with other numbers". The demo was dealt like any round: the hand tapped the round's own answer in up to a third of a level's demos, and an edge round (`10 + ? = 10`, a pair with 0) or a double (`2 + ? = 4`, read as given.part) was the worked example |
+| When an entry demo is seen | Once the hand has tapped the answer; the save at its start stays, for the session count (3.4, 3.9). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "הדגמה שנקטעה") | R9's watching round is the first round of a new structure; 3.3 drops a round the child leaves, and a demo left half-way was dropped too but counted as seen. The hand button brings it back only at a cost: the round becomes `help`, which ends the fast climb |
 | Stuck target | Held (`hold`): the rest of the session, then the next step, until the child passes the target level | §5.4: "the child plays it" and sees the demo again, also when the stuck round was a session's last |
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |

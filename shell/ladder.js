@@ -24,7 +24,7 @@ export const needsDemo = (state, level) =>
   state.demoDue === level.id ||
   (Boolean(level.demo) && !state.demoSeen.includes(level.id) && (state.fast === null || state.fast === level.id));
 
-/** @type {(state: Ladder, id: string) => Ladder} a demo adds its level to demoSeen when it starts */
+/** @type {(state: Ladder, id: string) => Ladder} an entry demo adds its level to demoSeen once the hand has tapped the answer */
 export const sawDemo = (state, id) => ({
   ...state,
   demoSeen: state.demoSeen.includes(id) ? state.demoSeen : [...state.demoSeen, id],

@@ -142,6 +142,50 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
 
+/**
+ * The middle of a demo: the hand held on its way to the answer, and let go (the page's clock does not move CSS
+ * motion, dev-spec R10).
+ */
+const holdHand = (page, hold = true) =>
+  page.locator('[data-hand]').evaluate((el, on) => el.getAnimations().forEach((a) => (on ? a.pause() : a.play())), hold);
+
+test('R9: a level\'s first demo is seen only once the hand has tapped the answer: a reload mid-demo brings it back', async ({ page }) => {
+  const demo = page.locator('main[data-screen="demo"]');
+  await open(page, `${FIXTURE}#/play/parts`);
+  await expect(demo).toHaveAttribute('data-level', '1');
+  await holdHand(page);
+  await page.reload();
+  await expect(demo).toHaveAttribute('data-level', '1');
+  await holdHand(page);
+  const { child } = await stored(page);
+  expect(child.sessions).toBe(2);
+  expect(child.games.parts.demoSeen).toEqual([]);
+  await holdHand(page, false);
+  await expect(demo).toHaveAttribute('data-solved', '');
+  expect((await stored(page)).child.games.parts.demoSeen).toEqual(['split-5']);
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
+});
+
+test('R9: leaving a level\'s first demo for home brings it back on the next step', async ({ page }) => {
+  const demo = page.locator('main[data-screen="demo"]');
+  await open(page, `${FIXTURE}#/next`);
+  await expect(demo).toHaveAttribute('data-level', '1');
+  await holdHand(page);
+  await look(page);
+  await page.locator('[data-home]').click();
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await look(page);
+  await page.locator('a.next-step').click();
+  await expect(demo).toHaveAttribute('data-level', '1');
+  await expect(demo).toHaveAttribute('data-solved', '');
+  const { child } = await stored(page);
+  expect(child.games.parts.demoSeen).toEqual(['split-5']);
+  expect(child.attempts).toEqual([]);
+});
+
 // The double-tap window (design 6.9, shell/taps.js): the shell drops a tap that comes within 300 ms
 // of a new screen or of "הַבָּא" appearing, by the events' timeStamps. The page's clock stamps the
 // events (page.clock fakes Event.timeStamp along with performance.now), so on a paused clock every
@@ -323,6 +367,8 @@ test('a broken stored record is mended on load: home opens, the next step plays,
   await look(page);
   await page.locator('a.next-step').click();
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '1');
+  // The demo's tap on the answer writes demoSeen (3.4).
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
   const { child } = await stored(page);
   expect(child.games).toEqual({ parts: { ...ladderAt('split-5'), hold: null } });
   expect(child.skills).toEqual({ 'num.parts.split': skillState({ last: YESTERDAY }) });
