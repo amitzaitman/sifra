@@ -20,14 +20,15 @@ const SEEDS = 10;
 const LOOP = 50;
 /**
  * Levels whose cover at rest has one size whatever is under it: the balance's pans (design 6.6, the
- * fixed dome). Elsewhere a cover in the picture covers the unknown's places (design 6.6), so its size
- * is the deduction the picture offers: the ten-frame, the balance's turning row (`set`, level 9,
- * 3 + 5 = 5 + ?) and the fixtures fail this clause by design. The owner's answer of 2026-10-18
- * (decisions.md, "המכסה במאזניים מגלה את התשובה") fixed the dome on the pans and left level 9's row
- * as it was.
+ * fixed dome) and the stories' covered change (level 3, design 6.10: the same dome, a square of 1.25u,
+ * the rows of the whole held from the mount, so it has the same pixels in every round). Elsewhere a
+ * cover in the picture covers the unknown's places (design 6.6), so its size is the deduction the
+ * picture offers: the ten-frame, the balance's turning row (`set`, level 9, 3 + 5 = 5 + ?) and the
+ * fixtures fail this clause by design. The owner's answer of 2026-10-18 (decisions.md, "המכסה במאזניים
+ * מגלה את התשובה") fixed the dome on the pans and left level 9's row as it was.
  * @type {(game: Game, level: Level) => boolean}
  */
-const fixedCover = (game, level) => game.meta.id === 'balance' && level.model === 'balance';
+const fixedCover = (game, level) => (game.meta.id === 'balance' && level.model === 'balance') || (game.meta.id === 'stories' && level.unknown === 'change');
 
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
 /** A tour can count twenty things, 150 ms each, with motion: the cards may stay locked a few seconds. */
@@ -178,7 +179,8 @@ for (const { path, games } of SITES) {
         // Two rounds with different answers show the same covers at rest: the cover's size never
         // tells what is under it (design 6.6, 6b76be4). Sizes are read in cubes, as the dome is two
         // cubes and their gap: a pan with more rows has smaller cubes, so its dome is a few pixels
-        // smaller too (51 against 53px on WebKit's iPhone 13), with the whole picture.
+        // smaller too (51 against 53px on WebKit's iPhone 13), with the whole picture. The stories have
+        // no cube, so their dome is read in pixels.
         const sizes = (covers) => covers.map((c) => c.split(' ').at(-1)).sort();
         for (const r of rest) {
           if (JSON.stringify(r.answer) === JSON.stringify(rest[0].answer)) continue;
