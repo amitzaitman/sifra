@@ -451,7 +451,9 @@ drawn with `mode: 'thumb'` once their host is in the page.
   the first live card, so focus never falls to the page (bug hunt #23).
 - A press and hold is a tap on the child's screens (app.css on `main`, all but the parents page, #/dev and the export):
   `-webkit-touch-callout: none` and `-webkit-user-select: none` (Safari 16.4 reads only the prefixed form), so iOS
-  shows no link menu or preview on a home card and selects no text in the equation or a card (bug hunt #17). A
+  shows no link menu or preview on a home card and selects no text in the equation or a card (bug hunt #17).
+  Android Chrome's link menu comes with the `contextmenu` event, which CSS cannot stop: `screen()` cancels it on
+  every child's screen (`noMenu`), all but the round's JSON on #/dev; the adults' screens keep it. A
   locked card (`[data-choices][data-locked]`: a display, a demo, the solve) does not sink under a press; one held
   until the lock ends sinks then and is taken on release (bug hunt #18).
 - main's one column is `minmax(0, 1fr)`, and the equation area and row have `min-width: 0`: a row wider than its box

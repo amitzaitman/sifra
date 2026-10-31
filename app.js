@@ -93,13 +93,24 @@ const control = (name, label, onclick, props = {}) =>
   h('button', { type: 'button', class: `ctl btn ctl-${name}`, 'data-control': true, 'aria-label': label, html: svg(name), onclick, ...props });
 const homeButton = (props = {}) => control('home', T.home, () => { location.hash = '#/'; }, { 'data-home': true, ...props });
 
+/** The adults' screens: they keep text selection and the browser's menu (app.css). */
+const ADULT = new Set(['parents', 'dev', 'export']);
+/**
+ * A press and hold on a child's screen opens no menu: Android Chrome's link menu on a home card comes with
+ * contextmenu (iOS's is app.css's touch-callout). The round's JSON on #/dev keeps it (bug hunt #17).
+ * @type {(e: Event) => void}
+ */
+const noMenu = (e) => {
+  if (!(e.target instanceof Element && e.target.closest('.dev-json'))) e.preventDefault();
+};
+
 /** Replaces the screen; aborts the previous one's listeners and round. */
 function screen(name, title, attrs = {}) {
   S.ctl?.abort();
   S.ctl = new AbortController();
   S.thumbs.length = 0;
   changed();
-  const main = h('main', { 'data-screen': name, ...attrs }, h('h1', { class: 'sr-only' }, title));
+  const main = h('main', { 'data-screen': name, oncontextmenu: ADULT.has(name) ? null : noMenu, ...attrs }, h('h1', { class: 'sr-only' }, title));
   document.title = title === T.brand ? title : `${title} · ${T.brand}`;
   S.root.replaceChildren(main);
   // Every screen opens at its top (3.2): a round, whose story plays at the top of the picture, never

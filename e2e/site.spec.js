@@ -471,6 +471,24 @@ test('a press and hold is a tap: no iOS link menu or text selection on the child
   expect(await select(page.locator('[data-dev]'))).toBe('text');
 });
 
+test('a press and hold opens no browser menu on the child\'s screens (Android Chrome\'s link menu is contextmenu); the parents page and #/dev keep it (bug hunt #17)', async ({ page }) => {
+  // Whether the page cancelled the contextmenu a long press fires, so the browser shows no menu.
+  const cancelled = (locator) => locator.evaluate((el) => !el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+  await open(page, `${INDEX}#/`);
+  await expect(page.locator('.next-step')).toBeVisible();
+  for (const sel of ['.next-step', '[data-card]', 'h2']) expect(await cancelled(page.locator(sel).first()), `home ${sel}`).toBe(true);
+  await page.evaluate(() => { location.hash = '#/dev/balance/2/5'; });
+  await expect(page.locator('[data-choices]')).toBeVisible();
+  for (const sel of ['.eq', '.card', '[data-area="picture"]']) expect(await cancelled(page.locator(sel).first()), `round ${sel}`).toBe(true);
+  expect(await cancelled(page.locator('.dev-json')), 'the round\'s JSON on #/dev').toBe(false);
+  await page.evaluate(() => { location.hash = '#/parents'; });
+  await expect(page.locator('main[data-screen="parents"]')).toBeVisible();
+  expect(await cancelled(page.locator('main[data-screen="parents"] a').first()), 'a parents link').toBe(false);
+  await page.evaluate(() => { location.hash = '#/dev'; });
+  await expect(page.locator('main[data-screen="dev"]')).toBeVisible();
+  expect(await cancelled(page.locator('main[data-screen="dev"] a').first()), 'a #/dev link').toBe(false);
+});
+
 test('a locked card does not sink under the finger; held until the lock ends, it sinks, and on release it is taken (design 6.5, bug hunt #18)', async ({ page }) => {
   await open(page, `${INDEX}#/dev/balance/2/5`);
   await look(page);
