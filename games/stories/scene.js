@@ -32,9 +32,12 @@ export const PX = {
 
 /**
  * Rubik 800 (design 4, 6.10; measured in Chromium): the tabular advance of a chip's digits (em), and
- * the ink of the proportional digits on objects at 14px (w, h): one digit at most, 10 and 11.
+ * the ink of the proportional digits on objects at 14px (w, h): one digit at most (4 the widest, 0
+ * and 8 the tallest), 10 and 11. pad: game.css's top padding (em) on chips and digits, which centres
+ * their ink in a box of line-height 1 at the 14px floor (0.2px off); the Node test takes the ink as
+ * centred, and the browser check reads it.
  */
-export const GLYPH = { advance: 0.68, ink: 0.72, ink14: { digit: [8.6, 10], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
+export const GLYPH = { advance: 0.68, ink: 0.72, pad: 0.12, ink14: { digit: [9.2, 10.1], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
 
 const px = (/** @type {number} */ b) => /** @type {Len} */ ([0, b]);
 const LINE = PX.track1 + PX.line;
@@ -238,8 +241,10 @@ export function planScene(round, state) {
     if (typeof item.place === 'number') last = Math.max(last, item.place);
   };
   const shape = pre && at < 1 ? pre : object;
+  // The morph's phase: each dot comes in from what it was (layoutScene's morph).
+  const morph = pre && st.phase === 'event:M' ? pre : null;
   /** @type {(p: number, role: string, more?: Record<string, any>) => void} */
-  const obj = (p, role, more = {}) => put({ id: `${shape === object ? 'obj' : 'pre'}-${p}`, kind: 'object', place: p, role, shape, ...more });
+  const obj = (p, role, more = {}) => put({ id: `${shape === object ? 'obj' : 'pre'}-${p}`, kind: 'object', place: p, role, shape, ...(morph ? { morph } : {}), ...more });
   /** @type {(p: number, dash?: boolean) => void} */
   const ring = (p, dash = false) => put({ id: `ring-${p}`, kind: 'ring', place: p, dash });
   /** @type {(p: number) => void} a dashed empty place */
@@ -423,8 +428,14 @@ export function layoutScene(plan, set) {
       const b = item.shape === 'balloon' ? { ...disc(place, 'balloon'), h: /** @type {Len} */ ([0.98, 0]) } : disc(place, item.shape);
       const m = mark(id, 'object', 'objects', b, { place, role: item.role, shape: item.shape, second: Boolean(item.second) });
       if (item.enter) m.from = enter(b);
+      // A dot that was a balloon or a ball starts on that disc: the offset of its middle and its size
+      // there (both discs are units only, so the ratio holds at every u).
+      if (item.morph) {
+        const was = disc(place, item.morph);
+        m.morph = { dy: sub(add(was.y, mul(was.w, 0.5)), add(b.y, mul(b.h, 0.5))), k: was.w[0] / b.w[0] };
+      }
     } else if (item.kind === 'outline') mark(id, 'outline', 'places', disc(place), { place, role: 'removed', hollow: true, faded: item.faded });
-    else if (item.kind === 'ghost') mark(id, 'ghost', 'places', item.inset ? grow(disc(place), mul(set.line, -1)) : disc(place), { place });
+    else if (item.kind === 'ghost') mark(id, 'ghost', 'places', item.inset ? grow(disc(place), mul(set.line, -1)) : disc(place), { place, inset: Boolean(item.inset) });
     else if (item.kind === 'place') mark(id, 'place', 'places', disc(place), { place });
     else if (item.kind === 'ring') mark(id, 'ring', 'lines', grow(disc(place), add(set.ringGap, set.line)), { place, dash: item.dash, line: set.line });
     else if (item.kind === 'digit') mark(id, 'digit', 'digits', disc(place), { place, text: item.text, tone: item.tone, grow: item.grow, font: set.font });

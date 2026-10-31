@@ -486,6 +486,30 @@ test('an event: arrivals slide in from the right, leavers fly up or pop, the fix
   assert.equal(layoutScene(planScene(roundOf('add-change', 4, 3), 'event:B2'), ROUND).marks.find((m) => m.id === 'lid').mark, '?');
 });
 
+test('the morph (levels 2, 5, 7): each dot starts on the disc of what it was, its middle and size, at every u; no other phase has it', () => {
+  for (const id of ['add-10', 'take-10', 'whole-10']) {
+    const round = stories.makeRound(level(id), rng(3));
+    assert.deepEqual(phasesOf(round).slice(0, 2), ['event:0', 'event:M'], id);
+    const before = layoutScene(planScene(round, 'event:0'), ROUND).marks.filter((m) => m.kind === 'object');
+    const M = layoutScene(planScene(round, 'event:M'), ROUND).marks.filter((m) => m.kind === 'object');
+    assert.equal(M.length, before.length, id);
+    for (const dot of M) {
+      const was = before.find((m) => m.place === dot.place);
+      assert.ok(dot.morph && dot.shape === 'dot' && was.shape !== 'dot', `${id} ${dot.id}`);
+      // A balloon's disc is its width square at the top of its box (its string hangs below it).
+      for (const u of [ROUND.font.min, 32, 64]) {
+        const D = len(was.box.w, u);
+        assert.ok(Math.abs(len(dot.box.w, u) * dot.morph.k - D) < 1e-9, `${id} ${dot.id} size at ${u}`);
+        assert.ok(Math.abs(len(dot.box.y, u) + len(dot.box.h, u) / 2 + len(dot.morph.dy, u) - (len(was.box.y, u) + D / 2)) < 1e-9, `${id} ${dot.id} middle at ${u}`);
+        assert.ok(Math.abs(len(dot.box.x, u) + len(dot.box.w, u) / 2 - (len(was.box.x, u) + D / 2)) < 1e-9, `${id} ${dot.id} column at ${u}`);
+      }
+    }
+    for (const phase of phasesOf(round).filter((p) => p !== 'event:M')) {
+      assert.ok(layoutScene(planScene(round, phase), ROUND).marks.every((m) => !m.morph), `${id} ${phase}`);
+    }
+  }
+});
+
 // ---------- Tokens (design 3, 4, 6.6, 6.10) ----------
 
 test('tokens: the layout\'s pixels are app.css\'s and design.md\'s', () => {

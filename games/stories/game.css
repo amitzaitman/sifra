@@ -3,6 +3,7 @@
    and strokes and fonts as such pairs on the drawing (--lu --lp the line, --tu --tp a thin edge,
    --su --sp a string, --cfu --cfp a chip's font). No geometry property here holds a literal length
    but a 1px that multiplies a variable (tests/code.test.js): a number that fails changes in scene.js.
+   One named exception: chips and digits pad their top by GLYPH.pad em, which centres the ink.
    The unit is solved here from the stage, the ten-frame's pattern; a display that adds rows changes
    --dhu and --dhp, which transition, so every mark slides as the unit shrinks. */
 @property --dhu { syntax: '<number>'; inherits: true; initial-value: 1; }
@@ -63,6 +64,9 @@
 [data-game="stories"] .st-ghost {
   border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost);
 }
+/* A ghost inside the outline of one that left is smaller by the line on each side: a thin edge keeps
+   its fill legible in a four-row display on a landscape phone (about 10px across there). */
+[data-game="stories"] .st-ghost[data-inset] { border-width: calc(var(--tu) * var(--u) + var(--tp) * 1px); }
 [data-game="stories"] .st-place {
   border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--surface);
 }
@@ -134,6 +138,7 @@
 [data-game="stories"] [data-anim="in"] { animation: stories-in var(--t-move) var(--ease) backwards; }
 [data-game="stories"] [data-anim="out"] { animation: stories-out var(--t-move) var(--ease) forwards; }
 [data-game="stories"] [data-anim="from"] { animation: stories-from var(--t-move) var(--ease) backwards; }
+[data-game="stories"] [data-anim="morph"] { animation: stories-morph var(--t-move) var(--ease) backwards; }
 [data-game="stories"] [data-anim="fly"] { animation: stories-fly var(--t-move) ease-in forwards; }
 [data-game="stories"] [data-anim="pop"] { animation: stories-pop var(--t-move) var(--ease) forwards; }
 [data-game="stories"] [data-anim="drop"] { animation: stories-drop var(--t-move) var(--ease) backwards; }
@@ -152,6 +157,8 @@
 @keyframes stories-fly {
   to { transform: translate(calc(var(--txu) * var(--u) + var(--txp) * 1px + var(--tsx) * 100cqw), calc(var(--tyu) * var(--u) + var(--typ) * 1px + var(--tsy) * 100cqh)); }
 }
+/* The morph: a dot starts on its balloon's disc, the same size and colour, so it never fades as it grows. */
+@keyframes stories-morph { from { transform: translateY(calc(var(--myu) * var(--u) + var(--myp) * 1px)) scale(var(--mk)); } }
 /* A pop grows a quarter and fades, no burst shapes (design 6.10). */
 @keyframes stories-pop { to { opacity: 0; transform: scale(1.25); } }
 @keyframes stories-drop { from { opacity: 0; transform: translateY(-60%); } }

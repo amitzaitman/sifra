@@ -168,6 +168,11 @@ function paint(el, m, byId) {
     el.style.setProperty(`--${key}sx`, num(off.stage[0]));
     el.style.setProperty(`--${key}sy`, num(off.stage[1]));
   }
+  // A dot that comes in from its balloon's or ball's disc (the morph): that disc's middle and size.
+  if (m.morph) {
+    setLen(el, 'my', m.morph.dy);
+    el.style.setProperty('--mk', num(m.morph.k));
+  }
   if (m.kind === 'object' || m.kind === 'outline') {
     set('role', m.role);
     set('shape', m.kind === 'object' ? m.shape : null);
@@ -175,6 +180,7 @@ function paint(el, m, byId) {
     set('faded', Boolean(m.faded));
     set('leaving', m.leaving ?? null);
   } else if (m.kind === 'ring') set('dash', Boolean(m.dash));
+  else if (m.kind === 'ghost') set('inset', Boolean(m.inset));
   else if (m.kind === 'line') {
     set('tone', m.role);
     set('group', m.group);
@@ -312,6 +318,10 @@ export function renderScene(host, round, ctx) {
       if (changed.has('mark') && m.mark) play(el, 'q');
     }
     if (how === 'event') {
+      // The morph (levels 2, 5, 7; design 6.10): each dot starts on its balloon's disc and slides down
+      // and grows to its place while the balloon fades, so nothing grows as it goes (a pop does). A
+      // ball is a dot's size already: the two cross-fade, so its seam fades too.
+      for (const p of added.filter((q) => q.m.morph && (q.m.morph.k !== 1 || q.m.morph.dy.some(Boolean)))) play(p.el, 'morph');
       // Arrivals slide in, leavers fly up or pop, in place order; each leaver's outline fades in as it goes.
       const arrivals = added.filter((p) => p.m.kind === 'object' && p.m.from).sort(byPlace);
       arrivals.forEach((p, j) => play(p.el, 'from', stagger(j, arrivals.length)));
@@ -323,7 +333,8 @@ export function renderScene(host, round, ctx) {
       });
     } else if (how === 'display') {
       // Ghosts and the dashed rings fill in order; digits are written one by one; what the value
-      // does not reach, or passes, blinks once and keeps its ring after them (design 7.1, 7.3).
+      // does not reach, or passes, blinks once and keeps its ring at 250 ms, and not before the last
+      // ghost or digit starts, so a ring never comes before its ghost (0.3 s at most, R10; design 7.1, 7.3).
       const fill = added.filter((p) => p.m.kind === 'ghost' || (p.m.kind === 'ring' && p.m.dash)).sort(byPlace);
       fill.forEach((p, j) => play(p.el, 'in', stagger(j, fill.length)));
       const digits = added.filter((p) => p.m.kind === 'digit');
@@ -335,7 +346,8 @@ export function renderScene(host, round, ctx) {
         const from = Number(p.m.id.split('-')[1]);
         play(p.el, 'in', at.get(kind === 'take' ? from : from + 1) ?? 0);
       }
-      const late = fill.length || digits.length ? 250 : 0;
+      const last = Math.max(stagger(fill.length - 1, fill.length), stagger(digits.length - 1, digits.length, 120));
+      const late = fill.length || digits.length ? Math.min(300, Math.max(250, last)) : 0;
       for (const p of added.filter((q) => q.m.kind === 'ring' && !q.m.dash)) {
         play(p.el, 'ring', late);
         // The object or outline under it blinks; a ghost there is what the value adds.
