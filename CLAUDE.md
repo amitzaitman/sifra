@@ -4,19 +4,20 @@ Math games for Israeli elementary-school children, in Hebrew, for phones and tab
 Grades 1-2 first, growing game by game to grade 6. Static site on GitHub Pages: no
 server, no build step, no audio.
 
-Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, two games (`ten-frame`,
-`balance`), the tests and CI. CI puts every merge to main on GitHub Pages; a game goes live (its link is shared
-with children) only after the owner's iPhone check there is logged in `docs/device-checks.md`.
+Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, three games (`ten-frame`,
+`balance`, and since 2026-10-30 `stories`, pedagogy §6.4), the tests and CI. CI puts every merge to main on GitHub
+Pages; a game goes live (its link is shared with children) only after the owner's iPhone check there is logged in
+`docs/device-checks.md`.
 
 ## Where things are
 
 - `docs/decisions.md`: the owner's decisions and why (Hebrew). Don't reverse one without asking.
 - `docs/architecture.md`: the engineering contract (for agents): files, the game module contract, the shell, tests and CI, and the gaps in the docs with the choice made and the owner's open questions.
 - The pedagogy doc is split by section; section numbers (§) are the same in every file:
-  - `docs/pedagogy.md` (§1, §5-§8): scope and evidence labels, how a silent app teaches (§5 is also the shell's spec), the first two games and their level tables (§6), what not to build on, and §8: the owner's decisions (§8.1), what to check in sources and with a child (§8.2-§8.4), design defaults (§8.5). It starts with an index of all the files.
+  - `docs/pedagogy.md` (§1, §5-§8): scope and evidence labels, how a silent app teaches (§5 is also the shell's spec), the games and their level tables (§6), what not to build on, and §8: the owner's decisions (§8.1), what to check in sources and with a child (§8.2-§8.4), design defaults (§8.5). It starts with an index of all the files.
   - `docs/rules.md` (§2): the eleven binding rules R1-R11 and how each is checked.
   - `docs/map.md` (§3): the grade 1-6 map. Aharoni and the Singapore series ("מתמטיקה יסודית") decide order, notation and teaching; the Ministry curriculum is secondary; §3.6 lists where the order differs from school.
-  - `docs/depth/README.md` (§4, §4.1) shared conventions; `docs/depth/errors.md` (§4.2) the error-rule catalogue; one `docs/depth/<strand>.md` per strand (§4.3-§4.14). A game needs rules.md, §4.1, errors.md, the strand file of every skill its levels name, skills.md, dev-spec.md and design.md; ten-frame and balance also need §6 in pedagogy.md, and the shell needs §5.
+  - `docs/depth/README.md` (§4, §4.1) shared conventions; `docs/depth/errors.md` (§4.2) the error-rule catalogue; one `docs/depth/<strand>.md` per strand (§4.3-§4.14). A game needs rules.md, §4.1, errors.md, the strand file of every skill its levels name, skills.md, dev-spec.md and design.md; each game also needs its §6 subsection in pedagogy.md (ten-frame §6.2, balance §6.3, stories §6.4), and the shell needs §5.
   - `docs/sources.md` (§9): sources and what was checked. `docs/dev-spec.md` (Appendix A): generator output and how each check is implemented.
 - `docs/design.md`: the visual design spec (Hebrew, own section numbers): the chosen direction, the tokens (colours with their roles and contrast, sizes, type, motion) with the `app.css` block, the components (home page, top bar, answer cards, the `?` cover, ten-frame, balance), how each result display and help step is drawn, accessibility checks, and the owner's design decisions (§11).
 - `docs/parents-videos.md`: Aharoni's videos per topic for the parents' page. Links unverified until checked.

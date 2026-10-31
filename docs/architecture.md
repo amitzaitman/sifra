@@ -10,6 +10,9 @@ figure that says why a choice was made, as it was measured then, stays. Read wit
 §6, [skills.md](skills.md), [depth/README.md](depth/README.md) (§4.1), [depth/errors.md](depth/errors.md) (§4.2).
 Game 3, `stories` (pedagogy §6.4, design §6.10), is built against the same contract, docs first (decisions.md,
 2026-10-30): what it adds to the shell, lib/ and the tests is marked "game 3" below, and its rows are in section 6.
+It is built (2026-10-30): its game folder, its registry line and rounds lock, tests/stories.test.js and
+e2e/stories.spec.js (4.9). Like the other two, it goes live only after the owner's iPhone check (section 6, "When a
+game goes live").
 
 ## 1. Files
 
@@ -51,6 +54,7 @@ start.js              static server from AlefBet: node start.js [port]; fails if
 tests/                node:test (section 4), with three fixture games in tests/fixtures/ and rounds.lock.json (4.1);
                       game 3 adds stories.test.js (4.1)
 e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js (4.8), <id>.spec.js per game
+                      (ten-frame, balance, stories: 4.7; the stories' calibration, glyphs and event: 4.9)
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
 ```
 
@@ -835,7 +839,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   the digits) fails the loop's topmost clause on the ten-frame's pair cards.
 - About 3.3 minutes on Chromium with two workers; the balance's loop is half of it.
 
-### 4.9 Game 3's tests (to come with its code)
+### 4.9 Game 3's tests (built 2026-10-30)
 
 - `tests/stories.test.js` (node:test, under 10 s): R6 [unit] (places fill left to right, top row first, in rows of
   five; the start first, arrivals after it, leavers last; the result and whole runs from place 0; `data-second` only
@@ -879,15 +883,40 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   hold the first route; with reduced motion the row is whole at once, and home's story thumb draws (its render calls
   `build`); and `buildEquation` in the page: by index, `[]` hides every token, `null` shows them all and clears
   `aria-busy`, an index that is no token throws and changes nothing. The contract spec (4.8) runs the fixture too.
-- `e2e/stories.spec.js` (4.7, both engines): at 320×568, 568×320 and 390×844 the browser's `--u` within 0.25px of
-  Node's, and a place, a dome, a wrap, a chip, a tour digit and a ghost within 1px of the layout, at rest, in a
-  4-row overflow and solved; after every step the text rects of digits and chips inside their discs and chips, the
-  ink of `10` and `11` (the element's pixels) inside its disc 1px clear at the floor u (it covers `GLYPH.pad`), and
-  `elementFromPoint` on each digit, chip, dome and cover `?`; the event: tokens appear in story order and the
-  equation's box never moves, a tap during it is taken and finishes it, reduced motion shows the end at once; R6
-  [browser] (an arrival in `--role-added`, a leaver's outline a `--role-removed` stroke, a `[data-second]` ball in
-  `--role-part-2`); and 4.7's list (first try, three misses, the 3-option levels, every demo, a session to the end
-  screen). site.spec.js and contract.spec.js cover the rest through the registry.
+- `e2e/stories.spec.js` (4.7, both engines; about 45 s on Chromium with two workers), through the real shell:
+  - Calibration, at 320×568, 568×320 and 390×844 with reduced motion, on `10 − 9 = ?` (level 5): the browser's
+    `--u` (a probe `width: var(--u)` in the drawing) within 0.25px of `unitFor` at the panel's content box (design
+    §5's clamps), and every mark's node (`data-id`) within 1px of `layoutScene` at that unit, every mark drawn and
+    nothing drawn that the layout lacks, at rest, in `op.other`'s 4-row overflow (19), at the tour and solved; so a
+    place, the dome, the wrap, a ghost, the tour's digit and the answer's chip among them. A balloon's node is its
+    disc (game.css), and a node that grows (the tour's last digit) is compared by its middle.
+  - Glyphs, at 568×320 (the digits' floor: 9 + 1's count-up of 11 in the basket at u 22.3px; 6 + ? = 10's jumps,
+    chips, fixed dome and stretched cover; 6 − 3's jumps back), after the rest, each miss and the solve: each digit's
+    and chip's text (its Range rect) inside its own box by 0.5px; each digit, chip, dome and cover `?` topmost at its
+    middle (a stretched cover's `?` on its first place), by `elementFromPoint` with every painted node taking hits;
+    and the ink of each two-digit number and of the tour's grown last digit, read from the page's pixels (the digit
+    alone, black on white, in a screenshot of its disc and 8px round it), inside its disc as a rectangle in a circle
+    with its corners 1px clear. A Range rect is the font's content box (about 1.2em), not its ink: at the floor
+    the corners of `10`'s rect leave the 22.3px disc by 0.7px while its ink keeps 1.5px from the edge, so the circle
+    reads pixels and the Range rect only the box.
+  - The event, held at each phase (its animations start paused, a test finishes them, as for the story fixture,
+    4.9 above) on a round of each kind (add to 5; level 3 reversed, the row growing from its right; take to 10
+    reversed with its morph; the basket's morph; the mixed take): at each phase the row shows `builtAt`'s tokens,
+    the start's number from the first, a token once shown stays, `aria-busy` while one is hidden, the row and every
+    token keep their boxes, and the exercise's `?` only once the picture has its own. The still first phase, and a
+    last one where nothing enters (the basket's rest), end at once and cannot be held; every phase that builds a
+    token is. A wrong tap during the event finishes it and gets its display, logged as a miss; a right one solves on
+    a first try; with reduced motion the end at once and a tap taken right after a miss.
+  - R6 [browser]: the start yellow in add and take (and the mixed take), an arrival `--role-added` with a solid
+    `--role-added-edge` edge, a leaver's outline a solid `--role-removed` border with no fill, the basket's second
+    part `--role-part-2` with the part edge, level 3's unknown magenta once solved, and `expectRoleColours` on each.
+    No unknown is drawn hollow: that was take-change's, deferred (pedagogy §6.4), so `expectRoleColours` learns no
+    `[data-hollow]`.
+  - 4.7's list: a first try (levels 2, 3 and 8: the answer's chip or the revealed unknown in magenta, the full
+    exercise, "הַבָּא" focused, R7, `expectCalm`), three misses on levels 3, 5 and 8 (a display that stays a minute,
+    the hint, the tour ending on the answer, outcome `shown`), the three 3-option levels (dots on the cards, hint
+    then tour), every demo level, and a session to the end screen. site.spec.js and contract.spec.js cover the rest
+    through the registry.
 
 ## 5. npm, tsconfig and CI
 
@@ -991,6 +1020,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | Stories' code (step 4a) | game.js exports, besides the contract (2.1), `poolOf(level)` (every story of a level in one order: makeRound picks one with its rng, the tests deal them all) and `labelOf(round)` (the picture's aria-label, for view.js). The rules read the round's story, `{ s, k, r, verb }` (the basket's parts are s and k, its whole r; verb `arrive`, `fly`, `pop` or `none`), and its stage is the level's variant (`{ morph: true }` on levels 2, 5 and 7). `op.swapped-subtraction` has no formula: it is the start unknown's, which v1 does not deal. `choose` throws where a story would deal no full set of cards; the tests deal every story of every pool. scene.js: `planScene(round, state)` returns `{ kind, s, k, r, n, rows, object, items, leaving }`, a state being a phase (`event:0`, `event:M`, `event:B`, `event:B2`, `rest`), `hint`, `solved`, or `{ display, rule, value, hint, tour, solved }`; `layoutScene(plan, ROUND or THUMB)` returns `{ dw, dh, n, rows, marks }`, each mark `{ id, kind, layer, box }` and its own fields, its id the same in every state; arrivals and the fixed dome (and its halo, by the same offset) carry `from`, take's leavers at `event:B` carry `leaving` and `to` (`null` for a pop), each an offset `{ x, y, stage }` (2.8). Also `phasesOf`, `builtAt` (ctx.build's indices per phase), `rowsFor`, `lidAt`, `outline` and `unitFor`. Built 2026-10-30, an engineering choice the owner may reverse | One plan per state, read alike by the view, the budget and the tests; an id that stays across states lets a mark slide, and lets the test compare an event's end with rest. A pool picked once, not numbers drawn and retried, keeps every story's share exact |
 | The stories' generic checks before the registry line | Until step 4c adds the stories to games/registry.js (with the rounds lock), tests/stories.test.js imports `checkGame`, `checkRound`, `checkDeal` and `checkUndrawn` from tests/games.test.js and runs them on the game; the import also reruns games.test.js's own tests in that process, about 3 s. It goes with the registry line. Built 2026-10-30; gone with the registry line (step 4c, 2026-10-30): tests/games.test.js runs the stories from games/registry.js, and tests/rounds.lock.json locks them at version 1 | The build plan adds the registry line after view.js; the game should meet the generic test before then |
 | The stories' view (step 4b) | view.js exports `DISPLAYS` (game.js's `displays`: its table, and miss throws on any other id before the picture changes), `drawScene(host, { layout, set, cover })` and `renderScene(host, round, ctx)`; game.js's `render` adds `labelOf`'s label. drawScene (condition 6: host and data only, role tokens only) draws into the host a stage (absolute over the host, `padding: inherit`, so its content box is the panel's or the thumb's; a size container, `dir="ltr"`, `data-math`), the drawing centred in it (`.st-draw`, `--u` solved in CSS from `--dwu --dwp --dhu --dhp`; the line, a thin edge of two thirds of it, a string of half of it and the fonts as pairs), ten layers in design 6.10's order, and a span per mark with `data-id` and its box as variables. Called again with another layout of the round, it keeps each mark's node while its id stays and returns the added nodes, the kept ones (with the attributes that changed) and the gone ones, still in the page. A `qmark` has no node: the '?' is its cover's own mark (app.css), and on the stretched cover it is moved to the first place. Chips and digits are kept in reading order in their layers (R7: the top line first, left to right). The view applies one state at a time (a phase, a display, the hint, a tour step, the closing): `[data-event]` (the phase), `[data-display]` (its id) and `[data-hint]` on `.st-draw`, `data-tour` on each tour digit, the motion as `data-anim`; a reset (the previous display, a tap during the event) at once, and every state at once with reduced motion and in thumbs. `miss` and `solve` call `finishEvent` (every animation finished, the rest state at once, `[data-event]` gone, `build(null)`, the targets set); the demo awaits the event (2.4). The basket without the morph (level 6) has no event: nothing moves, so no `[data-event]`. The morph (levels 2, 5, 7): layoutScene gives each dot of the phase `event:M` a `morph` (`{ dy, k }`: its middle's offset from the disc of the balloon or ball it was, and their size ratio, both discs in units only), and the dot comes in from that disc (`data-anim="morph"`, a transform) while the balloon fades, so nothing fades as it grows (a ball and its dot, the same disc, cross-fade) (tests/stories.test.js checks the start at every u). A ghost inside an outline carries `data-inset` and has the thin edge. The answer chip and level 3's revealed unknown come with the closing's state (the shell sets `data-solved` before `solve`; a solved thumb draws that state). Arcs are dashed CSS borders of half an ellipse, not an SVG. Built 2026-10-30, an engineering choice the owner may reverse (decisions.md, "הציור של סיפור זז ממצב למצב") | One drawing for every state, and every position from the layout the Node test solved. A node that stays can blink, fade, grey or keep a touch dot from one state to the next. R7's browser test reads the characters in DOM order, and the whole's chip changes line when the dome lifts. A chip drawn from the start would need a box in every state, and the layout gives one only in the solved state |
+| The stories' browser tests (step 4c) | e2e/stories.spec.js (4.9). The calibration compares every mark's node with the layout (1px), not only the six the plan named, and `--u` with `unitFor` at the panel's content box (0.25px). The glyph check reads a Range rect only against the element's own box; the circle is checked against the ink read from the page's pixels (each two-digit number and the tour's grown last digit, alone, black on white, at the digits' floor). The event is held phase by phase; a phase with nothing that moves (the still first one, the basket's rest) is not held, and every phase that builds a token is. No hollow-unknown case: take-change is deferred, and with it the only unknown drawn hollow. The spec picks its rounds by story in Node (`makeRound` over seeds), so a pool change moves a seed, not a test. Built 2026-10-30, an engineering choice the owner may reverse (decisions.md, "הבדיקה בדפדפן של סיפורים") | Every mark catches a mark that moved where six chosen ones would not. A Range rect is the font's content box (about 1.2em), not its ink: at the floor the corners of `10`'s rect leave its 22.3px disc by 0.7px while its ink keeps 1.5px from the edge, so a circle test on the rect would fail a right picture. A phase with no animation ends in the task it starts in, so no test can stop it there, and the child sees it only as the first frame of the next |
 
 ### Open questions for the owner
 
