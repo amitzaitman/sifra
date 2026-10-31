@@ -216,7 +216,11 @@ dev-spec A.1 is the shape, with these precisions:
 //   label                                 optional aria-label of the picture, from a locked template; a getter where
 //                                         the picture changes: the shell reads it at the mount, at picture(), after
 //                                         solve(), in setEquation and on ctx.relabel(). Solved, it names no cover and
-//                                         no empty pan or place, and the unknown by its count (bug hunt #24)
+//                                         no empty pan or place, and the unknown by its count (bug hunt #24).
+//                                         Help leaves it as at rest: the shell reads none after miss(), and it
+//                                         names the rest picture also where the hint lifts a cover for good
+//                                         (ten-frame levels 1, 2, 6, 7; the tour at 9) or regroups the balance's
+//                                         cubes (level 11). Level 10's moves change it, the tour's too
 ```
 
 A picture that tells a story before its `?` (game 3, design 6.10) runs its event from the mount, under `[data-event]`,
@@ -1044,7 +1048,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   topmost: the hint's ring runs along it in the same colour (the balance, design 6.6). The view's `label`, at rest,
   solved and in each thumb: a one-letter word (וְ, בְּ) takes a hyphen only before a digit (וְ-3, but וְעִגּוּל אֶחָד), and
   solved it says no cover and nothing empty, over all 50 seeds (the shell's path reads 10; the re-check of bug hunt
-  #24 found the solved split and the moved frames saying וְ-עִגּוּל אֶחָד, 2026-10-31).
+  #24 found the solved split and the moved frames saying וְ-עִגּוּל אֶחָד, 2026-10-31). After each miss the label is
+  the one at rest unless `setEquation` rewrote the row (level 10's tour); the shell's path checks the panel's
+  aria-label the same way while the equation row reads as at rest (help changes no label, 2.4; decisions.md, row
+  "תיאור התמונה אחרי הפתרון").
 - The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
   included (a `round.choices.sort()` in a render fails every clause; the shell's own freeze is site.spec.js's,
   4.6). Reverting 4781e24 (a ghost appended after

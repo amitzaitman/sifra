@@ -99,7 +99,8 @@ async function openRound(page, hash) {
 
 /**
  * The shell's path through one round (2.5): in symbols look the panel holds only the picture
- * button until it is tapped; each wrong card in order, the cards unlocked after each; the first
+ * button until it is tapped; each wrong card in order, the cards unlocked after each, and the
+ * label as at rest while the equation row is (help changes none, 2.4); the first
  * miss shows its rule's display, from step 2 a hint, at step 3 the last tour digit is the answer;
  * then the answer, after which no cover is shown and "הַבָּא" is there. In symbols look, the same
  * round again, solved on the first tap: the picture asked for after the solve shows no cover either.
@@ -118,11 +119,17 @@ async function shellPath(page, hash, game) {
     await page.locator('[data-show-picture]').click();
   }
   const covers = await shownCovers(page, 'main[data-screen="round"] [data-area="picture"]', '.bl-cube:not(.bl-ghost)');
+  // Help changes no label: it describes the exercise's picture until the row is rewritten or the round solved (2.4).
+  const row = page.locator('main[data-screen="round"] [data-area="equation"]');
+  const rest = { label: await panel.getAttribute('aria-label'), row: await row.textContent() };
   const wrong = round.choices.flatMap((c, i) => (c.rule ? [i] : []));
   for (const [m, i] of wrong.entries()) {
     const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
     await card(page, i).click();
     await unlocked(page);
+    if (await row.textContent() === rest.row) {
+      expect(await panel.getAttribute('aria-label'), where(`the label after miss ${m + 1} (step ${step}) is the one at rest`)).toBe(rest.label);
+    }
     if (m === 0) {
       // Only the first miss: with reduced motion the balance skips a later display (design 7.2), and
       // the stories' level 3 one that comes back (passing).
@@ -226,7 +233,8 @@ for (const { path, games } of SITES) {
  * and inside the host, and no inline style holds NaN; after a solve no cover is shown; in the panel,
  * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
  * is topmost (architecture 4.8); the view's label, at rest and solved, puts a hyphen after a one-letter word only
- * before a digit, and solved says no cover and nothing empty (design 6.3). Returns what went wrong, the first 40 or so.
+ * before a digit, and solved says no cover and nothing empty (design 6.3); after a miss it is the one at rest,
+ * unless setEquation rewrote the row (help changes no label, 2.4). Returns what went wrong, the first 40 or so.
  * @param {{ url: string, levels: Level[], seeds: number }} arg
  * @returns {Promise<string[]>}
  */
@@ -320,10 +328,11 @@ async function loop({ url, levels, seeds }) {
     root.removeAttribute('data-contract-hit');
     for (const n of misses) n.removeAttribute('data-contract-miss');
   };
+  let rewritten = false;   // setEquation was called: the exercise's row changed
   /** @type {(into: HTMLElement, round: Round, mode: string, solved: boolean, signal: AbortSignal) => any} */
   const render = (into, round, mode, solved, signal) => {
     into.replaceChildren();
-    return game.render(into, round, { signal, mode, solved, setEquation() {}, build() {}, onAttempt() {} }) ?? {};
+    return game.render(into, round, { signal, mode, solved, setEquation() { rewritten = true; }, build() {}, relabel() {}, onAttempt() {} }) ?? {};
   };
   // The picture's label (design 6.3): a one-letter word (וְ, בְּ) joins the word after it and takes a hyphen only
   // before a digit (וְ-3, וְעִגּוּל אֶחָד); solved, it names no cover and nothing empty (bug hunt #24).
@@ -350,11 +359,15 @@ async function loop({ url, levels, seeds }) {
         await drive(null);
         check(host, `${at} at rest`, { solved: false, top: true });
         written(view, `${at} at rest`, false);
+        // Help changes no label (2.4): a hint that lifts a cover for good or regroups cubes leaves it as at rest.
+        const rest = view?.label;
+        rewritten = false;
         const wrong = round.choices.filter((c) => c.rule);
         for (const [m, { value, rule }] of wrong.entries()) {
           const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
           await drive(view.miss?.({ value, rule, display: RULES[rule].display, step, first: m === 0 }));
           check(host, `${at} miss ${m + 1} (${rule}, step ${step})`, { solved: false, top: true });
+          if (!rewritten && view?.label !== rest) out.push(`${at} miss ${m + 1} (step ${step}): label "${view?.label}", at rest "${rest}"`);
           if (step === 3) break;
         }
         await drive(view.solve?.());
