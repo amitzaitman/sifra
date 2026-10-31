@@ -677,8 +677,6 @@ for (const id of ['add-change', 'take-10', 'mixed-10']) {
     await unlocked(page);
     await expect(page.locator('button[data-index]:not(.is-retired)')).toHaveCount(1);
     await expect(card(page, answerAt)).toHaveClass(/is-shown/);
-    // The shown card's ring comes in with the button's own 100 ms transition (app.css .btn).
-    await card(page, answerAt).evaluate((b) => Promise.all(b.getAnimations().map((a) => a.finished)));
     await expect(page.locator('[data-tour]')).toHaveText(tourOf(round));
     expect(await placed({ hint: true, tour: tourOf(round).length })).toEqual([]);
     await expectMathLeftToRight(page);
