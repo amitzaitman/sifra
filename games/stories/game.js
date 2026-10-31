@@ -4,10 +4,10 @@
 import { RULES } from '../../data/errors.js';
 import { SKILLS } from '../../data/skills.js';
 import { pickWeighted } from '../../lib/weights.js';
-import { lidAt, rowsFor } from './scene.js';
+import { lidAt, planScene, rowsFor } from './scene.js';
 import { DISPLAYS, renderScene } from './view.js';
 
-export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 1, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 2, css: new URL('game.css', import.meta.url).href };
 
 /** A third of the rounds reversed (R8): the last level of each one-structure skill. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -23,21 +23,30 @@ const basket = { ...scene, skill: 'addsub.meaning.part-whole', structure: 'part-
 // change is under the whole (level 3), and what stays under the start (take).
 // No dots under the cards' numbers from each skill's second level (cardDots, the balance's rule of
 // 2026-10-19): the picture shows every number in rows of five.
+// down: false on the first level of each skill: the level before it in the list is another skill's,
+// not one it needs, so the ladder stays there rather than step down to it (architecture 3.4).
+// undrawn: op.other is 0 where the two numbers are equal (2 + 2, 3 + 3), and a 0 has nothing to draw
+// (canShow); the next rule takes its place. The basket has no equal parts, and no level 1 + 1 (poolOf),
+// so 2 is never the answer of levels 1 and 6.
 /** The level table of pedagogy 6.4; level n is levels[n - 1]. Ids are stable (architecture 2.2). @type {Level[]} */
 export const levels = [
-  { id: 'add-5', ...add, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, exclude: [0, 1] },
-  { id: 'add-10', ...add, unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0, 1, 2, 3, 4, 5] },
+  { id: 'add-5', ...add, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 1, 2], undrawn: ['op.other'] },
+  { id: 'add-10', ...add, unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0, 1, 2, 3, 4, 5], undrawn: ['op.other'] },
   { id: 'add-change', ...add, unknown: 'change', max: 10, look: 'dots', demo: true, cardDots: false, forms: third, exclude: [0, 10] },
-  { id: 'take-5', ...take, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, exclude: [0, 5] },
+  { id: 'take-5', ...take, unknown: 'result', max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 5] },
   { id: 'take-10', ...take, unknown: 'result', max: 10, look: 'dots', cardDots: false, forms: third, exclude: [0, 10] },
-  { id: 'whole-5', ...basket, max: 5, look: 'objects', options: 3, demo: true, exclude: [0, 1] },
+  { id: 'whole-5', ...basket, max: 5, look: 'objects', options: 3, demo: true, down: false, exclude: [0, 1, 2] },
   { id: 'whole-10', ...basket, max: 10, look: 'dots', cardDots: false, forms: third, exclude: [0, 1, 2, 3, 4, 5] },
   // Levels 2 and 5 together, visible, in dots from the start: the planner picks the story (R3, R11).
-  { id: 'mixed-10', ...scene, skill: 'addsub.meaning.mixed', structure: ['change-add', 'change-take'], unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0] },
+  { id: 'mixed-10', ...scene, skill: 'addsub.meaning.mixed', structure: ['change-add', 'change-take'], unknown: 'result', max: 10, look: 'dots', cardDots: false, exclude: [0], undrawn: ['op.other'] },
 ];
 
-/** What a level draws beyond its parameters, by level id: objects that turn into dots as the round opens (design 6.10). */
-const VARIANT = { 'add-10': { morph: true }, 'take-10': { morph: true }, 'whole-10': { morph: true } };
+/**
+ * What a level draws beyond its parameters, by level id (design 6.10): objects that turn into dots as
+ * the round opens; on the mixed level the wrap comes with the hint, so the picture at rest does not
+ * outline what to count (decisions.md 2026-10-31).
+ */
+const VARIANT = { 'add-10': { morph: true }, 'take-10': { morph: true }, 'whole-10': { morph: true }, 'mixed-10': { wrap: 'hint' } };
 
 export const text = [];
 
@@ -47,7 +56,7 @@ export const displays = DISPLAYS;
 // ---------- Rules (docs/depth/errors.md): one formula per id, from round.story ----------
 
 /** @typedef {{ s: number, k: number, r: number, verb: string }} Story s the start (a: the first part), k the change (b), r the result (the whole) */
-/** @typedef {Round & { story: Story, stage: { morph?: boolean } }} StoryRound */
+/** @typedef {Round & { story: Story, stage: { morph?: boolean, wrap?: string, cols?: number } }} StoryRound */
 
 /** @type {(r: Round) => string} add (result), change (add, the change unknown), take (result), basket (the whole unknown) */
 const kindOf = (r) => (r.structure === 'part-whole' ? 'basket' : r.structure === 'change-take' ? 'take' : r.unknown === 'change' ? 'change' : 'add');
@@ -73,6 +82,18 @@ export const rules = {
   'slip.near': (r) => ({ oneOf: [r.answer - 1, r.answer + 1] }),
 };
 
+/**
+ * Whether the picture can draw a choice's display (architecture 2.1): every display fills, counts or
+ * flashes places, so a 0 has nothing to draw (op.other when the two numbers are equal; a slip under
+ * an answer of 1). These skills list no zero.* rule: no card is 0.
+ * @param {Round} round
+ * @param {Choice} choice
+ * @returns {boolean}
+ */
+export function canShow(round, { value }) {
+  return Number.isInteger(value) && value >= 1;
+}
+
 /** The rows a display may take (design 6.10): the story's two, and two more. */
 const MAX_ROWS = 4;
 
@@ -90,9 +111,9 @@ export function budget(round, { value, rule }) {
 }
 
 /**
- * One wrong choice per rule in the skill's order, each value once; a value the budget refuses is
- * left out and the next rule takes its place; a slip only where no real error gives the value, the
- * answer − 1 first (R4). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
+ * One wrong choice per rule in the skill's order, each value once; a value the picture cannot draw
+ * (canShow: a 0) or the budget refuses is left out and the next rule takes its place; a slip only
+ * where no real error gives the value, the answer − 1 first (R4). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
  * so nothing is drawn again and the shares cannot drift. choose stays here: a shared one would change
  * the other games' rounds.
  * @param {Round} round
@@ -110,7 +131,7 @@ function choose(round, level) {
     if (wrong.length === level.options - 1) break;
     const value = rules[id](round);
     const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
-    const pick = candidates.find((v) => Number.isInteger(v) && v >= 0 && !taken.includes(v) && (!isSlip(id) || !real.includes(v)) && budget(round, { value: v, rule: id }) === null);
+    const pick = candidates.find((v) => Number.isInteger(v) && canShow(round, { value: v, rule: id }) && !taken.includes(v) && (!isSlip(id) || !real.includes(v)) && budget(round, { value: v, rule: id }) === null);
     if (pick === undefined) continue;
     taken.push(pick);
     wrong.push({ value: pick, rule: id });
@@ -120,10 +141,25 @@ function choose(round, level) {
 }
 
 /**
+ * The columns a round's pictures use, five at most (design 6.10): its places at rest and solved and in
+ * every card's display. scene.js shifts a round of fewer to the middle of the drawing, the same in
+ * every state; the basket's rim is five columns wide, a frame, so its balls fill from its left.
+ * @param {Round} round
+ * @returns {number}
+ */
+function colsOf(round) {
+  if (round.structure === 'part-whole') return 5;
+  const states = ['rest', 'solved', ...round.choices.filter((c) => c.rule).map(({ value, rule }) => ({ display: RULES[rule].display, rule, value }))];
+  return Math.min(5, Math.max(...states.map((st) => planScene(round, st).last + 1)));
+}
+
+/**
  * Every story of a level, in one order (the generator picks one; nothing is drawn again):
  * add and the basket by the result's band, take by the start's, from 2 to 5 or from 6 to max
  * (the largest number of a level to 10 is 6-10, a generator rule, not min). No zero. The basket has
- * no second part twice the first (1 + 2: op.other and given.part give one number). Level 3 has no
+ * no second part twice the first (1 + 2: op.other and given.part give one number), and no two equal
+ * parts (3 + 3: op.other is 0, a card with nothing to draw, and given.part is the one real error
+ * left). No 1 + 1 (given.part and count.start-included both give 1, op.other 0). Level 3 has no
  * story whose fixed dome would need a row under the whole's rows (9 + ? = 10).
  * @param {Level} level
  * @returns {Story[]}
@@ -135,7 +171,7 @@ export function poolOf(level) {
   for (let top = lo; top <= hi; top++) {
     for (let x = 1; x < top; x++) {
       if (level.structure === 'change-take') out.push({ s: top, k: x, r: top - x, verb: '' });
-      else if (level.structure === 'part-whole' ? top - x !== 2 * x : level.unknown !== 'change' || lidAt(x) < 5 * Math.ceil(top / 5)) out.push({ s: x, k: top - x, r: top, verb: '' });
+      else if (level.structure === 'part-whole' ? top - x !== 2 * x && top !== 2 * x : level.unknown === 'change' ? lidAt(x) < 5 * Math.ceil(top / 5) : top > 2) out.push({ s: x, k: top - x, r: top, verb: '' });
     }
   }
   return out;
@@ -170,7 +206,11 @@ export function makeRound(level, rng) {
     equation: change ? row([s, op, '?'], [r]) : row([s, op, k], ['?']),
     answer: change ? k : r, choices: [],
   };
-  return { ...round, choices: choose(round, level) };
+  /** @type {StoryRound} */
+  const dealt = { ...round, choices: choose(round, level) };
+  /** @type {StoryRound} */
+  const out = { ...dealt, stage: { ...dealt.stage, cols: colsOf(dealt) } };
+  return out;
 }
 
 /** @type {(n: number, one: string, many: string) => string} a verb or adjective by its number (pedagogy 6.4) */

@@ -183,15 +183,16 @@ export async function expectMathLeftToRight(page) {
  * above 0.3 s outside [data-demo]. A story's event (architecture 2.4) runs from the mount with
  * the cards live, so it is waited out first, until no [data-event] is left. The cards unlock when
  * a display ends, while the hint's one pulse may still run (design 7.2: the hint does not lock),
- * so finite animations in [data-hint] and [data-display] are waited out too, and in [data-choices]
- * a card's own 100 ms transition (app.css .btn: a pressed card, the shown card's ring); an
- * infinite one is not, and fails.
+ * and while a story's picture comes back from a display (level 3's first miss, decisions.md
+ * 2026-10-31), so finite animations in the picture, [data-hint] and [data-display] are waited out
+ * too, and in [data-choices] a card's own 100 ms transition (app.css .btn: a pressed card, the
+ * shown card's ring); an infinite one is not, and fails.
  * @param {import('@playwright/test').Page} page
  */
 export async function expectCalm(page) {
   await expect(page.locator('[data-event]'), 'a story\'s event ends').toHaveCount(0);
   await page.evaluate(() => Promise.all(document.getAnimations()
-    .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity && /** @type {KeyframeEffect} */ (a.effect)?.target?.closest('[data-hint], [data-display], [data-choices]'))
+    .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity && /** @type {KeyframeEffect} */ (a.effect)?.target?.closest('[data-area="picture"], [data-hint], [data-display], [data-choices]'))
     .map((a) => a.finished.catch(() => null))));
   const problems = await page.evaluate(() => {
     const out = [];

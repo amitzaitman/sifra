@@ -101,7 +101,10 @@ test('the generator: every story of each pool, a third reversed where the level 
       if (passed.structure === 'change-take') assert.deepEqual([...verbs].sort(), ['fly', 'pop']);
     }
   }
-  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [10, 35, 34, 10, 35, 9, 33]);
+  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [9, 35, 34, 10, 35, 7, 30]);
+  // No 1 + 1 (its cards would be 1 twice and a 0), and no equal parts in the basket (decisions.md 2026-10-31).
+  assert.ok(!stories.poolOf(level('add-5')).some((p) => p.s === 1 && p.k === 1));
+  for (const id of ['whole-5', 'whole-10']) assert.ok(!stories.poolOf(level(id)).some((p) => p.s === p.k), id);
   // Level 3 deals no 9 + ? = 10 (design 6.10: no room for the dome after four dots in the second row).
   assert.ok(!stories.poolOf(level('add-change')).some((p) => p.s === 9));
 });
@@ -117,14 +120,23 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
   assert.equal(rowsFor(six, 'overflow', 15), 5);
   assert.match(stories.budget(six, { value: 15, rule: 'op.other' }), /5 rows, 4 at most/);
   assert.deepEqual(roundOf('add-5', 1, 2).choices.map((c) => c.rule), ['op.other', 'count.start-included', null]);
+  // No card is 0 (playtest 2026-10-31): where op.other is 0 (2 + 2, 3 + 3) the next rule takes its place.
+  assert.deepEqual(roundOf('add-5', 2, 2).choices, [{ value: 2, rule: 'given.part' }, { value: 3, rule: 'count.start-included' }, { value: 4, rule: null }]);
+  assert.deepEqual(roundOf('add-10', 3, 3).choices.map((c) => c.rule), ['given.part', 'count.start-included', null, 'slip.near']);
+  assert.equal(stories.canShow(roundOf('add-10', 3, 3), { value: 0, rule: 'op.other' }), false);
+  for (const base of stories.levels) {
+    for (const passed of variants(base)) {
+      for (let seed = 1; seed <= 2000; seed++) assert.ok(stories.makeRound(passed, rng(seed)).choices.every((c) => c.value >= 1), `${base.id} ${seed}`);
+    }
+  }
   // given.part: the start in add and in the basket, the change in take, whatever the form.
   assert.equal(stories.rules['given.part'](roundOf('take-10', 7, 3, 'reversed')), 3);
   assert.equal(stories.rules['given.part'](roundOf('whole-10', 3, 4, 'reversed')), 3);
-  // Where the slips are (decisions.md 2026-10-30): level 2 and the mixed add in 7 of 35, every round of level 7, nowhere else.
+  // Where the slips are (decisions.md 2026-10-30, 2026-10-31): level 2 and the mixed add in 10 of 35, every round of level 7, nowhere else.
   for (const base of stories.levels) {
     for (const passed of variants(base)) {
       const slips = stories.poolOf(passed).filter(({ s, k }) => roundOf(base.id, s, k, 'standard', passed === base ? undefined : passed.structure).choices.some((c) => c.rule === 'slip.near')).length;
-      const want = { 'add-10': 7, 'whole-10': 33, 'mixed-10': passed.structure === 'change-add' ? 7 : 0 }[base.id] ?? 0;
+      const want = { 'add-10': 10, 'whole-10': 30, 'mixed-10': passed.structure === 'change-add' ? 10 : 0 }[base.id] ?? 0;
       assert.equal(slips, want, `${base.id} ${passed.structure}`);
     }
   }
@@ -135,7 +147,8 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
 
 test('labels: the locked templates, singular where a number is 1', () => {
   assert.equal(stories.labelOf(roundOf('add-10', 4, 3)), 'הָיוּ 4, וּבָאוּ עוֹד 3');
-  assert.equal(stories.labelOf(roundOf('add-5', 1, 1)), 'הָיָה 1, וּבָא עוֹד 1');
+  assert.equal(stories.labelOf(roundOf('add-5', 1, 4)), 'הָיָה 1, וּבָאוּ עוֹד 4');
+  assert.equal(stories.labelOf(roundOf('add-5', 4, 1)), 'הָיוּ 4, וּבָא עוֹד 1');
   assert.equal(stories.labelOf(roundOf('add-change', 1, 6)), 'הָיָה 1, בָּאוּ עוֹד, וְעַכְשָׁיו יֵשׁ 7');
   const take = roundOf('take-5', 3, 1);
   assert.equal(stories.labelOf(take), take.story.verb === 'fly' ? 'הָיוּ 3, וְ-1 עָף' : 'הָיוּ 3, וְ-1 הִתְפּוֹצֵץ');
@@ -149,6 +162,28 @@ test('labels: the locked templates, singular where a number is 1', () => {
       }
     }
   }
+});
+
+test('the mixed level: at rest no wrap, the small dome alone over the picture\'s first row; the wrap with the hint, the tour and the closing (playtest 2026-10-31)', () => {
+  const ids = (round, state) => planScene(round, state).items.map((i) => i.id);
+  const take = roundOf('mixed-10', 9, 6, 'standard', 'change-take');
+  assert.ok(!ids(take, 'rest').includes('wrap'));
+  assert.ok(ids(take, 'rest').includes('dome-top'));
+  for (const state of ['hint', { hint: true, tour: 1 }, 'solved']) assert.ok(ids(take, state).includes('wrap'), JSON.stringify(state));
+  assert.ok(ids(take, 'hint').includes('dome') && !ids(take, 'hint').includes('dome-top'));
+  // The dome alone stands over the middle of the five first places, the wrap's over the three that stayed.
+  const mid = (state, id, round = take) => {
+    const m = layoutScene(planScene(round, state), ROUND).marks.find((x) => x.id === id);
+    return len(m.box.x, 40) + len(m.box.w, 40) / 2;
+  };
+  const L = layoutScene(planScene(take, 'rest'), ROUND);
+  assert.equal(mid('rest', 'dome-top'), len(L.dw, 40) / 2);
+  assert.ok(mid('hint', 'dome') < mid('rest', 'dome-top'));
+  // The add story: the dome stands where the wrap's will, so it keeps its id; levels 2 and 5 keep the wrap at rest.
+  const add = roundOf('mixed-10', 4, 3, 'standard', 'change-add');
+  assert.ok(ids(add, 'rest').includes('dome') && !ids(add, 'rest').includes('wrap'));
+  assert.equal(mid('rest', 'dome', add), mid('hint', 'dome', add));
+  for (const [id, s, k] of [['add-10', 4, 3], ['take-10', 9, 6]]) assert.ok(ids(roundOf(id, s, k), 'rest').includes('wrap'), id);
 });
 
 // ---------- The build order (design 6.10, ctx.build) ----------
@@ -203,8 +238,9 @@ const classOf = (m) => (m.group === 'tour-ring' ? 'tour' : CLASS[m.kind]);
  * The clearance two marks keep, in px (architecture 4.9), or null where they may meet: objects 6;
  * a ring (the tour's too) or a line to an item 1; a magenta line to the navy 3; a cover and its halo
  * to an item 4, to a line 3; chips to chips, domes and covers 2; the dome on the line it stands on 0;
- * arcs, chips and rings 1 from each other; a cover's '?' 1 from everything but its own cover. A chip
- * may lie over a track-1 line, an arc over lines and rings.
+ * arcs, chips and rings 1 from each other; an arc 1 from a line (a jump never runs into the wrap or
+ * the whole's line, playtest 2026-10-31); a cover's '?' 1 from everything but its own cover. A chip
+ * may lie over a track-1 line, an arc over rings.
  */
 function need(a, b) {
   const [x, y] = [classOf(a), classOf(b)];
@@ -224,7 +260,7 @@ function need(a, b) {
     'item-tour': 1, 'ring-tour': 1, 'line-tour': roles === 'unknown-whole' ? 3 : 1, 'cover-tour': 3, 'chip-tour': 1, 'dome-tour': 1, 'tour-tour': null,
     'dome-line': dome && (a.group ?? b.group) === (dome.on === 'wrap' ? 'wrap' : 'bracket') ? 0 : 1,
     'cover-cover': a.group && a.group === b.group ? null : 2, 'chip-cover': 2, 'cover-dome': 2, 'arc-cover': 1,
-    'chip-chip': 2, 'chip-dome': 2, 'arc-chip': 1, 'arc-dome': 1,
+    'chip-chip': 2, 'chip-dome': 2, 'arc-chip': 1, 'arc-dome': 1, 'arc-line': 1,
   }[pair] ?? null;
 }
 
@@ -257,12 +293,14 @@ function closest(a, b, lo, hi) {
   return best;
 }
 
-/** @type {(text: string, font: number, grown: boolean) => [number, number]} a number's ink on an object (design 6.10), the tour's last grown */
-function inkOf(text, font, grown) {
+/** game.css: the tour's last digit grows 1.3 on a dot, 1.15 on a balloon (two digits in height only). */
+const GROW = { dot: 1.3, balloon: 1.15 };
+/** @type {(text: string, font: number, grow: number) => [number, number]} a number's ink on an object (design 6.10), the tour's last grown by grow */
+function inkOf(text, font, grow) {
   const ink = text.length === 1 ? GLYPH.ink14.digit : GLYPH.ink14[text];
   if (!ink) throw new Error(`no measured ink for ${text}`);
   const [w, h] = ink.map((x) => (x * font) / 14);
-  return grown ? [text.length === 1 ? w * 1.3 : w, h * 1.3] : [w, h];
+  return grow ? [text.length === 1 ? w * grow : w, h * grow] : [w, h];
 }
 
 /** Every story of every level's pool (poolOf), both verbs of take, one round each (with its cards), by level and numbers. */
@@ -329,9 +367,13 @@ function checkLayout(L, lo, hi) {
   for (let u = lo; digits.length && u <= hi + 1e-9; u = u + 0.25 > hi && u < hi ? hi : u + 0.25) {
     const inks = digits.map((d) => {
       const font = Math.max(d.font.min, d.font.k * u);
-      const [w, h] = inkOf(d.text, font, d.grow);
+      const [w, h] = inkOf(d.text, font, d.grow ? GROW[d.on] : 0);
       const D = at(d.box.w, u);
       if ((w + 2) ** 2 + (h + 2) ** 2 > D ** 2 + 1e-6) problems.push(`${d.id}: ${d.text} at ${font.toFixed(1)}px leaves its ${D.toFixed(1)}px disc at u ${u}`);
+      // On a balloon one digit keeps inside its white circle (the line and 8% in from the disc; the tour's
+      // last grows with its circle there), so no white outline shows on the balloon's colour (playtest 2026-10-31).
+      const C = (D - 2 * PX.line - 0.16 * D) * (d.grow && d.on === 'balloon' ? GROW.balloon : 1);
+      if (d.on === 'balloon' && d.text.length === 1 && w ** 2 + h ** 2 > C ** 2 + 1e-6) problems.push(`${d.id}: ${d.text} at ${font.toFixed(1)}px leaves its ${C.toFixed(1)}px white circle at u ${u}`);
       const [cx, cy] = [at(d.box.x, u) + D / 2, at(d.box.y, u) + at(d.box.h, u) / 2];
       return { id: d.id, x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 };
     });
@@ -424,6 +466,35 @@ test('geometry: every case, state and u from the state\'s floor to 64 at the lis
   assert.ok(floors.thumb >= 14, `thumbs ${floors.thumb}`);
 });
 
+test('a round of fewer than five columns stands in the middle of the drawing, the same in every state; the basket fills its rim from the left (playtest 2026-10-31)', () => {
+  const u = 40;
+  const counts = {};
+  for (const { base, round, key } of CASES) {
+    const c = round.stage.cols;
+    counts[c] = (counts[c] ?? 0) + 1;
+    let [lo, hi, dw] = [Infinity, -Infinity, 0];
+    for (const state of statesOf(base, round)) {
+      const L = layoutScene(planScene(round, state), ROUND);
+      dw = len(L.dw, u);
+      for (const m of L.marks.filter((x) => ['object', 'outline', 'ghost', 'place'].includes(x.kind) && !x.leaving)) {
+        const mid = len(m.box.x, u) + len(m.box.w, u) / 2;
+        [lo, hi] = [Math.min(lo, mid), Math.max(hi, mid)];
+      }
+    }
+    const pitch = len(ROUND.G, u) + u;
+    if (round.structure === 'part-whole') {
+      assert.equal(c, 5, key);
+      assert.ok(Math.abs(lo - (len(ROUND.Ms, u) + u / 2)) < 1e-9, `${key}: the first ball in the rim's first column`);
+      continue;
+    }
+    assert.ok(Math.abs((hi - lo) / pitch - (c - 1)) < 1e-9, `${key}: its places span ${c} columns`);
+    assert.ok(Math.abs((lo + hi) / 2 - dw / 2) < 1e-9, `${key}: ${c} columns, off the middle by ${((lo + hi) / 2 - dw / 2).toFixed(2)}px`);
+  }
+  // Only the stories to 5 have fewer: 1 + 2 (and its cards) in three columns.
+  assert.ok(counts[3] > 0 && counts[4] > 0, JSON.stringify(counts));
+  assert.equal(roundOf('add-5', 1, 2).stage.cols, 3);
+});
+
 test('rows: the story\'s and the places a display fills past them; the budget says no exactly above 4; a digit display needs 3 at most', () => {
   // design 6.10, written out apart from planScene: the story's rows (the start of take, else the
   // result or whole), and overflow and count-up fill v places from the asked group's first place.
@@ -467,6 +538,18 @@ test('an event: arrivals slide in from the right, leavers fly up or pop, the fix
   const gone = take.marks.filter((m) => m.leaving);
   assert.deepEqual(gone.map((m) => m.place), [3, 4]);
   assert.ok(gone.every((m) => (m.leaving === 'up') === (m.to !== null)));
+  // A leaver of the second row rises half a column to the right, between the first row's places
+  // (playtest 2026-10-31); one of the first row straight up.
+  const fly = (s, k) => {
+    for (let seed = 1; seed < 5000; seed++) {
+      const r = stories.makeRound(level('take-10'), rng(seed));
+      if (r.story.s === s && r.story.k === k && r.story.verb === 'fly') return r;
+    }
+    throw new Error('no round');
+  };
+  const ten = layoutScene(planScene(fly(10, 7), 'event:B'), ROUND).marks.filter((m) => m.leaving);
+  assert.deepEqual(ten.map((m) => m.place), [3, 4, 5, 6, 7, 8, 9]);
+  for (const m of ten) assert.deepEqual(m.to.x, m.place < 5 ? [0, 0] : [0.55, 8], `place ${m.place}`);
   const change = layoutScene(planScene(roundOf('add-change', 4, 3), 'event:B'), ROUND);
   const lid = change.marks.find((m) => m.id === 'lid');
   assert.equal(lid.mark, '');
@@ -521,7 +604,6 @@ test('tokens: the layout\'s pixels are app.css\'s and design.md\'s', () => {
   // A move past the stage's edge by the panel's largest padding is clipped (design 6.10).
   assert.match(css, new RegExp(`\\.panel \\{[^}]*padding: clamp\\(8px, 3vw, ${PX.out}px\\)`));
   assert.match(design, new RegExp(`מה שזז מתחיל או נגמר ${PX.out}px מעבר לקצה הבמה`));
-  assert.match(design, new RegExp(`היא זזה ${PX.domeShift}px ימינה, בכל מסך`));
   assert.match(design, new RegExp(`גשר של ${PX.bridge}px`));
   assert.match(design, new RegExp(`כיפה קטנה \\(${PX.dome}px\\)`));
   assert.match(design, new RegExp(`תג ההתחלה מעל הנקודה הראשונה, ${PX.chipGap}px מעליה`));
@@ -532,6 +614,11 @@ test('tokens: the layout\'s pixels are app.css\'s and design.md\'s', () => {
   const { 10: ten, 11: eleven, digit } = GLYPH.ink14;
   assert.match(design, new RegExp(`הדיו של \`10\`\\s+הוא ${ten[0]} על ${ten[1]}px \\(של \`11\` ‏${eleven[0]} על ${eleven[1]}, של ספרה אחת עד ${digit[0]} על ${digit[1]}\\)`));
   assert.match(design, new RegExp(`רק טבעות, ולכן הרווח שם ${ROUND.Bd[0]}u ועוד ${ROUND.Bd[1]}px, והשוליים מתחתיה ${ROUND.Mbd[0]}u ועוד ${ROUND.Mbd[1]}px`));
+  // The tour's last digit grows as the geometry test takes it: 1.3 on a dot, 1.15 with its circle on a balloon.
+  const game = readFileSync(new URL('../games/stories/game.css', import.meta.url), 'utf8');
+  assert.match(game, new RegExp(`\\.st-digit\\.is-grow \\{ scale: ${GROW.dot}; \\}`));
+  assert.match(game, new RegExp(`\\.st-digit\\.is-grow\\[data-on="balloon"\\] \\{ scale: ${GROW.balloon}; \\}`));
+  assert.match(game, /\.st-digit\.is-grow\[data-on="balloon"\]::before \{ scale: none; \}/);
   // The rectangle of 10's ink, with a pixel spare at each corner, needs a 21.94px disc (design 6.10).
   assert.equal(Math.hypot(ten[0] + 2, ten[1] + 2).toFixed(2), '21.94');
 });

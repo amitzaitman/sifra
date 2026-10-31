@@ -92,10 +92,11 @@ export function drawScene(host, { layout, set, cover: make }) {
       draw.append(layer);
     }
     // Strokes and fonts from the set (design 6.10): the line, a thin edge (chips, dashes on a
-    // cover), a balloon's string; digits on objects, a floor in rounds and none in thumbs.
+    // cover), a balloon's string (2px, a whole pixel, so every string draws alike); digits on
+    // objects, a floor in rounds and none in thumbs.
     setLen(draw, 'l', set.line);
     setLen(draw, 't', times(set.line, 2 / 3));
-    setLen(draw, 's', times(set.line, 1 / 2));
+    setLen(draw, 's', times(set.line, 2 / 3));
     setLen(draw, 'cf', set.chipFont);
     draw.style.setProperty('--fk', num(set.font.k));
     draw.style.setProperty('--fmin', num(set.font.min));
@@ -130,6 +131,8 @@ export function drawScene(host, { layout, set, cover: make }) {
       layers[m.layer].append(el);
       added.push({ el, m, changed });
     } else kept.push({ el, m, changed });
+    // A leaver is drawn under what stays, so one that rises past another passes behind it.
+    if (m.leaving && layers[m.layer].firstChild !== el) layers[m.layer].prepend(el);
   }
   const gone = [...old.values()];
   for (const el of gone) delete el.dataset.id;
@@ -193,8 +196,11 @@ function paint(el, m, byId) {
   else if (m.kind === 'chip' || m.kind === 'digit') {
     set('tone', m.tone);
     set('ring', Boolean(m.ring));
-    // The tour's digits (R5, architecture 2.5 step 4): the last one the answer.
+    // The tour's digits (R5, architecture 2.5 step 4): the last one the answer. A digit's font from
+    // its disc: a balloon's is smaller than a dot's (scene.js).
     set('tour', m.kind === 'digit' && m.tone === 'unknown' ? m.text : null);
+    set('on', m.kind === 'digit' && m.on === 'balloon' ? 'balloon' : null);
+    if (m.kind === 'digit') el.style.setProperty('--fk', num(m.font.k));
     if (el.textContent !== m.text) el.textContent = m.text;
     el.classList.toggle('is-grow', Boolean(m.grow));
     el.classList.toggle('is-two', m.text.length > 1);
@@ -250,7 +256,7 @@ export function renderScene(host, round, ctx) {
    * Moves the picture to a state (scene.js planScene, layoutScene): what stays keeps its node, what
    * comes enters (how), what goes lifts or fades; at once with reduced motion, in thumbs and on a reset.
    * @param {State} next
-   * @param {'instant' | 'event' | 'display' | 'hint' | 'return' | 'tour' | 'solve'} how
+   * @param {'instant' | 'enter' | 'event' | 'display' | 'hint' | 'return' | 'tour' | 'solve'} how
    */
   const apply = (next, how) => {
     const instant = how === 'instant' || thumb || reduced();
@@ -285,7 +291,7 @@ export function renderScene(host, round, ctx) {
 
   /**
    * The motion of a change of state (design 6.10, 7.1-7.3, 8): each kind enters its way, with the
-   * event's, the display's, the hint's and the closing's own order.
+   * first picture's, the event's, the display's, the hint's and the closing's own order.
    * @param {Drawn} drawn
    * @param {State} prev
    * @param {string} how
@@ -316,6 +322,16 @@ export function renderScene(host, round, ctx) {
     for (const { el, m, changed } of kept) {
       if (changed.has('ring') && m.ring) play(el, 'blink');
       if (changed.has('mark') && m.mark) play(el, 'q');
+    }
+    if (how === 'enter') {
+      // The still 'before' (design 6.10): the start's objects enter in place order, as the ten-frame's
+      // items do, and their chip with the last one; the rest of the first picture is there at once.
+      // So the event's next phase waits for them: 'first there were s' is seen before anything comes.
+      const objects = added.filter((p) => p.m.kind === 'object').sort(byPlace);
+      objects.forEach((p, j) => play(p.el, 'in', stagger(j, objects.length)));
+      const last = stagger(objects.length - 1, objects.length);
+      for (const p of added.filter((q) => q.m.kind === 'chip')) play(p.el, 'in', last);
+      return;
     }
     if (how === 'event') {
       // The morph (levels 2, 5, 7; design 6.10): each dot starts on its balloon's disc and slides down
@@ -403,7 +419,7 @@ export function renderScene(host, round, ctx) {
     targets();
   } else {
     ended = false;
-    apply({ ...st, phase: phases[0] }, 'instant');
+    apply({ ...st, phase: phases[0] }, 'enter');
     draw.dataset.event = phases[0];
     ctx.build(builtAt(round, phases[0]));
     story = (async () => {
@@ -456,17 +472,26 @@ export function renderScene(host, round, ctx) {
     if (st.display) apply(base, 'instant');
     // A first miss keeps its display to the next tap (on a 3-option level the hint joins it); a later
     // one runs, then the picture comes back to its start, cover down, with the hint drawn as it does.
-    // With reduced motion a later display is skipped.
+    // With reduced motion a later display is skipped. On level 3 a display that lifts the dome shows
+    // the places under it, so the answer: a first miss's runs and comes back too, the dome down and no
+    // hint; and at step 3 any display goes straight to the tour, the dome staying up (decisions.md
+    // 2026-10-31), so the cover never comes down between two lifts.
+    const lifts = kind === 'change' && display !== 'flash';
     if (first || !reduced()) {
       apply({ ...base, display: { display, rule, value } }, 'display');
       await settle(draw, signal);
       if (signal.aborted) return;
       sweep();
-      if (first) {
+      if (first && !lifts) {
         if (step >= 2) apply({ ...st, hint: true }, 'hint');
         return;
       }
-      apply({ ...base, hint: true }, 'return');
+      if (kind === 'change' && step === 3) {
+        st = { ...base, hint: true };
+        await tour();
+        return;
+      }
+      apply({ ...base, hint: !first || step >= 2 }, 'return');
       // The cards lock only while a display runs (design 7.1): at step 2 the return is not awaited.
       const back = settle(draw, signal).then(sweep);
       if (step < 3) return;
@@ -497,7 +522,8 @@ export function renderScene(host, round, ctx) {
       // where there is one, the '?'; then the hint and the tour (R9, the ten-frame's pattern).
       await story;
       for (const id of kind === 'change' ? ['chip-start', 'chip-whole', 'lid'] : ['obj-0', 'dome']) {
-        const el = signal.aborted ? null : node(id);
+        // The mixed level's dome alone at rest is dome-top where the wrap's would stand elsewhere.
+        const el = signal.aborted ? null : node(id) ?? (id === 'dome' ? node('dome-top') : null);
         if (el) await hand.tap(el);
       }
       if (signal.aborted) return;

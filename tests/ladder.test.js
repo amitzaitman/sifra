@@ -205,3 +205,18 @@ test('down: false: two helped rounds, or the end of a fast climb, keep the child
   assert.equal(back.level, 'take-0');
   assert.deepEqual(back.passed, ['add-0', 'add-1']);
 });
+
+test('the stories: no step down from the first level of take or of the basket to another skill\'s level', async () => {
+  const { levels: stories } = await import('../games/stories/game.js');
+  const firsts = stories.filter((l, i) => i > 0 && l.skill !== stories[i - 1].skill && l.skill !== 'addsub.meaning.mixed');
+  assert.deepEqual(firsts.map((l) => [l.id, l.down]), [['take-5', false], ['whole-5', false]]);
+  for (const level of firsts) {
+    const s = step(step({ ...startLadder(stories, level.id), fast: null }, stories, { outcome: 'help', kind: 'new', session: 1 }).state, stories, { outcome: 'help', kind: 'new', session: 1 }).state;
+    assert.equal(s.level, level.id);
+  }
+  // The climb of the playtest: add-5, add-10, add-change first try, then a help at take-5.
+  let s = startLadder(stories);
+  for (const outcome of ['first', 'first', 'first', 'help']) s = step(s, stories, { outcome, kind: 'new', session: 1 }).state;
+  assert.equal(s.level, 'take-5');
+  assert.deepEqual(s.passed, ['add-5', 'add-10', 'add-change']);
+});

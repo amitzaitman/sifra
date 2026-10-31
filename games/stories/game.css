@@ -1,7 +1,7 @@
 /* The story scene (design 6.10, architecture 2.8). scene.js lays out every mark as a box of lengths
    a·u + b px; view.js puts each in one span with its box in --xu --xp --yu --yp --wu --wp --hu --hp,
    and strokes and fonts as such pairs on the drawing (--lu --lp the line, --tu --tp a thin edge,
-   --su --sp a string, --cfu --cfp a chip's font). No geometry property here holds a literal length
+   --su --sp a string, --cfu --cfp a chip's font; --fk on a digit, its font's share of the unit). No geometry property here holds a literal length
    but a 1px that multiplies a variable (tests/code.test.js): a number that fails changes in scene.js.
    One named exception: chips and digits pad their top by GLYPH.pad em, which centres the ink.
    The unit is solved here from the stage, the ten-frame's pattern; a display that adds rows changes
@@ -34,10 +34,12 @@
 [data-game="stories"] .st-obj[data-role="part"] { --edge: var(--role-part-edge); background-color: var(--role-part); }
 [data-game="stories"] .st-obj[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="stories"] .st-obj[data-role="added"] { --edge: var(--role-added-edge); background-color: var(--role-added); }
-/* A balloon's knot and its string: no role (R6). A ball's one seam, in its edge colour. */
+/* A balloon's knot and its string: no role (R6). The knot narrows away from the disc, so knot and
+   string never read as an arrow up; the string is a whole 2px, the same on every balloon. A ball's
+   one seam, in its edge colour. */
 [data-game="stories"] .st-obj[data-shape="balloon"]::before {
   content: ''; position: absolute; left: 50%; top: calc(100% - 0.02 * var(--u)); width: calc(0.16 * var(--u)); height: calc(0.06 * var(--u));
-  translate: -50% 0; background: var(--ink-soft); clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
+  translate: -50% 0; background: var(--ink-soft); clip-path: polygon(0 0, 100% 0, 65% 100%, 35% 100%);
 }
 [data-game="stories"] .st-obj[data-shape="balloon"]::after {
   content: ''; position: absolute; left: 50%; top: 100%; width: calc(var(--su) * var(--u) + var(--sp) * 1px); height: calc(0.2 * var(--u));
@@ -64,9 +66,9 @@
 [data-game="stories"] .st-ghost {
   border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost);
 }
-/* A ghost inside the outline of one that left is smaller by the line on each side: a thin edge keeps
-   its fill legible in a four-row display on a landscape phone (about 10px across there). */
-[data-game="stories"] .st-ghost[data-inset] { border-width: calc(var(--tu) * var(--u) + var(--tp) * 1px); }
+/* A ghost inside the outline of one that left fills the outline's inside: the outline is its edge, and
+   it has no ring, so it never reads as a bullseye in a four-row display on a landscape phone. */
+[data-game="stories"] .st-ghost[data-inset] { border-width: 0; }
 [data-game="stories"] .st-place {
   border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--surface);
 }
@@ -106,7 +108,7 @@
 /* Chips (design 6.10, 7.1): white, a thin edge; the start's digit in ink, the whole's navy with a
    navy edge, the answer's magenta. Flashed, a ring of the line takes the edge's place inside it. */
 [data-game="stories"] .st-chip {
-  display: grid; place-items: center; padding-top: 0.12em; border-radius: calc(0.3 * (var(--hu) * var(--u) + var(--hp) * 1px));
+  display: grid; place-items: center; padding-top: 0.02em; border-radius: calc(0.3 * (var(--hu) * var(--u) + var(--hp) * 1px));
   background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 calc(var(--tu) * var(--u) + var(--tp) * 1px) var(--chip-edge, var(--frame));
   font-size: max(calc(var(--fmin) * 1px), calc(var(--cfu) * var(--u) + var(--cfp) * 1px)); font-weight: 800; line-height: 1; white-space: nowrap;
 }
@@ -117,9 +119,10 @@
 /* Digits on objects (design 6.10, 7.1-7.2): proportional, on a white circle the line and 8% in from
    the disc's edge, so its colour shows round it; a thin white outline where they pass the circle.
    A display's in --role-added-edge, the tour's in --role-unknown; the tour's last grows 1.3 (two
-   digits in height only), its circle does not. */
+   digits in height only), and its circle does not; on a balloon's smaller disc both grow 1.15, so the
+   digit stays inside its circle. */
 [data-game="stories"] .st-digit {
-  z-index: 0; display: grid; place-items: center; padding-top: 0.12em; color: var(--role-added-edge);
+  z-index: 0; display: grid; place-items: center; padding-top: 0.02em; color: var(--role-added-edge);
   font-size: max(calc(var(--fmin) * 1px), calc(var(--fk) * var(--u))); font-weight: 800; line-height: 1; font-variant-numeric: proportional-nums;
   text-shadow: 0 0 1px var(--surface), 1.5px 0 var(--surface), -1.5px 0 var(--surface), 0 1.5px var(--surface), 0 -1.5px var(--surface),
     1px 1px var(--surface), -1px 1px var(--surface), 1px -1px var(--surface), -1px -1px var(--surface);
@@ -132,6 +135,8 @@
 [data-game="stories"] .st-digit.is-grow::before { scale: 0.7692; }
 [data-game="stories"] .st-digit.is-grow.is-two { scale: 1 1.3; }
 [data-game="stories"] .st-digit.is-grow.is-two::before { scale: 1 0.7692; }
+[data-game="stories"] .st-digit.is-grow[data-on="balloon"] { scale: 1.15; }
+[data-game="stories"] .st-digit.is-grow[data-on="balloon"]::before { scale: none; }
 
 /* Motion (design 6.10, 8): each runs once, 250ms a move, 600ms a blink or a pulse, 150ms a digit;
    delays between items entering in order only, 0.3 s at most (view.js). Thumbs never move (app.css). */

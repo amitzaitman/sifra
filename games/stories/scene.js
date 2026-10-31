@@ -8,8 +8,9 @@
 /** @typedef {{ x: Len, y: Len, w: Len, h: Len }} Box */
 /** @typedef {{ t: Len, b: Len, l: Len, r: Len }} Slab a band of a region: top, bottom, left, right */
 /**
- * What a state draws, in places (planScene): every item has an id (stable across states) and a kind.
- * @typedef {{ kind: string, s: number, k: number, r: number, n: number, rows: number, object: string, items: Record<string, any>[], leaving: Record<string, any>[] }} Plan
+ * What a state draws, in places (planScene): every item has an id (stable across states) and a kind;
+ * last, the last place it fills; cols, the columns the round's pictures use (round.stage.cols).
+ * @typedef {{ kind: string, s: number, k: number, r: number, n: number, rows: number, last: number, cols: number, object: string, items: Record<string, any>[], leaving: Record<string, any>[] }} Plan
  */
 /**
  * A move's start (from) or end (to), added to the mark's box: x and y, and a share of the stage's
@@ -26,18 +27,19 @@
  * out, the panel's largest padding (app.css .panel), so a move past the stage's edge by it is clipped.
  */
 export const PX = {
-  line: 3, ringGap: 2, track1: 8, halo: 3, tick: 4, bracketGap: 6, dome: 28, domeShift: 1.5, bridge: 4,
-  chipGap: 6, chipPad: 6, arc: 8, out: 16, hug: 17, digit: { k: 0.45, min: 14 }, tap: 8, tapEdge: 2,
+  line: 3, ringGap: 2, track1: 8, halo: 3, tick: 4, bracketGap: 6, dome: 28, bridge: 4,
+  chipGap: 6, chipPad: 6, arc: 5, out: 16, hug: 17, digit: { k: 0.45, min: 14 }, tap: 8, tapEdge: 2,
 };
 
 /**
  * Rubik 800 (design 4, 6.10; measured in Chromium): the tabular advance of a chip's digits (em), and
  * the ink of the proportional digits on objects at 14px (w, h): one digit at most (4 the widest, 0
- * and 8 the tallest), 10 and 11. pad: game.css's top padding (em) on chips and digits, which centres
- * their ink in a box of line-height 1 at the 14px floor (0.2px off); the Node test takes the ink as
- * centred, and the browser check reads it.
+ * and 8 the tallest), 10 and 11. pad: game.css's top padding (em) on chips and digits, which keeps
+ * their ink within 1px of the box's middle at every size a round uses, 14 to 29px (measured
+ * 2026-10-31; 0.12em was 1.5 to 2.4px low from 20px up); the Node test takes the ink as centred,
+ * and the browser check reads it. balloon: a balloon's disc to a dot's, which sizes its digits.
  */
-export const GLYPH = { advance: 0.68, ink: 0.72, pad: 0.12, ink14: { digit: [9.2, 10.1], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
+export const GLYPH = { advance: 0.68, ink: 0.72, pad: 0.02, balloon: 0.78, ink14: { digit: [9.2, 10.1], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
 
 const px = (/** @type {number} */ b) => /** @type {Len} */ ([0, b]);
 const LINE = PX.track1 + PX.line;
@@ -56,7 +58,7 @@ export const ROUND = {
     basket: px(LINE + PX.bracketGap + PX.line + PX.dome + PX.halo), change: /** @type {Len} */ ([0.25 + 0.15, LINE + 18]),
   },
   line: px(PX.line), ringGap: px(PX.ringGap), track1: px(PX.track1), halo: px(PX.halo), tick: px(PX.tick), bracketGap: px(PX.bracketGap),
-  dome: px(PX.dome), domeShift: px(PX.domeShift), bridge: px(PX.bridge), strip: /** @type {Len} */ ([0.125, 2]),
+  dome: px(PX.dome), bridge: px(PX.bridge), strip: /** @type {Len} */ ([0.125, 2]),
   chipH: /** @type {Len} */ ([0.15, 18]), chipFont: /** @type {Len} */ ([0.15, 12]), chipPad: px(PX.chipPad), chipGap: px(PX.chipGap),
   arc: px(PX.arc), out: px(PX.out), hug: px(PX.hug), font: PX.digit, uMax: 64,
 };
@@ -68,7 +70,7 @@ export const THUMB = {
   G: unit(0.4), Ms: unit(0.35), B: unit(0.6), Bh: unit(0.4), Bd: unit(0.3), Mb: unit(0.35), Mbd: unit(0.3),
   T: { add: unit(1), take: unit(1), basket: unit(1.3), change: unit(1.15) },
   line: unit(0.1), ringGap: unit(0.06), track1: unit(0.2), halo: unit(0.1), tick: unit(0.1), bracketGap: unit(0.2),
-  dome: unit(0.6), domeShift: unit(0), bridge: unit(0.15), strip: unit(0.1),
+  dome: unit(0.6), bridge: unit(0.15), strip: unit(0.1),
   chipH: unit(0.6), chipFont: unit(0.45), chipPad: unit(0.15), chipGap: unit(0.15),
   arc: unit(0.3), out: unit(0.5), hug: null, font: { k: 0.45, min: 0 }, uMax: 64,
 };
@@ -169,7 +171,7 @@ export function storyOf(round) {
   const thing = kind === 'basket' ? 'ball' : 'balloon';
   return {
     kind, s, k, r, verb, n: Math.ceil((kind === 'take' ? s : r) / 5),
-    object: round.look === 'objects' ? thing : 'dot', pre: round.stage?.morph ? thing : null,
+    object: round.look === 'objects' ? thing : 'dot', pre: round.stage?.morph ? thing : null, wrap: round.stage?.wrap ?? 'rest',
   };
 }
 
@@ -227,7 +229,7 @@ function stateOf(state) {
  */
 export function planScene(round, state) {
   const st = stateOf(state);
-  const { kind, s, k, r, n, object, pre, verb } = storyOf(round);
+  const { kind, s, k, r, n, object, pre, verb, wrap } = storyOf(round);
   const at = PHASES.indexOf(st.phase);
   const rest = at === PHASES.length - 1;
   /** @type {Record<string, any>[]} */
@@ -270,13 +272,18 @@ export function planScene(round, state) {
     if (kind === 'change' && shown) for (let p = s; p < r; p++) empty(p);
   }
   // The unknown's mark: the wrap and its small dome (add, take), the rim and the bracket (basket), the
-  // fixed dome, then its '?', the whole's outline and chip (level 3); the hint's stretched cover.
-  if ((kind === 'add' || kind === 'take') && rest) put({ id: 'wrap', kind: 'wrap', role: 'unknown', from: 0, to: r });
+  // fixed dome, then its '?', the whole's outline and chip (level 3); the hint's stretched cover. On
+  // the mixed level the wrap comes with the hint, the tour or the closing: at rest the small dome
+  // stands alone over the middle of the picture's first row (dome-top where that is not the wrap's).
+  const wrapped = rest && (wrap !== 'hint' || st.hint || st.tour > 0 || st.solved);
+  if ((kind === 'add' || kind === 'take') && wrapped) put({ id: 'wrap', kind: 'wrap', role: 'unknown', from: 0, to: r });
   if (kind === 'basket') {
     put({ id: 'rim', kind: 'rim' });
     put({ id: 'bracket', kind: 'bracket', role: 'unknown' });
   }
-  if (kind !== 'change' && (rest || kind === 'basket')) put(st.solved ? { id: 'answer', kind: 'chip', at: 'dome', text: String(round.answer), tone: 'unknown' } : { id: 'dome', kind: 'dome' });
+  const top = Math.min(kind === 'take' ? s : r, 5);
+  const domeId = wrapped || top === Math.min(r, 5) ? 'dome' : 'dome-top';
+  if (kind !== 'change' && (rest || kind === 'basket')) put(st.solved ? { id: 'answer', kind: 'chip', at: 'dome', text: String(round.answer), tone: 'unknown' } : { id: domeId, kind: 'dome', over: wrapped || kind === 'basket' ? 'line' : 'top' });
   if (kind === 'change') {
     put({ id: 'chip-start', kind: 'chip', at: 'start', text: String(s), tone: 'ink', ring: st.display === 'flash' && st.rule !== 'given.whole' });
     if (at >= 2 && !lifted && !st.hint) put({ id: 'lid', kind: 'lid', place: lidAt(s), mark: at >= 3 ? '?' : '', enter: at === 2 ? 'right' : null });
@@ -295,8 +302,10 @@ export function planScene(round, state) {
     for (let p = g0; p < g0 + v; p++) {
       if (content(p) === 'object') ring(p, true);
       else {
+        // Past the group a ghost has a ring, but not inside the outline of one that left: the
+        // outline marks that place already, and the two read as a bullseye (decisions.md 2026-10-31).
         put({ id: `ghost-${p}`, kind: 'ghost', place: p, inset: content(p) === 'outline' });
-        if (p >= r) ring(p);
+        if (p >= r && content(p) !== 'outline') ring(p);
       }
     }
     for (let p = g0 + v; p < r; p++) ring(p);
@@ -330,7 +339,7 @@ export function planScene(round, state) {
     if (kind === 'change' && st.tour === k) put({ id: 'tour-ring', kind: 'tourRing', role: 'unknown', from: s, to: r });
   }
   const rows = Math.max(n, Math.ceil((last + 1) / 5));
-  return { kind, s, k, r, n, rows, object, items, leaving };
+  return { kind, s, k, r, n, rows, last, cols: round.stage?.cols ?? 5, object, items, leaving };
 }
 
 /**
@@ -348,7 +357,9 @@ export const rowsFor = (round, display, value) => planScene(round, { display, va
 /**
  * Every mark of a plan in its box (design 6.10): places in rows of five at Ms + c(u + G), story rows
  * B apart under the top band T, display rows Bh and Bd apart; track-0 rings 2px off a disc, track-1
- * lines (wrap, whole, rim) 8px off the objects (a balloon with its string), 3px thick.
+ * lines (wrap, whole, rim) 8px off the objects (a balloon with its string), 3px thick. A round whose
+ * pictures use fewer than five columns (plan.cols) is shifted right by half the columns it leaves,
+ * so it stands in the middle of the drawing, the same in every state.
  * @param {Plan} plan
  * @param {typeof ROUND | typeof THUMB} set
  * @returns {Layout}
@@ -356,7 +367,8 @@ export const rowsFor = (round, display, value) => planScene(round, { display, va
 export function layoutScene(plan, set) {
   const { kind, s, r, n, rows, object, items } = plan;
   const T = set.T[kind];
-  const colX = (/** @type {number} */ c) => add(set.Ms, mul(add(U, set.G), c));
+  const shift = (5 - plan.cols) / 2;
+  const colX = (/** @type {number} */ c) => add(set.Ms, mul(add(U, set.G), c + shift));
   const rowY = (/** @type {number} */ i) => (i < n ? add(T, mul(add(U, set.B), i)) : add(T, mul(add(U, set.B), n - 1), U, set.Bh, mul(add(U, set.Bd), i - n)));
   const dw = add(mul(U, 5), mul(set.G, 4), mul(set.Ms, 2));
   const dh = add(rowY(rows - 1), U, rows > n ? set.Mbd : set.Mb);
@@ -382,8 +394,10 @@ export function layoutScene(plan, set) {
   // the drawing is centred in the stage, so from the drawing's middle the stage's edge is half the stage away.
   /** @type {(b: Box) => Offset} */
   const enter = (b) => ({ x: sub(add(mul(dw, 0.5), set.out), b.x), y: px(0), stage: [0.5, 0] });
-  /** @type {(b: Box) => Offset} */
-  const flyUp = (b) => ({ x: px(0), y: sub(mul(dh, 0.5), add(bottom(b), set.out)), stage: [0, -0.5] });
+  // A leaver of the second row drifts half a column to the right as it rises, so it passes between
+  // the first row's places, under the ones that stay (view.js draws the leavers first), not through them.
+  /** @type {(b: Box, row: number) => Offset} */
+  const flyUp = (b, row) => ({ x: row ? mul(add(U, set.G), 0.5) : px(0), y: sub(mul(dh, 0.5), add(bottom(b), set.out)), stage: [0, -0.5] });
 
   // A run of places in row pieces: [{ row, c0, c1 }], and as slabs of a region, the band between two rows joined.
   /** @type {(from: number, to: number) => { row: number, c0: number, c1: number }[]} */
@@ -405,11 +419,19 @@ export function layoutScene(plan, set) {
 
   // The small dome: on the wrap's top line, in the middle of the run's first row; over the basket, on
   // the bracket in the middle. Its halo goes under the lines, so the line it stands on stays whole.
+  // Alone at rest on the mixed level: at the same height, over the middle of the picture's first row.
   const wrapTop = sub(extent(0).y, add(set.track1, set.line));
   const bracketTop = sub(wrapTop, add(set.bracketGap, set.line));
-  const firstRow = Math.min(r, 5);
-  const domeMid = kind === 'basket' ? mul(dw, 0.5) : add(mul(add(extent(0).x, right(extent(firstRow - 1))), 0.5), kind === 'add' && r === 2 ? set.domeShift : px(0));
-  const domeBox = box(sub(domeMid, mul(set.dome, 0.5)), sub(kind === 'basket' ? bracketTop : wrapTop, set.dome), set.dome, set.dome);
+  /** @type {(over: string) => Len} */
+  const domeMidOf = (over) => {
+    if (kind === 'basket') return mul(dw, 0.5);
+    const first = Math.min(over === 'top' && kind === 'take' ? s : r, 5);
+    return mul(add(extent(0).x, right(extent(first - 1))), 0.5);
+  };
+  /** @type {(over: string) => Box} */
+  const domeBoxOf = (over) => box(sub(domeMidOf(over), mul(set.dome, 0.5)), sub(kind === 'basket' ? bracketTop : wrapTop, set.dome), set.dome, set.dome);
+  const domeMid = domeMidOf('line');
+  const domeBox = domeBoxOf('line');
   /** @type {(text: string) => Len} a single digit's chip is square; two digits, their advance and the padding */
   const chipW = (text) => (text.length === 1 ? set.chipH : add(mul(set.chipFont, GLYPH.advance * text.length), mul(set.chipPad, 2)));
   // Level 3's whole outline: round the dots and the fixed dome at rest; round the true places once the dome lifts.
@@ -438,12 +460,17 @@ export function layoutScene(plan, set) {
     else if (item.kind === 'ghost') mark(id, 'ghost', 'places', item.inset ? grow(disc(place), mul(set.line, -1)) : disc(place), { place, inset: Boolean(item.inset) });
     else if (item.kind === 'place') mark(id, 'place', 'places', disc(place), { place });
     else if (item.kind === 'ring') mark(id, 'ring', 'lines', grow(disc(place), add(set.ringGap, set.line)), { place, dash: item.dash, line: set.line });
-    else if (item.kind === 'digit') mark(id, 'digit', 'digits', disc(place), { place, text: item.text, tone: item.tone, grow: item.grow, font: set.font });
+    else if (item.kind === 'digit') {
+      // On a balloon the digit is sized from its disc, as on a dot from its own (decisions.md 2026-10-31).
+      const font = object === 'balloon' ? { ...set.font, k: set.font.k * GLYPH.balloon } : set.font;
+      mark(id, 'digit', 'digits', disc(place), { place, text: item.text, tone: item.tone, grow: item.grow, font, on: object });
+    }
     else if (item.kind === 'arc') {
-      // From place top to place top, 8px high; across a row break, out to the right margin and in from the left one.
+      // From place top to place top, 5px high, so with its stroke it stays 1.5px under a track-1 line;
+      // across a row break, out past the disc's ring and in before it, short of the side lines.
       const [a, b] = [Math.min(item.from, item.to), Math.max(item.from, item.to)];
       const [da, db] = [disc(a), disc(b)];
-      const reach = mul(add(U, set.G), 0.5);
+      const reach = add(mul(da.w, 0.5), set.ringGap, set.line);
       const parts = Math.floor(a / 5) === Math.floor(b / 5) ? [[midX(da), midX(db), da.y]] : [[midX(da), add(midX(da), reach), da.y], [sub(midX(db), reach), midX(db), db.y]];
       parts.forEach(([x0, x1, top], i) => mark(parts.length > 1 ? `${id}-${i}` : id, 'arc', 'arcs', grow(span(x0, sub(top, set.arc), x1, top), half), { half: parts.length > 1 ? (i ? 'in' : 'out') : null }));
     } else if (item.kind === 'wrap') line(id, 'unknown', outline(runSlabs(0, r, null), set.track1, set.line));
@@ -454,8 +481,9 @@ export function layoutScene(plan, set) {
       line(id, 'unknown', [span(l, bracketTop, rr, add(bracketTop, set.line)), span(l, add(bracketTop, set.line), add(l, set.line), add(bracketTop, set.line, set.tick)),
         span(sub(rr, set.line), add(bracketTop, set.line), rr, add(bracketTop, set.line, set.tick))]);
     } else if (item.kind === 'dome') {
-      halo(id, domeBox);
-      mark(id, 'dome', 'dome', domeBox, { mark: '?', on: kind === 'basket' ? 'bracket' : 'wrap' });
+      const b = domeBoxOf(item.over);
+      halo(id, b);
+      mark(id, 'dome', 'dome', b, { mark: '?', on: kind === 'basket' ? 'bracket' : item.over === 'top' ? 'top' : 'wrap' });
     } else if (item.kind === 'lid') {
       // Its halo moves with it, by the same offset, and starts past the clip too.
       const h = halo(id, lidBox);
@@ -515,7 +543,7 @@ export function layoutScene(plan, set) {
   }
   for (const item of plan.leaving) {
     const b = item.shape === 'balloon' ? { ...disc(item.place, 'balloon'), h: /** @type {Len} */ ([0.98, 0]) } : disc(item.place, item.shape);
-    mark(item.id, 'object', 'objects', b, { place: item.place, role: item.role, shape: item.shape, leaving: item.exit, to: item.exit === 'up' ? flyUp(b) : null });
+    mark(item.id, 'object', 'objects', b, { place: item.place, role: item.role, shape: item.shape, leaving: item.exit, to: item.exit === 'up' ? flyUp(b, Math.floor(item.place / 5)) : null });
   }
   return { dw, dh, n, rows, marks };
 }

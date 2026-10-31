@@ -30,6 +30,15 @@ const LOOP = 50;
  */
 const fixedCover = (game, level) => (game.meta.id === 'balance' && level.model === 'balance') || (game.meta.id === 'stories' && level.unknown === 'change');
 
+/**
+ * A first miss whose display runs and comes back, as a later miss's does (design 7.1's written
+ * exception): the stories' level 3, where a display that lifts the dome would leave the places under
+ * it, so the answer, on screen (decisions.md 2026-10-31). With reduced motion it is skipped, as a
+ * later miss's display is (design 7.2).
+ * @type {(game: Game, level: Level, display: string) => boolean}
+ */
+const passing = (game, level, display) => game.meta.id === 'stories' && level.unknown === 'change' && display !== 'flash';
+
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
 /** A tour can count twenty things, 150 ms each, with motion: the cards may stay locked a few seconds. */
 const unlocked = (page) => expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
@@ -94,9 +103,10 @@ async function openRound(page, hash) {
  * round again, solved on the first tap: the picture asked for after the solve shows no cover either.
  * @param {import('@playwright/test').Page} page
  * @param {string} hash
+ * @param {Game} game
  * @returns {Promise<{ answer: any, covers: string[] }>} the answer, and the covers shown at rest
  */
-async function shellPath(page, hash) {
+async function shellPath(page, hash, game) {
   const { round, level, answerAt } = await openRound(page, hash);
   const panel = page.locator('main[data-screen="round"] [data-area="picture"]');
   const where = (what) => `${hash}: ${what}`;
@@ -112,9 +122,11 @@ async function shellPath(page, hash) {
     await card(page, i).click();
     await unlocked(page);
     if (m === 0) {
-      // Only the first miss: with reduced motion the balance skips a later display (design 7.2).
+      // Only the first miss: with reduced motion the balance skips a later display (design 7.2), and
+      // the stories' level 3 one that comes back (passing).
       const display = RULES[round.choices[i].rule].display;
-      await expect(panel.locator(`[data-display="${display}"]`).first(), where(`miss 1 shows ${display}`)).toBeVisible();
+      if (passing(game, level, display)) await expect(panel.locator('[data-display]'), where(`miss 1's ${display} came back`)).toHaveCount(0);
+      else await expect(panel.locator(`[data-display="${display}"]`).first(), where(`miss 1 shows ${display}`)).toBeVisible();
     }
     if (step >= 2) await expect(panel.locator('[data-hint]').first(), where(`step ${step} has the hint`)).toBeAttached();
     if (step === 3) {
@@ -174,7 +186,7 @@ for (const { path, games } of SITES) {
         await page.goto(`${path}#/dev`);
         /** @type {{ seed: number, answer: any, covers: string[] }[]} */
         const rest = [];
-        for (let seed = 1; seed <= SEEDS; seed++) rest.push({ seed, ...(await shellPath(page, `#/dev/${id}/${i + 1}/${seed}`)) });
+        for (let seed = 1; seed <= SEEDS; seed++) rest.push({ seed, ...(await shellPath(page, `#/dev/${id}/${i + 1}/${seed}`, game)) });
         if (!fixedCover(game, level)) return;
         // Two rounds with different answers show the same covers at rest: the cover's size never
         // tells what is under it (design 6.6, 6b76be4). Sizes are read in cubes, as the dome is two
@@ -195,7 +207,7 @@ for (const { path, games } of SITES) {
     test(`${id} ${n}, seed 1, with motion: the shell's path keeps the render contract`, async ({ page }) => {
       await page.clock.install({ time: NOW });
       await page.goto(`${path}#/dev`);
-      await shellPath(page, `#/dev/${id}/${n}/1`);
+      await shellPath(page, `#/dev/${id}/${n}/1`, game);
     });
   }
 }

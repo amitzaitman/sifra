@@ -130,6 +130,45 @@ async function calibrate(page, round, state, vp, want) {
   return out;
 }
 
+/**
+ * Level 3's first miss on a display that lifts the dome runs and comes back, the dome down (decisions.md
+ * 2026-10-31): to look at the display, motion goes on and its marks' animations are held, each 1 ms
+ * before its end (as drawn, still running, so the view waits). The function returned lets it end:
+ * the picture comes back, and reduced motion is on again.
+ * @param {import('@playwright/test').Page} page
+ * @param {() => Promise<void>} click
+ */
+async function heldDisplay(page, click) {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const style = await page.addStyleTag({ content: '[data-display] * { animation-play-state: paused !important; }' });
+  await click();
+  await expect(draw(page)).toHaveAttribute('data-display', /./);
+  await draw(page).evaluate((d) => {
+    for (const a of d.getAnimations({ subtree: true })) a.currentTime = Number(a.effect?.getComputedTiming().endTime) - 1;
+  });
+  return async () => {
+    await style.evaluate((el) => el.remove());
+    await expect(draw(page)).not.toHaveAttribute('data-display');
+    await unlocked(page);
+    await expectCalm(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  };
+}
+
+/**
+ * Level 3 after a first miss's display came back: the fixed dome down, none of the places under it on
+ * screen (no ghost, dashed place, digit or arc), no hint (playtest 2026-10-31).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} where
+ */
+async function expectDomeBack(page, where) {
+  await expect(page.locator('.st-lid .cover[data-mark="?"]'), where).toHaveCount(1);
+  await expect(page.locator('.st-lid .cover.is-lifted'), where).toHaveCount(0);
+  await expect(page.locator('[data-area="picture"] :is(.st-ghost, .st-place, .st-digit, .st-arc, .st-dash)'), where).toHaveCount(0);
+  await expect(page.locator('.st-obj[data-role="unknown"]'), where).toHaveCount(0);
+  await expect(draw(page), where).not.toHaveAttribute('data-hint');
+}
+
 // Two rounds, each through rest, op.other's four-row overflow (design 7.3), the hint, the tour and the
 // closing: 10 − 9 = ? (a visible run: the wrap and its dome, the outlines; overflow 19 from place 0)
 // and 5 + ? = 9 (level 3: the chips, the fixed dome, the whole's outline; overflow 14 from place 5;
@@ -149,10 +188,16 @@ for (const vp of /** @type {[number, number][]} */ ([[320, 568], [568, 320], [39
       // op.other first, its display; with reduced motion a later miss skips its display: the hint, then the tour.
       const wrong = wrongOf(round).sort((a, b) => Number(round.choices[b].rule === 'op.other') - Number(round.choices[a].rule === 'op.other'));
       const { value } = round.choices[wrong[0]];
-      await card(page, wrong[0]).click();
+      // Level 3's comes back once drawn: held to be looked at.
+      const release = c.id === 'add-change' ? await heldDisplay(page, () => card(page, wrong[0]).click()) : await card(page, wrong[0]).click();
       await expect(draw(page)).toHaveAttribute('data-display', 'overflow');
       expect(planScene(round, { display: 'overflow', rule: 'op.other', value }).rows, where(`overflow ${value}`)).toBe(4);
       expect(await calibrate(page, round, { display: 'overflow', rule: 'op.other', value }, vp, c.overflow), where(`overflow ${value}`)).toEqual([]);
+      if (release) {
+        await release();
+        await expectDomeBack(page, where('after its overflow'));
+        expect(await calibrate(page, round, 'rest', vp, c.rest), where('back at rest')).toEqual([]);
+      }
       await card(page, wrong[1]).click();
       await expect(draw(page)).toHaveAttribute('data-hint', '');
       expect(await calibrate(page, round, { hint: true }, vp, c.hint), where('at the hint')).toEqual([]);
@@ -234,16 +279,18 @@ const glyphProblems = (page, where) => draw(page).evaluate((d, at) => {
 /**
  * The ink of each two-digit number and of the tour's grown last digit on an object, read from the
  * page's pixels (the digit alone, black on white): inside its disc, a rectangle in a circle, its
- * corners 1px clear (design 6.10; tests/stories.test.js holds the same with GLYPH's measured ink).
- * Also the texts it read, so a test can tell that it read the digits it is there for.
+ * corners 1px clear (design 6.10; tests/stories.test.js holds the same with GLYPH's measured ink),
+ * and its middle within 1px of the box's, up and down (GLYPH.pad; playtest 2026-10-31). Also the
+ * texts it read, so a test can tell that it read the digits it is there for.
  * @param {import('@playwright/test').Page} page
  * @param {string} where
+ * @param {string} [which] the glyphs to read: by default the wide and the grown digits
  */
-async function inkProblems(page, where) {
+async function inkProblems(page, where, which = '.st-digit:is(.is-two, .is-grow)') {
   const out = [];
   const read = [];
-  const digits = await page.locator('[data-area="picture"] .st-digit:is(.is-two, .is-grow)').all();
-  const style = await page.addStyleTag({ content: '[data-ink] [data-area="picture"] { background: #fff !important; } [data-ink] [data-area="picture"] * { visibility: hidden !important; } [data-ink] [data-ink-at] { visibility: visible !important; color: #000 !important; text-shadow: none !important; } [data-ink] [data-ink-at]::before { display: none !important; }' });
+  const digits = await page.locator(`[data-area="picture"] ${which}`).all();
+  const style = await page.addStyleTag({ content: '[data-ink] [data-area="picture"] { background: #fff !important; } [data-ink] [data-area="picture"] * { visibility: hidden !important; } [data-ink] [data-ink-at] { visibility: visible !important; color: #000 !important; text-shadow: none !important; box-shadow: none !important; background: transparent !important; } [data-ink] [data-ink-at]::before { display: none !important; }' });
   for (const digit of digits) {
     // The clip is in the viewport: the panel in it (a tap on a card may have scrolled the page).
     await digit.scrollIntoViewIfNeeded();
@@ -252,7 +299,8 @@ async function inkProblems(page, where) {
       document.querySelector('main')?.setAttribute('data-ink', '');
       const b = n.getBoundingClientRect();
       const s = getComputedStyle(n);
-      return { text: n.textContent, cx: b.left + b.width / 2, cy: b.top + b.height / 2, w: parseFloat(s.width), h: parseFloat(s.height) };
+      const scale = s.scale === 'none' ? [1] : s.scale.split(' ').map(Number);
+      return { text: n.textContent, cx: b.left + b.width / 2, cy: b.top + b.height / 2, w: parseFloat(s.width), h: parseFloat(s.height), sy: scale.at(-1) ?? 1 };
     });
     // Room round the disc, so ink that leaves it shows.
     const pad = 8;
@@ -288,7 +336,12 @@ async function inkProblems(page, where) {
     const xs = [ink.x0 / k - pad - geo.w / 2, ink.x1 / k - pad - geo.w / 2];
     const ys = [ink.y0 / k - pad - geo.h / 2, ink.y1 / k - pad - geo.h / 2];
     const far = Math.max(...xs.flatMap((x) => ys.map((y) => Math.hypot(x, y))));
-    if (far > geo.w / 2 - 1) out.push(`${at}: its ink (${(xs[1] - xs[0]).toFixed(1)} × ${(ys[1] - ys[0]).toFixed(1)}) reaches ${far.toFixed(2)}px from the middle, ${(geo.w / 2 - 1).toFixed(2)} allowed`);
+    const chip = geo.w !== geo.h;
+    if (!chip && far > geo.w / 2 - 1) out.push(`${at}: its ink (${(xs[1] - xs[0]).toFixed(1)} × ${(ys[1] - ys[0]).toFixed(1)}) reaches ${far.toFixed(2)}px from the middle, ${(geo.w / 2 - 1).toFixed(2)} allowed`);
+    // A grown digit grows from its middle, and is drawn at its grown size: an offset grows with it,
+    // to 1.35px measured (a 20.2px '6' grown 1.3 at 390×844), so 1.5px there.
+    const low = (ys[0] + ys[1]) / 2;
+    if (Math.abs(low) > (geo.sy === 1 ? 1 : 1.5)) out.push(`${at}: its ink's middle ${low.toFixed(2)}px ${low > 0 ? 'below' : 'above'} the box's`);
   }
   await style.evaluate((s) => s.remove());
   return { out, read };
@@ -310,8 +363,10 @@ async function glyphsThrough(page, round, rules) {
   const inked = [];
   for (const [m, rule] of rules.entries()) {
     const i = round.choices.findIndex((c) => c.rule === rule);
-    await card(page, i).click();
-    await unlocked(page);
+    // Level 3's first display comes back once drawn when it lifts the dome: held to be looked at.
+    const held = m === 0 && round.unknown === 'change' && RULES[rule].display !== 'flash';
+    const release = held ? await heldDisplay(page, () => card(page, i).click()) : await card(page, i).click();
+    if (!held) await unlocked(page);
     if (m === 0) await expect(draw(page)).toHaveAttribute('data-display', RULES[rule].display);
     const where = `${key}, card ${round.choices[i].value} (${rule})`;
     out.push(...await glyphProblems(page, where));
@@ -320,11 +375,34 @@ async function glyphsThrough(page, round, rules) {
       out.push(...ink.out);
       inked.push(ink.read);
     }
+    if (release) await release();
   }
   await card(page, round.choices.findIndex((c) => !c.rule)).click();
   await expect(page.locator('[data-next]')).toBeVisible();
   out.push(...await glyphProblems(page, `${key} solved`));
   return { out, inked };
+}
+
+for (const vp of /** @type {[number, number][]} */ ([[1024, 1366], [390, 844]])) {
+  test(`${vp.join('×')}: every digit's and chip's ink in the middle of its box, within 1px (u up to 64; playtest 2026-10-31)`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: vp[0], height: vp[1] });
+    const problems = [];
+    const read = [];
+    for (const [id, s, k] of /** @type {[string, number, number][]} */ ([['add-10', 4, 5], ['add-change', 3, 6], ['take-5', 5, 2]])) {
+      const { round } = await devAt(page, id, storySeed(id, s, k));
+      for (const i of wrongOf(round).slice(0, round.choices.length - 1)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      await expect(page.locator('[data-tour]').first()).toBeVisible();
+      const ink = await inkProblems(page, `${id} ${s}, ${k} in the tour`, ':is(.st-digit, .st-chip)');
+      problems.push(...ink.out);
+      read.push(...ink.read);
+    }
+    expect(problems).toEqual([]);
+    expect(read.length).toBeGreaterThan(10);
+  });
 }
 
 test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11 (u 22.3px) and the tour\'s 10; 6 + ? = 10\'s jumps, chips and covers; 6 − 3\'s jumps back', async ({ page }) => {
@@ -422,17 +500,54 @@ for (const [id, seed, structure] of /** @type {[string, () => number, string?][]
       await expect.poll(async () => (await now(page)).phase).not.toBe(was);
       at = await now(page);
     }
-    // The first phase, the still 'before', has nothing that moves and ends at once; so may the last,
-    // where nothing new enters (the basket's). The morph, and each phase that builds a token, are held
-    // until step(): every round here has one, so the loop above ran at least once.
-    const phases = phasesOf(round).slice(1);
-    expect(seen).toEqual(phases.filter((p) => seen.includes(p)));
-    const held = phases.filter((p, i) => p === 'event:M' || JSON.stringify(builtAt(round, p)) !== JSON.stringify(builtAt(round, phasesOf(round)[i])));
-    expect(held.length, 'a phase that moves').toBeGreaterThan(0);
-    expect(seen).toEqual(expect.arrayContaining(held));
+    // Every phase before the end moves, so each is held until step(): the still 'before' too, its start
+    // entering in order (playtest 2026-10-31), then the morph, the event and the '?'. The end is held
+    // where something enters there (the wrap draws in), and not in the basket, where nothing does.
+    expect(seen.filter((p) => p !== 'rest')).toEqual(phasesOf(round).slice(0, -1));
     expect(await now(page)).toMatchObject({ phase: null, busy: null, shown: all, boxes: first.boxes, q: true });
   });
 }
+
+// The still 'before' is seen (playtest 2026-10-31): at normal speed the event's next phase starts a
+// quarter of a second or more after the round's picture, once the start's objects have entered.
+for (const [id, s, k, structure] of /** @type {[string, number, number, string?][]} */ ([['add-5', 1, 4], ['add-change', 4, 3], ['take-5', 5, 4], ['mixed-10', 9, 3, 'change-take']])) {
+  test(`${id}${structure ? ` (${structure})` : ''}: the start enters first, and the story goes on 250 ms or more after the picture appears`, async ({ page }) => {
+    await page.addInitScript(() => {
+      /** @type {Record<string, number>} */
+      const t = {};
+      Object.assign(window, { phases: t });
+      new MutationObserver(() => {
+        const phase = document.querySelector('.st-draw')?.getAttribute('data-event');
+        if (phase && t[phase] === undefined) t[phase] = Number(document.timeline.currentTime);
+      }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-event'] });
+    });
+    await page.goto(`${INDEX}#/dev/stories/${number(id)}/${storySeed(id, s, k, structure)}${structure ? `/${structure}` : ''}`);
+    await expect(page.locator('[data-choices]')).toBeVisible();
+    await expect(page.locator('[data-event]')).toHaveCount(0);
+    const t = await page.evaluate(() => /** @type {any} */ (window).phases);
+    const next = Object.keys(t).find((p) => p !== 'event:0');
+    expect(Object.keys(t)[0]).toBe('event:0');
+    expect(t[next] - t['event:0'], `${next} after the picture`).toBeGreaterThanOrEqual(250);
+  });
+}
+
+test('take: a leaver of the second row rises half a column right, drawn under what stays', async ({ page }) => {
+  const { round } = await holdAt(page, `#/dev/stories/${number('take-10')}/${seedOf('take-10', (r) => r.story.s === 10 && r.story.k === 4 && r.story.verb === 'fly')}`);
+  for (let i = 0; i < 4 && (await now(page)).phase !== 'event:B'; i++) {
+    const was = (await now(page)).phase;
+    await step(page);
+    await expect.poll(async () => (await now(page)).phase).not.toBe(was);
+  }
+  expect((await now(page)).phase).toBe('event:B');
+  const layer = await page.locator('[data-layer="objects"]').evaluate((l) => [...l.children].map((n) => ({
+    id: n.getAttribute('data-id'), leaving: n.getAttribute('data-leaving'), dx: n.style.getPropertyValue('--txu'),
+  })));
+  // The leavers first in the layer (painted under the six that stay), the second row's drifting right.
+  expect(layer.slice(0, 4).map((n) => n.leaving)).toEqual(Array(4).fill('up'));
+  expect(layer.slice(4).every((n) => !n.leaving)).toBe(true);
+  expect(layer.filter((n) => n.leaving).map((n) => [n.id, n.dx]).sort()).toEqual([['obj-6', '0.55'], ['obj-7', '0.55'], ['obj-8', '0.55'], ['obj-9', '0.55']]);
+  expect(round.story.r).toBe(6);
+});
 
 test('a wrong tap during the event finishes it and is a miss like any other: its display, the row whole; the record lists it', async ({ page }) => {
   await seedStore(page, storeWith({ games: { stories: ladderAt('take-10') } }));
@@ -505,6 +620,11 @@ test('R6: the start yellow, add and take alike; arrivals in --role-added with a 
   await expectRoleColours(page);
   // 5 − 2 = ?: three stay yellow (the colour never tells the operation), two outlines, hollow.
   await devAt(page, 'take-5', storySeed('take-5', 5, 2));
+  // A balloon's knot narrows away from its disc, and its string is a whole 2px: no arrow up under it (playtest 2026-10-31).
+  expect(await page.locator('.st-obj[data-shape="balloon"]').evaluateAll((els) => els.map((el) => {
+    const [knot, string] = [getComputedStyle(el, '::before'), getComputedStyle(el, '::after')];
+    return { clip: knot.clipPath, string: string.width };
+  }))).toEqual(Array(3).fill({ clip: 'polygon(0px 0px, 100% 0px, 65% 100%, 35% 100%)', string: '2px' }));
   expect(await colours(page.locator('.st-obj[data-role="part"]'))).toEqual(Array(3).fill(expect.objectContaining({ fill: part })));
   expect(await colours(page.locator('.st-outline[data-role="removed"]'))).toEqual(Array(2).fill(expect.objectContaining({ fill: 'rgba(0, 0, 0, 0)', border: `solid ${removed}` })));
   await expectRoleColours(page);
@@ -592,7 +712,8 @@ for (const { id, seed, structure } of DEALT) {
       const display = RULES[rule].display;
       const where = `${id} ${JSON.stringify(round.story)}, card ${value} (${rule})`;
       const slot = await card(page, i).boundingBox();
-      await card(page, i).click();
+      // Level 3's display that lifts the dome comes back once drawn: held to be looked at, then let go.
+      const release = level.unknown === 'change' && display !== 'flash' ? await heldDisplay(page, () => card(page, i).click()) : await card(page, i).click();
       await expect(card(page, i), where).toHaveClass(/is-retired/);
       expect(await card(page, i).boundingBox(), where).toEqual(slot);
       await expect(draw(page), where).toHaveAttribute('data-display', display);
@@ -608,6 +729,11 @@ for (const { id, seed, structure } of DEALT) {
         await expect(page.locator('.st-digit', { hasText: new RegExp(`^${value}$`) }), where).toHaveCount(1);
       }
       expect(await calibrate(page, round, { display, rule, value, hint: level.options === 3 }, [vp.width, vp.height], []), where).toEqual([]);
+      if (release) {
+        await release();
+        await expectDomeBack(page, where);
+        expect(await calibrate(page, round, 'rest', [vp.width, vp.height], ['lid']), `${where}: back at rest`).toEqual([]);
+      }
     }
   });
 }
@@ -647,6 +773,7 @@ for (const id of ['add-10', 'add-change', 'mixed-10']) {
 for (const id of ['add-change', 'take-10', 'mixed-10']) {
   test(`${id}, the help ladder: a display that stays, then the hint, then the tour ends on the answer; outcome shown`, async ({ page }) => {
     const { round, answerAt } = await playAt(page, id);
+    const { kind } = storyOf(round);
     const { width, height } = /** @type {{ width: number, height: number }} */ (page.viewportSize());
     /** @type {(state: any) => Promise<string[]>} the picture where scene.js puts it, once nothing moves */
     const placed = async (state) => {
@@ -656,14 +783,20 @@ for (const id of ['add-change', 'take-10', 'mixed-10']) {
     const wrong = wrongOf(round);
     const { value, rule } = round.choices[wrong[0]];
     const slot = await card(page, wrong[0]).boundingBox();
+    // On level 3 a display that lifts the dome runs and comes back, the dome down (decisions.md 2026-10-31).
+    const lifts = kind === 'change' && RULES[rule].display !== 'flash';
     await card(page, wrong[0]).click();
     await expect(card(page, wrong[0])).toHaveClass(/is-retired/);
     expect(await card(page, wrong[0]).boundingBox()).toEqual(slot);
-    await expect(draw(page)).toHaveAttribute('data-display', RULES[rule].display);
+    if (lifts) await expect(draw(page)).not.toHaveAttribute('data-display');
+    else await expect(draw(page)).toHaveAttribute('data-display', RULES[rule].display);
     await unlocked(page);
     await expect(page.locator('[data-hint]')).toHaveCount(0);
-    expect(await placed({ display: RULES[rule].display, rule, value })).toEqual([]);
-    // The display stays to the next tap: a minute changes nothing.
+    if (lifts) {
+      expect(await placed('rest')).toEqual([]);
+      await expectDomeBack(page, `${rule} ${value}`);
+    } else expect(await placed({ display: RULES[rule].display, rule, value })).toEqual([]);
+    // The display, or the picture it came back to, stays to the next tap: a minute changes nothing.
     const html = await page.locator('main').innerHTML();
     await page.clock.runFor(60000);
     expect(await page.locator('main').innerHTML()).toBe(html);
@@ -685,6 +818,32 @@ for (const id of ['add-change', 'take-10', 'mixed-10']) {
     expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', wrong: wrong.map((i) => round.choices[i].rule), help: ['hint', 'tour'] });
   });
 }
+
+test('level 3, step 3: from the display straight to the tour, the cover never coming down between two lifts (playtest 2026-10-31)', async ({ page }) => {
+  // 4 + ? = 7: given.part 4, given.whole 7, op.other 11; the third, op.other, lifts the dome.
+  const { round, answerAt } = await devAt(page, 'add-change', storySeed('add-change', 4, 3));
+  await expect(page.locator('[data-event]')).toHaveCount(0);
+  const [a, b, c] = ['given.part', 'given.whole', 'op.other'].map((rule) => round.choices.findIndex((ch) => ch.rule === rule));
+  for (const i of [a, b]) {
+    await card(page, i).click();
+    await unlocked(page);
+    await expectCalm(page);
+  }
+  await expect(page.locator('.st-piece')).not.toHaveCount(0);
+  await page.evaluate(() => {
+    const w = /** @type {any} */ (window);
+    w.drops = 0;
+    new MutationObserver((list) => {
+      for (const m of list) for (const n of m.addedNodes) if (n instanceof Element && n.matches('.st-piece, .st-lid')) w.drops += 1;
+    }).observe(document.querySelector('.st-draw'), { subtree: true, childList: true });
+  });
+  await card(page, c).click();
+  await expect(page.locator('[data-tour]')).toHaveText(tourOf(round));
+  await unlocked(page);
+  expect(await page.evaluate(() => /** @type {any} */ (window).drops), 'a cover put down after the third miss').toBe(0);
+  await card(page, answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+});
 
 for (const id of ['add-5', 'take-5', 'whole-5']) {
   test(`${id}, 3 options: dots on the cards; the first miss keeps its display and brings the hint, the second the tour, to the answer`, async ({ page }) => {
@@ -724,6 +883,33 @@ for (const id of stories.levels.filter((l) => l.demo).map((l) => l.id)) {
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', String(number(id)));
   });
 }
+
+test('a session at a level of nine stories deals eight different exercises; two helped rounds keep it there (playtest 2026-10-31)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await playAt(page, 'add-5');
+  const seen = [];
+  for (let n = 0; n < 20; n++) {
+    const screen = page.locator('main[data-screen]');
+    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
+    const name = await screen.getAttribute('data-screen');
+    if (name === 'end') break;
+    if (name === 'round') {
+      await look(page);
+      const { round, answerAt } = await roundOf(page);
+      seen.push(`${round.equation.left.join(' ')} = ${round.equation.right.join(' ')}`);
+      // One wrong card, then the answer: every round helped, so the ladder would step down; add-5 says down: false.
+      await card(page, wrongOf(round)[0]).click();
+      await unlocked(page);
+      await card(page, answerAt).click();
+    }
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+  expect(seen).toHaveLength(8);
+  expect(new Set(seen).size, seen.join(', ')).toBe(8);
+  expect((await stored(page)).child.attempts.map((a) => a.levelId)).toEqual(Array(8).fill('add-5'));
+});
 
 test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
