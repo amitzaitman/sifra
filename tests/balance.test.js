@@ -149,10 +149,12 @@ test('a display takes 8 rows on the pans at most (design 6.8): a wrong value tha
   assert.equal(displayRows(round, 'overflow', 28), 9);
   assert.equal(balance.budget(round, { value: 27, rule: 'op.other' }), null);
   assert.match(balance.budget(round, { value: 28, rule: 'op.other' }), /overflow needs 9 rows/);
-  // A slip's count-up is drawn as ghosts (design 7.3); the jumps need two numbers on the other pan,
-  // and a display the pans do not draw has no drawing at all.
+  // A slip's count-up is drawn as ghosts (design 7.3); the jumps go from the known part's last cube over
+  // the unknown's places, within the start picture's rows (decisions.md 2026-10-31); a display the
+  // pans do not draw has no drawing at all.
   assert.equal(balance.budget(round, { value: 2, rule: 'slip.near' }), null);
-  assert.match(balance.budget(round, { value: 2, rule: 'count.start-included' }), /jumps has no drawing/);
+  assert.equal(balance.budget(round, { value: 2, rule: 'count.start-included' }), null);
+  assert.equal(displayRows(round, 'jumps', 2), 4);
   assert.match(balance.budget(round, { value: 2, rule: 'seq.decade-ten' }), /regroup has no drawing/);
   // On the 20 levels op.other and equal.add-all reach 39; those cards are left out, and every card fits.
   let left = 0;
@@ -181,12 +183,15 @@ test('displays: the balance draws six, on every model, and says no to any other 
     assert.equal(drawable(r, 'constructor'), false, `${id}: constructor`);
   }
   assert.match(balance.budget(balance.makeRound(level('turn'), rng(1)), { value: 2, rule: 'seq.decade-ten' }), /regroup has no drawing/);
-  // canShow is drawable: the jumps count on over the other pan's two numbers, so ? = a + b only.
-  const rounds = Array.from({ length: 40 }, (_, k) => balance.makeRound(level('missing-reversed'), rng(k + 1)));
-  const jumps = (r) => balance.canShow(r, { value: r.answer + 1, rule: 'count.start-included' });
-  const [sum, part] = ['result-left', 'right-part'].map((u) => rounds.filter((r) => r.unknown === u));
-  assert.ok(sum.length && sum.every(jumps), '? = a + b draws the jumps');
-  assert.ok(part.length && !part.some(jumps), 'c = a + ? has none');
+  // canShow is drawable: the jumps count on over the other pan's two numbers (? = a + b), or from a missing
+  // part's known part over the unknown's places (every missing-part form, decisions.md 2026-10-31).
+  const jumps = (r) => balance.canShow(r, { value: r.unknown === 'result-left' ? r.answer - 1 : r.answer + 1, rule: 'count.start-included' });
+  const rounds = Array.from({ length: 200 }, (_, k) => balance.makeRound(level('missing-symbols'), rng(k + 1)));
+  for (const form of ['result-left', 'right-part', 'left-part']) {
+    const some = rounds.filter((r) => r.unknown === form);
+    assert.ok(some.length && some.every(jumps), `${form} draws the jumps`);
+  }
+  assert.ok(rounds.some((r) => r.eqform === 'reversed'), 'c = a + ? among them');
   assert.equal(balance.canShow(rounds[0], { value: 2, rule: 'seq.decade-ten' }), false);
 });
 
@@ -405,3 +410,21 @@ test('the fixed cover stands beside the top row\'s cubes or on them, never over 
   assert.deepEqual(lidPlaces({ row: 0, col: 3 }), [3, 4, 8, 9]);
 });
 
+test('level 6 deals the missing-part exercises with a large known part again: count.start-included is drawn there (decisions.md 2026-10-31)', () => {
+  // 15 + ? = 18 and its forms: op.other (33) and equal.add-all leave the cards (8 rows at most), so the
+  // jumps (19, from the 15's last cube over the three places) give the second real error.
+  const big = { 'right-part': 0, 'left-part': 0 };
+  for (let seed = 1; seed <= 3000; seed++) {
+    const r = balance.makeRound(level('missing-symbols-20'), rng(seed));
+    if (r.unknown === 'result-left') continue;
+    const known = r.helpPicture.find((g) => g.role === 'part').count;
+    if (known >= 14) big[r.unknown] += 1;
+    const jump = r.choices.find((c) => c.rule === 'count.start-included');
+    if (jump) assert.equal(jump.value, r.answer + 1, `seed ${seed}`);
+  }
+  assert.ok(big['right-part'] > 50 && big['left-part'] > 15, JSON.stringify(big));
+  const r = Array.from({ length: 3000 }, (_, k) => balance.makeRound(level('missing-symbols-20'), rng(k + 1)))
+    .find((x) => x.equation.left.join(' ') === '15 + ?' && x.equation.right[0] === 18);
+  assert.ok(r, '15 + ? = 18 is dealt');
+  assert.deepEqual(r.choices.map((c) => c.value).filter((v) => v !== 3).every((v) => [15, 18, 4, 2].includes(v)), true, JSON.stringify(r.choices));
+});

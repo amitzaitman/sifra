@@ -6,7 +6,7 @@ import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { DISPLAYS, displayRows, drawable, drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 6, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 7, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
 // No dots under the cards' numbers: the pans show each number in rows of five, and the dots would let
@@ -14,9 +14,9 @@ export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 6, 
 const pans = {
   structure: 'equation', model: 'balance', look: /** @type {Level['look']} */ ('dots'), options: 4, demo: false, terms: false, cardDots: false,
 };
-// undrawn (architecture 2.2): count.start-included's jumps count on over the two numbers of the other
-// pan, so only ? = a + b draws them; a missing part has none (architecture 6, "Open questions").
-const missing = { ...pans, skill: 'eq.sign.missing', max: 10, undrawn: ['count.start-included'] };
+// count.start-included's jumps are drawn on every form (view.js jumps): over the other pan's two
+// numbers in ? = a + b, from the known part's last cube on a missing part (decisions.md 2026-10-31).
+const missing = { ...pans, skill: 'eq.sign.missing', max: 10 };
 // Every form met so far, c = a + ? in 40% of the rounds (R8) and each other form in 20%.
 const symbols = {
   ...missing, unknown: ['right-part', 'left-part', 'result-left'], look: /** @type {Level['look']} */ ('symbols'),
@@ -138,8 +138,8 @@ export const displays = DISPLAYS;
 
 /**
  * Whether the round's picture can draw a wrong choice's display (architecture 2.1; drawable() in
- * view.js): the jumps count on over the two numbers of the other pan (? = a + b), so a missing part
- * has none. budget() says no where this does, and where the rows do not fit.
+ * view.js): the jumps count on over the two numbers of the other pan (? = a + b), or from a missing
+ * part's known part (a + ? = c). budget() says no where this does, and where the rows do not fit.
  * @param {Round} round
  * @param {Choice} choice
  * @returns {boolean}

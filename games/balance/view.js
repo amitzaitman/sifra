@@ -136,10 +136,14 @@ function drawingOf(table, display) {
 /** @type {<T>(drawing: T) => Record<string, T>} one drawing for every display (a judging card, the turned rows) */
 const forEvery = (drawing) => Object.fromEntries(DISPLAYS.map((id) => [id, drawing]));
 
+/** @type {(round: Round) => boolean} a missing part (a + ? = c, ? + a = c, c = a + ?): the unknown's pan holds a known part */
+const missingPart = (round) => round.unknown === 'right-part' || round.unknown === 'left-part';
+
 /**
  * Whether show() can draw a display on this round (design 7.1, 7.3): one of DISPLAYS, which a
- * judging card and the turned rows draw as ghosts and the pans each its own way; the jumps count on
- * over the two numbers of the other pan (? = a + b), so they have no drawing where it holds one (a + ? = c).
+ * judging card and the turned rows draw as ghosts and the pans each its own way. The jumps count on
+ * over the two numbers of the other pan (? = a + b), or, on a missing part, from the known part's last
+ * cube over the unknown's places (a + ? = c, ? + a = c, c = a + ?; decisions.md 2026-10-31).
  * @param {Round} round
  * @param {string} display
  * @returns {boolean}
@@ -148,7 +152,9 @@ export function drawable(round, display) {
   if (!DISPLAYS.includes(display)) return false;
   if (round.model !== 'balance' || display !== 'jumps') return true;
   const data = sidesOf(round, false);
-  return data[data.left.some((g) => g.role === 'unknown') ? 'right' : 'left'].length === 2;
+  const u = data.left.some((g) => g.role === 'unknown') ? 'left' : 'right';
+  if (missingPart(round)) return data[u].some((g) => g.role === 'part');
+  return data[u === 'left' ? 'right' : 'left'].length === 2;
 }
 
 /**
@@ -211,16 +217,18 @@ function balanceScene(host, round, solved, signal) {
    * a ring never paints over a cube. Two pieces that share no column (a run from mid-row into the
    * next row) are joined by a link of the ring's line in the rows' gap, where the cover's bridge
    * runs, so the group reads as one outline (design 6.8, 7.2).
-   * @type {(layer: Layer, side: Side, runs: Run[], className: string) => HTMLElement[]}
+   * `marked`: places a display drew on (a jump's marks), neighbours too.
+   * @type {(layer: Layer, side: Side, runs: Run[], className: string, marked?: number[]) => HTMLElement[]}
    */
-  const rings = (layer, side, runs, className) => {
+  const rings = (layer, side, runs, className, marked = []) => {
     const own = new Set(runs.flatMap((r) => Array.from({ length: r.length }, (_, i) => r.start + i)));
     const { layout } = pans[side];
     // Before the hint the cover is the fixed one: what lies under it is no neighbour, its places look empty.
+    // Lifted (is-open), the fixed one is gone.
     const places = data[side].flatMap((g, i) => (g.cover ? layout.spans[i]?.places ?? [] : []));
-    const covered = outlined ? places : layout.lid ? lidPlaces(layout.lid) : [];
+    const covered = outlined ? places : layout.lid && !scene.classList.contains('is-open') ? lidPlaces(layout.lid) : [];
     const cubes = layout.cubes.map((c) => c.slot).filter((slot) => outlined || !places.includes(slot));
-    const taken = new Set([...cubes, ...covered].filter((slot) => !own.has(slot)));
+    const taken = new Set([...cubes, ...covered, ...marked].filter((slot) => !own.has(slot)));
     const on = (col, row) => col >= 0 && col < 5 && row >= 0;
     const other = (col, row) => on(col, row) && taken.has(row * 5 + col);
     return runs.flatMap((r) => {
@@ -303,24 +311,50 @@ function balanceScene(host, round, solved, signal) {
     put(layer[u], 'bl-zero is-wrong', at(span.places[0]), 0);
   };
   /**
-   * Counting on with the start counted (? = a + b): from a's last cube, one short; the places it
-   * missed keep a ring.
-   * @type {Show}
+   * Numbered marks along a path of places in a pan, from `first`, with an arc between two that follow
+   * on in a row; a place past the pan's last gets a ghost cube under its mark.
+   * @type {(layer: Layer, side: Side, path: number[], first: number) => void}
    */
-  const jumps = (layer, { value }) => {
-    const { layout } = pans[k];
-    const first = data[k][0].count;
-    const path = [layout.spans[0].places.at(-1), ...layout.spans[1].places];
-    while (path.length <= value - first) path.push(layout.slots + path.length - layout.spans[1].places.length - 1);
-    const steps = path.slice(0, value - first + 1);
-    stagger(steps.map((slot, j) => {
-      if (slot === steps[j - 1] + 1 && slot % 5) put(layer[k], 'bl-arc', at(slot - 1));
-      if (slot >= layout.slots) put(layer[k], 'bl-cube bl-ghost', at(slot));
-      const mark = put(layer[k], 'bl-mark', at(slot), first + j);
+  const hop = (layer, side, path, first) => {
+    const { layout } = pans[side];
+    stagger(path.map((slot, j) => {
+      if (slot === path[j - 1] + 1 && slot % 5) put(layer[side], 'bl-arc', at(slot - 1));
+      if (slot >= layout.slots) put(layer[side], 'bl-cube bl-ghost', at(slot));
+      const mark = put(layer[side], 'bl-mark', at(slot), first + j);
       // A mark is a white disc with a 2px edge, like a known cube: its digits get the same room, 3px each side.
       if (first + j > 9) condense(mark, first + j, mark.offsetWidth - 6);
       return mark;
     }));
+  };
+  /** @type {(layout: import('./stage.js').PanLayout, path: number[], n: number) => number[]} the path's first n places, on past the pan's last */
+  const along = (layout, path, n) => {
+    const out = path.slice(0, n);
+    for (let next = layout.slots; out.length < n; next++) out.push(next);
+    return out;
+  };
+  /**
+   * Counting on with the start counted (design 7.3). ? = a + b: from a's last cube, a on it, one short;
+   * the places it missed keep a ring. A missing part (a + ? = c): the cover lifts, 1 on the known part's
+   * last cube, then over the unknown's places to the whole, one more than the answer; the cube counted
+   * as 1 blinks and keeps a ring ("you counted one that was already there").
+   * @type {Show}
+   */
+  const jumps = (layer, { value }, lift) => {
+    if (missingPart(round)) {
+      lift();
+      const pi = data[u].findIndex((g) => g.role === 'part');
+      const start = pans[u].layout.spans[pi].places.at(-1);
+      const path = along(pans[u].layout, [start, ...span.places], value);
+      hop(layer, u, path, 1);
+      cubesOf(u, pi).at(-1)?.classList.add('is-flash');
+      rings(layer, u, [{ start, length: 1 }], 'is-wrong is-late', path);
+      return;
+    }
+    const { layout } = pans[k];
+    const first = data[k][0].count;
+    const path = [layout.spans[0].places.at(-1), ...layout.spans[1].places];
+    const steps = along(layout, path, value - first + 1);
+    hop(layer, k, steps, first);
     rings(layer, k, runsOf(path.slice(steps.length).filter((slot) => slot < layout.slots)), 'is-wrong is-late');
   };
   /**

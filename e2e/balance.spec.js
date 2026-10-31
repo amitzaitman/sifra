@@ -96,7 +96,7 @@ test('a first try: the pans stay level, the unknown shows in its colour, the ful
 // Every rule the game offers, in rounds that show it, with what its display draws (design 7.1, 7.3).
 // 13 + 5 = ? + 12 (both-sides-symbols 9): slip.near's 5, where equal.add-all's 30 needs 9 rows.
 const DISPLAYS = [
-  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 129],
+  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 129], ['missing-symbols-20', 31],
   ['both-sides', 1], ['both-sides-symbols', 9], ['turn', 1], ['true-false', 1], ['relational', 1],
 ];
 test('every wrong rule shows its display, and its card goes with its slot kept', async ({ page }) => {
@@ -1331,6 +1331,81 @@ test('the jumps: each arc hops from one mark\'s top to the next, drawn over the 
       await unlocked(page);
       await expect(page.locator('[data-display="jumps"] .bl-arc').first()).toBeVisible();
       expect(await page.evaluate(arcProblems), `${width}px ${level} ${seed}`).toEqual([]);
+    }
+  }
+});
+
+/**
+ * Where a ring of a jumps layer paints over a mark next to it (a ring round a mark's own place is its
+ * ring), read in the page as ringOverlaps reads cubes.
+ * @returns {string[]}
+ */
+function ringOverMarks() {
+  const out = [];
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '[data-game] [data-display] :is(.bl-ring, .bl-ring-link, .bl-mark) { pointer-events: auto !important; }';
+  const inside = (b, x, y) => x > b.left && x < b.right && y > b.top && y < b.bottom;
+  for (const mark of document.querySelectorAll('[data-display="jumps"] .bl-mark')) {
+    const b = mark.getBoundingClientRect();
+    const [cx, cy] = [b.left + b.width / 2, b.top + b.height / 2];
+    for (let t = 0; t <= 1; t += 1 / 16) {
+      const [x, y] = [b.left + 1 + t * (b.width - 2), b.top + 1 + t * (b.height - 2)];
+      for (const [px, py] of [[x, b.top + 1], [x, b.bottom - 1], [b.left + 1, y], [b.right - 1, y]]) {
+        const hits = document.elementsFromPoint(px, py);
+        const at = hits.indexOf(mark);
+        if (at < 0) continue;
+        for (const ring of hits.slice(0, at).filter((h) => h.matches('.bl-ring, .bl-ring-link'))) {
+          if (!inside(ring.getBoundingClientRect(), cx, cy)) out.push(`a ring over the mark ${mark.textContent}`);
+        }
+      }
+    }
+  }
+  style.remove();
+  return [...new Set(out)];
+}
+
+test('the jumps on a missing part: 1 on the known part\'s last cube, then over the unknown\'s places to the whole; that cube blinks and keeps a ring (design 7.3, decisions.md 2026-10-31)', async ({ page, browserName }) => {
+  test.setTimeout(120000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Level 6, where op.other and equal.add-all need more than 8 rows: 13 + ? = 19 (card 7), ? + 13 = 18 (6),
+  // 19 = 15 + ? (5, the right pan) and ? + 19 = 20 (2: the start and one place).
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    for (const seed of [10, 31, 45, 1]) {
+      const { round } = await devAt(page, 'missing-symbols-20', seed);
+      const i = round.choices.findIndex((c) => c.rule === 'count.start-included');
+      const where = `${width}px ${round.equation.left.join(' ')} = ${round.equation.right.join(' ')} (seed ${seed})`;
+      expect(i, where).toBeGreaterThanOrEqual(0);
+      const { value } = round.choices[i];
+      expect(value, where).toBe(round.answer + 1);
+      await card(page, i).click();
+      await unlocked(page);
+      const side = round.helpPicture.find((g) => g.role === 'unknown').side;
+      const marks = page.locator(`[data-display="jumps"] .bl-pan[data-pan="${side}"] .bl-mark`);
+      await expect(marks, where).toHaveText(Array.from({ length: value }, (_, j) => String(j + 1)));
+      await expect(page.locator('[data-display="jumps"] .bl-mark'), `${where}: on the unknown's pan only`).toHaveCount(value);
+      await expect(page.locator(`.bl-scene > .bl-pan[data-pan="${side}"] .bl-lid > .cover:not(.is-lifted)`), `${where}: the cover lifted`).toHaveCount(0);
+      const at = await page.evaluate((side) => {
+        const centre = (n) => { const b = n.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+        const stack = document.querySelector(`.bl-scene > .bl-pan[data-pan="${side}"] > .bl-stack`);
+        const part = [...stack.querySelectorAll('.bl-cube[data-role="part"]')].at(-1);
+        const places = [part, ...stack.querySelectorAll('.bl-cube[data-role="unknown"]')].map(centre);
+        const marks = [...document.querySelectorAll(`[data-display="jumps"] .bl-pan[data-pan="${side}"] .bl-mark`)].map(centre);
+        const ring = [...document.querySelectorAll(`[data-display="jumps"] .bl-pan[data-pan="${side}"] .bl-ring.is-wrong`)].map((r) => r.getBoundingClientRect().toJSON());
+        return { off: marks.map(([x, y], j) => Math.hypot(x - places[j][0], y - places[j][1])), flash: part.classList.contains('is-flash'), ring, start: part.getBoundingClientRect().toJSON(),
+          arcs: document.querySelectorAll('[data-display="jumps"] .bl-arc').length };
+      }, side);
+      // Each mark on its place: the first on the known part's last cube, then one on each of the unknown's places.
+      expect(Math.max(...at.off), `${where}: a mark off its place, px`).toBeLessThan(1);
+      expect(at.flash, `${where}: the cube counted as 1 blinks`).toBe(true);
+      expect(at.ring.length, `${where}: one ring`).toBe(1);
+      const [r, c] = [at.ring[0], at.start];
+      expect(r.left < c.left && r.right > c.right && r.top < c.top && r.bottom > c.bottom, `${where}: the ring round that cube`).toBe(true);
+      expect(at.arcs, `${where}: arcs`).toBeGreaterThan(0);
+      expect(await page.evaluate(arcProblems), where).toEqual([]);
+      expect(await page.evaluate(ringOverlaps, ringInset(browserName)), where).toEqual([]);
+      expect(await page.evaluate(ringOverMarks), where).toEqual([]);
+      await expect(page.locator('.bl-scene'), `${where}: the beam stays`).toHaveAttribute('data-tilt', 'level');
     }
   }
 });
