@@ -1041,7 +1041,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   topmost at its centre, by `elementFromPoint` with the painted nodes taking hits as `paintedOver` (4.7) does, and a
   digit's text fits its box (`scrollWidth`), or is centred on it (a 10 on one dot of the ten-frame's pair cards,
   design 7.2). A cover without a mark, the bridge between the pieces of a cover over two rows, is not checked as
-  topmost: the hint's ring runs along it in the same colour (the balance, design 6.6).
+  topmost: the hint's ring runs along it in the same colour (the balance, design 6.6). The view's `label`, at rest,
+  solved and in each thumb: a one-letter word (וְ, בְּ) takes a hyphen only before a digit (וְ-3, but וְעִגּוּל אֶחָד), and
+  solved it says no cover and nothing empty, over all 50 seeds (the shell's path reads 10; the re-check of bug hunt
+  #24 found the solved split and the moved frames saying וְ-עִגּוּל אֶחָד, 2026-10-31).
 - The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
   included (a `round.choices.sort()` in a render fails every clause; the shell's own freeze is site.spec.js's,
   4.6). Reverting 4781e24 (a ghost appended after

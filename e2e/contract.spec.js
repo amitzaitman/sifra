@@ -225,7 +225,8 @@ for (const { path, games } of SITES) {
  * Animations are finished as they start. After each step: nothing threw; every box shown is finite
  * and inside the host, and no inline style holds NaN; after a solve no cover is shown; in the panel,
  * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
- * is topmost (architecture 4.8). Returns what went wrong, the first 40 or so.
+ * is topmost (architecture 4.8); the view's label, at rest and solved, puts a hyphen after a one-letter word only
+ * before a digit, and solved says no cover and nothing empty (design 6.3). Returns what went wrong, the first 40 or so.
  * @param {{ url: string, levels: Level[], seeds: number }} arg
  * @returns {Promise<string[]>}
  */
@@ -324,6 +325,15 @@ async function loop({ url, levels, seeds }) {
     into.replaceChildren();
     return game.render(into, round, { signal, mode, solved, setEquation() {}, build() {}, onAttempt() {} }) ?? {};
   };
+  // The picture's label (design 6.3): a one-letter word (וְ, בְּ) joins the word after it and takes a hyphen only
+  // before a digit (וְ-3, וְעִגּוּל אֶחָד); solved, it names no cover and nothing empty (bug hunt #24).
+  /** @type {(view: any, where: string, solved: boolean) => void} */
+  const written = (view, where, solved) => {
+    const label = view?.label;
+    if (typeof label !== 'string') return;
+    if (/(^|\s)[א-ת][ְ-ׇּׁׂ]*-(?!\d)/.test(label)) out.push(`${where}: label "${label}", a hyphen before a word`);
+    if (solved && /מִכְס|רֵיק/.test(label)) out.push(`${where}: label "${label}" after the solve`);
+  };
   for (const level of levels) {
     for (let seed = 1; seed <= seeds && out.length < 40; seed++) {
       const at = `${level.id}${level.structure ? ` ${level.structure}` : ''} seed ${seed}`;
@@ -339,6 +349,7 @@ async function loop({ url, levels, seeds }) {
         }
         await drive(null);
         check(host, `${at} at rest`, { solved: false, top: true });
+        written(view, `${at} at rest`, false);
         const wrong = round.choices.filter((c) => c.rule);
         for (const [m, { value, rule }] of wrong.entries()) {
           const step = Math.min(3, m + 1 + (round.choices.length === 4 ? 0 : 1));
@@ -348,6 +359,7 @@ async function loop({ url, levels, seeds }) {
         }
         await drive(view.solve?.());
         check(host, `${at} solved`, { solved: true, top: true });
+        written(view, `${at} solved`, true);
         if (symbols) {
           ctl.abort();
           const again = new AbortController();
@@ -361,8 +373,9 @@ async function loop({ url, levels, seeds }) {
         // A thumb is the picture at rest or solved, checked above in the panel: here only its boxes
         // and, solved, no cover. Home draws its thumbs at seed 1; the end screen, solved, at any seed.
         for (const solved of seed === 1 ? [false, true] : [true]) {
-          render(thumb, round, 'thumb', solved, still.signal);
+          const small = render(thumb, round, 'thumb', solved, still.signal);
           check(thumb, `${at} thumb${solved ? ', solved' : ''}`, { solved, top: false });
+          written(small, `${at} thumb${solved ? ', solved' : ''}`, solved);
         }
       } catch (e) {
         out.push(`${at}: threw ${e?.stack ?? e}`);

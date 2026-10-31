@@ -381,6 +381,8 @@ export function makeRound(level, rng) {
 
 /** @type {(n: number) => string} counters, in the singular for one */
 const circles = (n) => (n === 1 ? 'עִגּוּל אֶחָד' : `${n} עִגּוּלִים`);
+/** @type {(n: number) => string} "and" counters: וְ joins the word, with a hyphen only before a digit (וְ-3) */
+const andCircles = (n) => (n === 1 ? 'וְעִגּוּל אֶחָד' : `וְ-${circles(n)}`);
 /** @type {(n: number) => string} empty cells, in the singular for one */
 const empties = (n) => (n === 1 ? 'תָּא רֵיק אֶחָד' : `${n} תָּאִים רֵיקִים`);
 
@@ -401,11 +403,11 @@ const LABEL = {
   /** @type {(k: number) => string} */
   bundle: (k) => (k === 0 ? 'צְרוֹר שֶׁל עֶשֶׂר' : k === 1 ? 'צְרוֹר שֶׁל עֶשֶׂר וְעוֹד קַשִּׁית אַחַת' : `צְרוֹר שֶׁל עֶשֶׂר וְעוֹד ${k} קַשִּׁיּוֹת`),
   /** @type {(a: number, b: number) => string} */
-  frames: (a, b) => `שְׁתֵּי מִסְגָּרוֹת: ${circles(a)} וְ-${circles(b)}`,
+  frames: (a, b) => `שְׁתֵּי מִסְגָּרוֹת: ${circles(a)} ${andCircles(b)}`,
 };
 
 /** @type {(p: number, u: number) => string} the known counters and the unknown's, which are none when it is 0 */
-const both = (p, u) => (u ? `${circles(p)} וְ-${circles(u)}` : circles(p));
+const both = (p, u) => (u ? `${circles(p)} ${andCircles(u)}` : circles(p));
 /** Labels of the solved picture (locked templates, R1): no cover, the unknown named by its count (bug hunt #24). */
 const SOLVED = {
   /** @type {(w: number, p: number, u: number) => string} */

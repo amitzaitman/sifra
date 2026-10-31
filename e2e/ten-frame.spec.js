@@ -1619,7 +1619,8 @@ test('level 10: the picture\'s description follows the counters that move, and n
     await expect(panel).toHaveAttribute('aria-label', new RegExp(`${k + 1} עִגּוּלִים`));
   }
   const rest = a + b - 10;
-  await expect(panel).toHaveAttribute('aria-label', new RegExp(`10 עִגּוּלִים וְ-${rest === 1 ? 'עִגּוּל אֶחָד' : `${rest} עִגּוּלִים`}$`));
+  // "and" joins a word (וְעִגּוּל) and takes a hyphen only before a digit (וְ-3).
+  await expect(panel).toHaveAttribute('aria-label', new RegExp(`10 עִגּוּלִים ${rest === 1 ? 'וְעִגּוּל אֶחָד' : `וְ-${rest} עִגּוּלִים`}$`));
 });
 
 for (const [name, size] of [['a Pixel 7', null], ['320×568 at dpr 2', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2 }]]) {
