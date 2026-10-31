@@ -254,6 +254,29 @@ test('stuck: a prerequisite another game offers wins over the previous level', (
   assert.deepEqual([same.game.meta.id, same.index], ['scale', 0], 'same-as not mastered: it comes first');
 });
 
+test('stuck: at a level with down: false, nowhere to go is stay, not the other skill\'s level below (decisions.md 2026-10-31)', async () => {
+  const games = Object.values(await import('../games/registry.js'));
+  const [frame, balance, stories] = ['ten-frame', 'balance', 'stories'].map((id) => games.find((g) => g.meta.id === id));
+  const where = (c, game, id) => {
+    const to = stuckTarget(c, games, game, game.levels.findIndex((l) => l.id === id), SKILLS);
+    return [to.game.meta.id, to.game.levels[to.index].id, to.missing];
+  };
+  // No game offers either prerequisite of the teen bundle: stay (the demo again), both logged; not make-ten in symbols.
+  assert.deepEqual(where(child(), frame, 'teen-bundle'), ['ten-frame', 'teen-bundle', ['num.subitize.patterns', 'count.sequence.next']]);
+  // The stories' take to 5: not 4 + ? = 10 (the playtest's case).
+  assert.deepEqual(where(child(), stories, 'take-5'), ['stories', 'take-5', ['count.set.how-many']]);
+  // Balance 10 and 11: a prerequisite not mastered wins; all mastered, stay, not the turn or true-false.
+  const c = child({ balance: ladder(balance, 'relational', balance.levels.map((l) => l.id)) });
+  assert.deepEqual(where(c, balance, 'true-false'), ['balance', 'missing-symbols-20', []]);
+  for (const id of ['eq.sign.missing', 'eq.sign.both-sides']) c.skills[id] = skill({ passedDay: '2026-10-01', reviewDays: ['2026-10-02', '2026-10-05'] });
+  assert.deepEqual(where(c, balance, 'true-false'), ['balance', 'true-false', []]);
+  assert.deepEqual(where(c, balance, 'relational'), ['balance', 'relational', []]);
+  // A level that steps down still returns to the level below (the turn: its when makes both-sides a prerequisite).
+  c.games['ten-frame'] = ladder(frame, 'bridge-symbols', frame.levels.map((l) => l.id));
+  c.skills['num.parts.split'] = skill({ passedDay: '2026-10-01', reviewDays: ['2026-10-02', '2026-10-05'] });
+  assert.deepEqual(where(c, balance, 'turn'), ['balance', 'both-sides-symbols', []]);
+});
+
 test('stuck: the next step holds the target until the child passes it (5.4)', () => {
   // Stuck at make-ten with num.parts.split passed but not mastered: back to split-sym.
   const split = ['split-5', 'split-10', 'split-sym'];

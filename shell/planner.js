@@ -162,8 +162,9 @@ export function nextStep(child, games, skills) {
 /**
  * Where a stuck child goes (pedagogy 5.4): the first prerequisite, in written order, not mastered
  * and offered by a game, at its highest passed level there, else its first; if none, the previous
- * level of the same skill, else the previous level in the list, else stay. missing: unmastered
- * prerequisites that no game offers.
+ * level of the same skill, else the previous level in the list (not from a level with down: false,
+ * 3.4: that level is another skill's, no easier), else stay. missing: unmastered prerequisites
+ * that no game offers.
  * @param {Child} child
  * @param {Game[]} games
  * @param {Game} game
@@ -182,7 +183,8 @@ export function stuckTarget(child, games, game, index, skills) {
     if (!g) missing.push(p);
     else to ??= { game: g, index: passedOf(child, g, p).at(-1) ?? levelsOf(g, p)[0] };
   }
-  to ??= { game, index: levelsOf(game, skill).filter((i) => i < index).at(-1) ?? Math.max(0, index - 1) };
+  const below = game.levels[index].down === false ? index : Math.max(0, index - 1);
+  to ??= { game, index: levelsOf(game, skill).filter((i) => i < index).at(-1) ?? below };
   return { ...to, missing };
 }
 

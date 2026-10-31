@@ -820,6 +820,29 @@ test('"show me how": a demo, then the same round from the start, logged as how',
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', help: ['how'], demo: ['how'], wrong: [] });
 });
 
+test('stuck at the teen bundle (level 8, down: false): the child stays there and sees its demo again, both prerequisites logged (3.7)', async ({ page }) => {
+  // The tenth round, in a second session, under half first tries. No game offers num.subitize.patterns or
+  // count.sequence.next, and the level below is make-ten in symbols, another skill: stay.
+  const at = { 'teen-bundle': { n: 9, first: 0, sessions: 1, lastSession: 1 } };
+  const passed = game.levels.slice(0, number('teen-bundle') - 1).map((l) => l.id);
+  await seedStore(page, storeWith({ sessions: 1, games: { [ID]: ladderAt('teen-bundle', { passed, at }) } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${INDEX}#/play/${ID}`);
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '8');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { child } = await stored(page);
+  expect(child.events.at(-1)).toMatchObject({
+    type: 'stuck', game: ID, level: 8, to: { game: ID, level: 8, skill: 'pv.teens.ten-and' }, missing: ['num.subitize.patterns', 'count.sequence.next'],
+  });
+  expect(child.games[ID]).toMatchObject({ level: 'teen-bundle', hold: 'teen-bundle', demoDue: 'teen-bundle', passed });
+  expect(child.attempts.at(-1)).toMatchObject({ levelId: 'teen-bundle', outcome: 'first', levelBefore: 8, levelAfter: 8 });
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '8');
+});
+
 /**
  * Plays a session to its end screen, each round right on the first try (demos run through).
  * @param {import('@playwright/test').Page} page

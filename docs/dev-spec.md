@@ -108,7 +108,9 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   first-try): the first prerequisite of the skill (base, plus conditional ones whose condition the
   level meets) without "mastered" that has a level in some existing game, starting at the last
   level passed there, or its first level; if none, the previous level of the same skill (the
-  previous level in the game's list at a skill's first level; stay at the game's first level);
+  previous level in the game's list at a skill's first level; stay at the game's first level,
+  and at a level with `down: false`, whose level below is another skill's and no easier,
+  decisions.md 2026-10-31);
   the demo runs again; the event is logged with the level returned to and any prerequisite that no
   game offers. Test cases: a prerequisite that no game offers (`num.parts.split` needs
   `count.set.how-many`, which neither `ten-frame` nor `balance` has) returns the child to the
