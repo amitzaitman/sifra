@@ -404,10 +404,38 @@ const LABEL = {
   frames: (a, b) => `שְׁתֵּי מִסְגָּרוֹת: ${circles(a)} וְ-${circles(b)}`,
 };
 
-/** @type {(p: { kind: string, data: any }) => string} the picture's label, from LABEL */
-const labelOf = ({ kind, data: d }) => (kind === 'tree' ? LABEL.bond(d.whole, d.left.n) : kind === 'pairs' ? LABEL.pairs(d.whole)
-  : kind === 'bundles' ? LABEL.bundle(d.ones) : kind === 'bundles-part' ? LABEL.teen(d.tag) : kind === 'bridge' ? LABEL.frames(d.a, d.b)
-  : !d.whole ? LABEL.split(d.tag, d.part) : d.covered ? LABEL.covered(d.part) : LABEL.open(d.part, d.unknown));
+/** @type {(p: number, u: number) => string} the known counters and the unknown's, which are none when it is 0 */
+const both = (p, u) => (u ? `${circles(p)} וְ-${circles(u)}` : circles(p));
+/** Labels of the solved picture (locked templates, R1): no cover, the unknown named by its count (bug hunt #24). */
+const SOLVED = {
+  /** @type {(w: number, p: number, u: number) => string} */
+  split: (w, p, u) => `מִסְגֶּרֶת: ${w} בְּסַךְ הַכֹּל, ${both(p, u)}`,
+  /** @type {(p: number, u: number) => string} */
+  ten: (p, u) => `מִסְגֶּרֶת עֶשֶׂר: ${both(p, u)}`,
+  /** @type {(w: number, p: number, u: number) => string} */
+  bond: (w, p, u) => `קֶשֶׁר מִסְפָּרִים: ${w}, ${p} וְ-${u}`,
+  /** @type {(w: number, k: number) => string} */
+  teen: (w, k) => `${LABEL.bundle(k)}, ${w} בְּסַךְ הַכֹּל`,
+};
+
+/**
+ * The picture's label, from LABEL, or from SOLVED once solved; the two frames name the counters where they are now
+ * (level 10 moves them).
+ * @type {(p: { kind: string, data: any }, solved?: boolean, answer?: any, frames?: number[] | null) => string}
+ */
+const labelOf = ({ kind, data: d }, solved = false, answer = null, frames = null) => {
+  if (kind === 'bridge') {
+    const [a, b] = frames ?? [d.a, d.b];
+    return LABEL.frames(a, b);
+  }
+  if (kind === 'bundles') return LABEL.bundle(d.ones);
+  if (!solved) {
+    return kind === 'tree' ? LABEL.bond(d.whole, d.left.n) : kind === 'pairs' ? LABEL.pairs(d.whole) : kind === 'bundles-part' ? LABEL.teen(d.tag)
+      : !d.whole ? LABEL.split(d.tag, d.part) : d.covered ? LABEL.covered(d.part) : LABEL.open(d.part, d.unknown);
+  }
+  return kind === 'tree' ? SOLVED.bond(d.whole, d.left.n, d.right.n) : kind === 'pairs' ? SOLVED.bond(d.whole, answer[0], answer[1])
+    : kind === 'bundles-part' ? SOLVED.teen(d.tag, d.ones) : !d.whole ? SOLVED.split(d.tag, d.part, d.unknown) : SOLVED.ten(d.part, d.unknown);
+};
 
 /**
  * Draws a round's picture into a stage: the base drawing, sized in units by the stage (game.css).
@@ -503,6 +531,7 @@ export function render(host, round, ctx) {
       if (movable() && (pic.bottom.includes(counter) || hit === pic.t.trays[1] || pic.t.cells.indexOf(hit) >= 10)) {
         clear();   // a display drawn on the counters before they moved would no longer say the same
         const moving = move(pic, pic.bottom.includes(counter) ? counter : undefined);
+        ctx.relabel();   // the frames hold other counts now (bug hunt #24)
         await Promise.all(moving.map((m) => settle(m, signal)));
         for (const m of moving) m.classList.remove('is-moving');
         return;
@@ -532,7 +561,11 @@ export function render(host, round, ctx) {
   };
 
   return {
-    label: labelOf(pictureOf(round)),
+    /** Read again by the shell after the solve, a move and setEquation (2.4): solved, the cover is gone. */
+    get label() {
+      const frames = pic?.kind === 'bridge' ? [pic.top.length, pic.bottom.length] : null;
+      return labelOf(pictureOf(round), solved || (still && ctx.solved), round.answer, frames);
+    },
     picture() {
       if (!pic) draw();
     },

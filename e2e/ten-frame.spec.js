@@ -1583,6 +1583,22 @@ test('an end screen\'s solved thumb with 0: the ring is wide enough round the 0\
   }
 });
 
+test('level 10: the picture\'s description follows the counters that move, and names the full ten (design 6.3; bug hunt #24)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const { round } = await devAt(page, 'bridge-move');
+  const [a, , b] = round.equation.left;
+  const panel = page.locator('[data-area="picture"]');
+  await expect(panel).toHaveAttribute('aria-label', new RegExp(`${a} עִגּוּלִים וְ-${b} עִגּוּלִים$`));
+  // Tap the second frame's tray (it moves its first counter) until the first frame is full.
+  for (let k = a; k < 10; k++) {
+    const tray = await page.locator('[data-area="picture"] .tf-tray').nth(1).boundingBox();
+    await page.mouse.click(tray.x + 3, tray.y + tray.height / 2);
+    await expect(panel).toHaveAttribute('aria-label', new RegExp(`${k + 1} עִגּוּלִים`));
+  }
+  const rest = a + b - 10;
+  await expect(panel).toHaveAttribute('aria-label', new RegExp(`10 עִגּוּלִים וְ-${rest === 1 ? 'עִגּוּל אֶחָד' : `${rest} עִגּוּלִים`}$`));
+});
+
 for (const [name, size] of [['a Pixel 7', null], ['320×568 at dpr 2', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2 }]]) {
   test.describe(`the removed marks on ${name}`, () => {
     if (size) test.use(size);

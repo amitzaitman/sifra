@@ -74,15 +74,20 @@ const WORDS = {
   cube: 'קֻבִּיָּה אַחַת', cubes: 'קֻבִּיּוֹת', dot: 'נְקֻדָּה אַחַת', dots: 'נְקֻדּוֹת', rows: 'שְׁתֵּי שׁוּרוֹת',
 };
 
-/** @type {(round: Round) => string} */
-function labelOf(round) {
-  if (round.model === 'cards') return WORDS.emptyScale;
+/**
+ * The picture's label: the cover or the empty pan before the solve; solved, the unknown's cubes by their count, and a
+ * judging round's true card on the pans (bug hunt #24).
+ * @type {(round: Round, solved?: boolean) => string}
+ */
+function labelOf(round, solved = false) {
+  if (round.model === 'cards' && !solved) return WORDS.emptyScale;
   const set = round.model === 'set';
-  const side = (name) => groupsOf(round).filter((g) => g.side === name).map((g) => {
-    if (g.role === 'unknown') return round.unknown === 'result-right' ? WORDS.empty : WORDS.cover;
+  const data = sidesOf(round, solved);
+  const side = (name) => data[name].filter((g) => !solved || g.count > 0).map((g) => {
+    if (g.role === 'unknown' && !solved) return round.unknown === 'result-right' ? WORDS.empty : WORDS.cover;
     const [one, many] = set ? [WORDS.dot, WORDS.dots] : [WORDS.cube, WORDS.cubes];
     return g.count === 1 ? one : `${g.count} ${many}`;
-  }).join(', ');
+  }).join(', ') || WORDS.empty;
   return `${set ? WORDS.rows : WORDS.balance}: ${side('left')} ${WORDS.versus} ${side('right')}`;
 }
 
@@ -747,7 +752,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     if (!signal.aborted) await Promise.all(ring().map((r) => settle(r, signal)));
   };
   return {
-    label: labelOf(round),
+    /** Read again by the shell after the solve (2.4): solved, the cubes under the cover by their count. */
+    get label() { return labelOf(round, closed || (mode === 'thumb' && solved)); },
     picture: () => draw(closed),
     async miss(choice) {
       busy = true;

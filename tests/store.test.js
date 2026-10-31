@@ -7,7 +7,7 @@ import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import { nextStep, planSession, reviews, schedule } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
-import { CAPS, KEY, SCHEMA, SHAPE, capped, childOf, exportFile, load, migrate, newChild, normaliseChild, save } from '../shell/store.js';
+import { CAPS, KEY, SCHEMA, SHAPE, capped, childOf, exportFile, load, migrate, newChild, normaliseChild, refresh, save } from '../shell/store.js';
 import { SKILLS } from '../data/skills.js';
 
 const newId = () => 'c0000abcd';
@@ -221,17 +221,64 @@ test('a quota error drops the oldest half of the attempts and retries once', () 
   assert.equal(save(store), true);
   assert.deepEqual(childOf(store).attempts.map((a) => a.i), [5, 6, 7, 8, 9]);
   assert.equal(storage.writes, 1);
-  // Two quota errors in a row: give up, without throwing.
+  // Two quota errors in a row: give up, without throwing, and nothing is dropped: nothing was written, so the
+  // half the retry set aside comes back (bug hunt #21). Once space frees, all ten are written.
   const twice = memory({}, quota);
   const store2 = load(twice, newId, WHEN);
-  twice.setItem = () => { throw quota; };
+  childOf(store2).attempts.push(...Array.from({ length: 10 }, (_, i) => ({ i })));
+  let calls = 0;
+  twice.setItem = () => { calls += 1; throw quota; };
   assert.equal(save(store2), false);
+  assert.equal(calls, 2, 'one write and one retry');
+  assert.deepEqual(childOf(store2).attempts.map((a) => a.i), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.equal(save(store2), false, 'the next save tries again from all of them');
+  assert.equal(childOf(store2).attempts.length, 10);
+  const written = [];
+  twice.setItem = (key, value) => { written.push(JSON.parse(value)); };
+  assert.equal(save(store2), true);
+  assert.equal(written[0].children[written[0].current].attempts.length, 10);
   // Any other error: no retry, nothing dropped.
   const other = memory({}, new Error('broken'));
   const store3 = load(other, newId, WHEN);
   childOf(store3).attempts.push({ i: 0 }, { i: 1 });
   assert.equal(save(store3), false);
   assert.equal(childOf(store3).attempts.length, 2);
+});
+
+test('refresh: another tab\'s write replaces memory before this tab writes; the same text, a failed read or a broken value keeps it (bug hunt #8)', () => {
+  const storage = memory();
+  const a = load(storage, () => 'c0000000a', WHEN);
+  childOf(a).attempts.push({ tab: 'a' });
+  assert.equal(save(a), true);
+  // Another tab loads what a wrote, plays, and saves.
+  const b = load(storage, () => 'c0000000b', WHEN);
+  assert.equal(b.data.current, 'c0000000a', 'one child: b read a\'s');
+  childOf(b).attempts.push({ tab: 'b' });
+  childOf(b).games.balance = startLadder([{ id: 'same' }]);
+  assert.equal(save(b), true);
+  // a refreshes before its next write: it takes b's progress, then adds its own.
+  assert.equal(refresh(a, newId, WHEN), true);
+  assert.deepEqual(childOf(a).attempts.map((x) => x.tab), ['a', 'b']);
+  assert.ok(childOf(a).games.balance);
+  childOf(a).attempts.push({ tab: 'a' });
+  assert.equal(save(a), true);
+  assert.deepEqual(childOf(migrate(storage.getItem(KEY), newId, WHEN)).attempts.map((x) => x.tab), ['a', 'b', 'a']);
+  // Nothing new: the text a wrote is the one stored.
+  assert.equal(refresh(a, newId, WHEN), false);
+  // A failed read, nothing stored, or a broken value: memory stays.
+  const broken = { getItem() { throw new Error('denied'); }, setItem() {} };
+  const c = load(broken, newId, WHEN);
+  childOf(c).attempts.push({ tab: 'c' });
+  assert.equal(refresh(c, newId, WHEN), false);
+  assert.equal(childOf(c).attempts.length, 1);
+  storage.setItem(KEY, '{oops');
+  assert.equal(refresh(a, newId, WHEN), false);
+  assert.equal(childOf(a).attempts.length, 3);
+  // A newer schema from another tab: taken, and not writable, so this tab never writes over it.
+  storage.setItem(KEY, JSON.stringify({ schema: SCHEMA + 1, current: 'x', children: {} }));
+  assert.equal(refresh(a, newId, WHEN), true);
+  assert.equal(a.writable, false);
+  assert.equal(save(a), false);
 });
 
 test('export: the stored value as is, with key, schema, time and persisted', () => {

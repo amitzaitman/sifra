@@ -197,6 +197,8 @@ dev-spec A.1 is the shape, with these precisions:
 //                setEquation draws a row with every token; app.css shows every token under [data-solved]; a no-op
 //                in thumbs, after the solve (the shell has shown every token) and after abort; an index that is no
 //                token of the row throws (shell/equation.js buildEquation)
+//   relabel      () => void: the shell reads the view's label again (after a change it does not see: a counter
+//                that moved on ten-frame level 10); a no-op in thumbs
 //   onAttempt    (value) => void: commit of a build round; unused in milestone 1
 // RoundView: { miss, solve, picture, demo, label }
 //   miss({ value, rule, display, step, first }) => Promise<void>
@@ -211,7 +213,10 @@ dev-spec A.1 is the shape, with these precisions:
 //                                         a solved thumb does: no cover, no intro
 //   demo(hand) => Promise<void>           optional steps before the hand taps the answer; hand.tap(el) => Promise,
 //                                         hand.rest() => Promise (back off the picture, before a hint or a tour, 2.6)
-//   label                                 optional aria-label of the picture, from a locked template
+//   label                                 optional aria-label of the picture, from a locked template; a getter where
+//                                         the picture changes: the shell reads it at the mount, at picture(), after
+//                                         solve(), in setEquation and on ctx.relabel(). Solved, it names no cover and
+//                                         no empty pan or place, and the unknown by its count (bug hunt #24)
 ```
 
 A picture that tells a story before its `?` (game 3, design 6.10) runs its event from the mount, under `[data-event]`,
@@ -249,14 +254,17 @@ meaning (from the mount).
    the whole; R5). It resolves when the display has ended and, at step 3, the tour; it does not wait for the
    hint's pulse, which goes on after the cards unlock (design §7.1-§7.2: the cards lock only while a display runs,
    the hint does not lock). At once with reduced motion, and on abort.
-5. Correct: the shell applies the ladder (3.4) and any stuck return (3.7), then writes the attempt (3.9), marks the
+5. Correct: the shell applies the ladder (3.4) and any stuck return (3.7), then records the attempt (3.9; it is
+   written to storage once the closing below has run, also when the round is left, so a long log's write never holds
+   up the card's change, bug hunt #20), marks the
    card, sets `data-solved` on the screen (app.css then shows `[data-role="unknown"]`, `.eq-answer` and any
    `.is-unbuilt` token), shows every token of the equation row itself (`buildEquation(row, null)` in
    shell/equation.js, so the row is no longer `aria-busy`; the game's `build` does nothing from here on; a tap during
    a story's event, 2.4, comes here before the game finishes the event), lifts the
-   equation cover (it leaves the accessibility tree, and each answer comes back as a new node, so the polite live
-   region says the solved equation, design §6.4), awaits
-   `view.solve()`, then puts "הַבָּא" in the cards' place and focuses it (design §6.9). On "הַבָּא" it aborts
+   equation cover (it leaves the accessibility tree, and each answer comes back as a new node; the row is one atomic
+   polite live region per round, refilled in place by setEquation, so a reader says the whole solved equation, design
+   §6.4), awaits `view.solve()`, writes the attempt, reads the view's label again, then puts "הַבָּא" in the cards'
+   place and focuses it (design §6.9). On "הַבָּא" it aborts
    `signal`, empties the host and starts the next round.
 
 ### 2.6 Demo and "show me how" (R9)
@@ -437,7 +445,18 @@ drawn with `mode: 'thumb'` once their host is in the page.
   draws a card's `:focus-visible` ring only under `:root[data-keys]`, which a capture `keydown` listener sets and a
   capture `pointerdown` listener removes (start()). A page loaded straight at a round (iOS Safari reloads a discarded
   tab so) showed the ring, which a silent child reads as "this one", and after a miss it often landed on the answer
-  (the cards ascend, the small error values first; playtest 2026-10-31).
+  (the cards ascend, the small error values first; playtest 2026-10-31). The same rule covers "הַבָּא" (`.next`), which
+  the solve focuses: on iPhone a link tapped on home leaves Safari's focus state so that it showed the ring (bug hunt
+  #7). "תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key hands its focus on before it goes: to "הַבָּא" after the solve, else
+  the first live card, so focus never falls to the page (bug hunt #23).
+- A press and hold is a tap on the child's screens (app.css on `main`, all but the parents page, #/dev and the export):
+  `-webkit-touch-callout: none` and `-webkit-user-select: none` (Safari 16.4 reads only the prefixed form), so iOS
+  shows no link menu or preview on a home card and selects no text in the equation or a card (bug hunt #17). A
+  locked card (`[data-choices][data-locked]`: a display, a demo, the solve) does not sink under a press; one held
+  until the lock ends sinks then and is taken on release (bug hunt #18).
+- main's one column is `minmax(0, 1fr)`, and the equation area and row have `min-width: 0`: a row wider than its box
+  overflows it, so `fitEquation` shrinks it to 28px and then wraps it, and nothing widens the column past main's
+  content box (it took both gutters at 320px on balance level 8's `10 + 10 = ? + 18`, bug hunt #9).
 - Off-target taps: each pointerdown on the screen that hits no button and no `[data-target]` is counted by the
   nearest `[data-area]` (`picture`, `equation`, else `other`) until the solve; one the double-tap window drops is not.
 - Double tap (design 6.9; owner decision 2026-10-14, "חלון של 0.3 שנייה"): the shell drops a tap that comes within
@@ -606,8 +625,18 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   rejection from a chain a thumb started would reach the error screen, and its home button would land on the same
   thumb again.
 - Written after each solved round, each entry demo's start (the session count) and its tap on the answer
-  (`demoSeen`, 3.4), and each jump. Caps: 4000 attempts and 500 events, oldest first out; on a quota error drop the
-  oldest half of the attempts and retry once. `navigator.storage.persist()` runs once per start.
+  (`demoSeen`, 3.4), each jump, and each session's start. Caps: 4000 attempts and 500 events, oldest first out; on a
+  quota error the oldest half of the attempts is set aside and it retries once; if the retry fails too, nothing was
+  written, so the half comes back and nothing is lost from memory (bug hunt #21). `navigator.storage.persist()` runs
+  once per start.
+- Storage is read again before each write (`refresh` in store.js, bug hunt #8): at each route, at the top of each
+  round, as the entry demo is seen and first in each solved round's record. Another tab of the site (a WhatsApp link
+  opens a new Safari tab, and old tabs keep their state for days) may have written since this one read or wrote;
+  `save` writes the whole store, so without it one tab undid the other's progress. A stored text other than the
+  last one this tab read or wrote (`raw`) replaces memory, migrated, when this code can read it or it is newer (then
+  not writable); a failed read, nothing stored or a broken value keeps memory. A solved round steps its game's
+  ladder only when the ladder still stands at the round's level (another tab may have moved it); the attempt and the
+  review schedule are written either way. The `storage` event alone would not do: a frozen iOS tab may never get it.
 - An attempt (CLAUDE.md "ready to grow" 3, §5.11): `t`, `day`, `session`, `child`, `game`, `level`, `levelId`,
   `skill`, `seed`, `version`, `params` (the level as passed), `answer`, `kind`, `outcome` (`shown` if the tour ran;
   `help` after any miss, `picture` or `how`; else `first`), `wrong` (rules in tap order), `firstMs` and `ms` (from
@@ -769,6 +798,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   and the other verb are one exercise); `plainDemo` (0, a double, a pair with 0, a judging card) and `demoSeedFor`
   on made-up rounds (the same answer, the same row with another answer, edge rounds only, nothing else: the first
   demo seed after `TRIES` rounds).
+- store (tests/store.test.js, besides migrate, the shape, caps and export): a quota error sets the oldest half aside
+  and retries once; a retry that fails too puts the half back, so all ten stay and a later save writes them (bug hunt
+  #21); `refresh` takes another tab's write before this tab writes, keeps memory on the same text, a failed read or a
+  broken value, and takes a newer schema as not writable (bug hunt #8).
 - balance (tests/balance.test.js): `equal.add-to-equal` and `equal.compensate-wrong` against values worked out by
   hand on `8 + 5 = 9 + ?`, `3 + 5 = 5 + ?` and `1 + 7 = ? + 4`, and on every round of levels 7-9 and 11 from its
   exercise alone, not against the game's own formulas (bug hunt #13).
@@ -868,7 +901,13 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   game whose render sorts the round's `choices` (replaced the same way) leaves its thumb `data-broken` and its round
   on the error screen, the one test of the shell's own freeze (2.5: the contract loop freezes its own copy, and no
   game writes); a game whose `miss` rejects (replaced the same way) opens the error screen, the one test of the
-  `unhandledrejection` listener (a display a game cannot draw throws after the cards lock, 2.1).
+  `unhandledrejection` listener (a display a game cannot draw throws after the cards lock, 2.1). The bug hunt of
+  2026-10-31: "הַבָּא" after a direct load into a demo shows no ring until a key (3.2); a press and hold selects
+  nothing on home and a round, and the parents page and `#/dev` keep selection; a locked card does not sink, and
+  one held until the lock ends sinks and is taken; balance level 8's widest exercise keeps main's column and both
+  gutters at 320 and 390, its row shrunk or wrapped; the equation row is the same atomic node before and after the
+  solve; a solve paints the card before it writes (a MutationObserver reads the stored count as the card turns
+  correct), and the attempt is stored by "הַבָּא"; the soft-grey parents link and names have paper behind them.
 - On index.html, looping over the registry (every game: ten-frame, stories and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; home with every game's ladder at each level in turn draws every thumb
@@ -910,7 +949,17 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   mount (2300 or more after look() and a 2 s run, the first tap the solve within 1 ms; at the help ladder 300 or more,
   and a minute between the first tap and the solve); a stuck return in the same game (3.7) logs the level the child
   was moved to as `levelAfter`; a stuck return into another game plays the target's demo and then its rounds in the
-  same session, the stuck game keeping its level; the picture asked for after that solve has no cover.
+  same session, the stuck game keeping its level; two tabs in one context each read the store again before they
+  write, so it holds one child, both ladders and all three attempts (3.9); "תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key
+  hands its focus to the first live card, or to "הַבָּא" after the solve; the picture asked for after that solve has
+  no cover.
+- balance.spec.js since the bug hunt: the jumps on a missing part (each mark on its place, the blink and the ring,
+  arcs, no ring over a cube or a mark); at 568×320 and 844×390 the cubes at rest and in a two-digit tour 17.5px or
+  more, ghosts at 8 rows 9.4px or more, jump marks with their digits inside, chips 5px off the pole, no sideways
+  scroll; turned from 568×320 to 320×568 home's thumbs inside their cards, and a tour's squeezed numbers measured
+  again at 844×390 and back to 1 at 390×844. ten-frame.spec.js: the solved thumbs with 0 at four sizes (the 0 at 14px
+  inside its ring's hole), the leftover-only display's removed marks with no gold pixel (a Pixel 7 and 320×568 at
+  dpr 2), and level 10's description following the counters to the full ten.
 
 ### 4.8 The render contract (e2e/contract.spec.js)
 
@@ -925,9 +974,10 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   display that lifts the dome, which runs and comes back on a first miss too, so is skipped there: `passing`,
   2026-10-31); from step 2 a
   `[data-hint]`; at step 3 the last `[data-tour]` reads the answer (a pair card's second number; a judging round's
-  true card's sum, the same on both sides); after the answer no `.cover` is shown on the screen and `[data-next]` is
-  there. In `symbols` look the same round again, solved on the first tap, then the picture button past the tap
-  window: its picture shows no cover (2.4). On the balance's pans two seeds with different answers show covers of
+  true card's sum, the same on both sides); after the answer no `.cover` is shown on the screen, `[data-next]` is
+  there, and the panel's aria-label says no cover and nothing empty (no מִכְס, no רֵיק: the label is read again after
+  the solve, 2.4; bug hunt #24). In `symbols` look the same round again, solved on the first tap, then the picture
+  button past the tap window: its picture shows no cover, and its label none either (2.4). On the balance's pans two seeds with different answers show covers of
   the same size at rest, measured in cubes (design 6.6, the fixed dome is two cubes and their gap; a pan with more
   rows has smaller cubes, so the dome is a few pixels smaller with the whole picture); so do the stories' covered
   change (level 3), measured in pixels (design 6.10: the same dome, a square of 1.25u, with the whole's rows held

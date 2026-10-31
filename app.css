@@ -56,8 +56,9 @@ a { color: inherit; -webkit-tap-highlight-color: transparent; }
 svg[data-icon] { display: block; width: 32px; height: 32px; }
 
 /* One centred column; the page scrolls down, never sideways (design 5). */
+/* One column as wide as main's content box: nothing in it, a wide equation row included, can widen it (bug hunt #9). */
 main {
-  position: relative; display: grid; align-content: start; gap: 12px; width: 100%; max-width: calc(560px + 2 * var(--gutter));
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; width: 100%; max-width: calc(560px + 2 * var(--gutter));
   min-height: 100dvh; margin: 0 auto; padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
 }
 @media (min-height: 700px) { main { gap: 16px; } }
@@ -77,9 +78,11 @@ main {
 .ctl-picture svg { width: 48px; height: 48px; }
 
 /* The equation row (design 6.4). */
-.equation { display: grid; place-items: center; min-height: calc(var(--fs-eq) * 1.3); }
+/* min-width 0 on both (grid items): a row wider than its box overflows it, so fitEquation shrinks it and then wraps it,
+   instead of widening the column (design 6.4). */
+.equation { display: grid; place-items: center; min-width: 0; min-height: calc(var(--fs-eq) * 1.3); }
 .eq {
-  display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 0.25em; width: 100%;
+  display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 0.25em; width: 100%; min-width: 0;
   font-size: var(--fs-eq); font-weight: 800; line-height: 1.2; white-space: nowrap;
 }
 .eq.is-wrapped { flex-wrap: wrap; }
@@ -125,9 +128,12 @@ main {
 /* The focus ring goes round the shown answer's ring (3-7px out), not over it, and over the empty
    slots beside it (design 6.5). */
 .card.is-shown:focus-visible { position: relative; z-index: 1; outline-offset: 10px; }
-/* A card the shell focused shows no ring until a key is pressed (app.js sets data-keys): a silent
-   child reads a ring as "this one" (playtest 2026-10-31). */
-:root:not([data-keys]) .card:focus-visible { outline: none; }
+/* A card or "הַבָּא" the shell focused shows no ring until a key is pressed (app.js sets data-keys): a
+   silent child reads a ring as "this one" (playtest 2026-10-31; "הַבָּא" after a link tap on iPhone, bug hunt #7). */
+:root:not([data-keys]) :is(.card, .next):focus-visible { outline: none; }
+/* Locked during a display, a demo or the solve (R5, design 6.5): a press does not sink the card. A press held
+   until the lock ends sinks then, and is taken on release (bug hunt #18). */
+.cards[data-locked] .card:not(.is-correct):not(.is-retired):not(.is-shown):is(:active, .is-pressed) { transform: none; box-shadow: 0 var(--lip-h) 0 var(--lip-c); }
 
 /* "הַבָּא" (design 6.9): in the cards' place, the arrow after the word. */
 .next {
@@ -159,6 +165,8 @@ main {
 .thumb { position: relative; display: grid; place-items: center; height: 96px; overflow: hidden; pointer-events: none; }
 [data-thumb] *, [data-thumb] *::before, [data-thumb] *::after { animation: none !important; transition: none !important; }
 .parents-link { display: flex; align-items: center; min-height: var(--target); color: var(--ink-soft); font-size: 16px; font-weight: 500; }
+/* Soft grey under 24px needs paper behind it, off the grid's lines (design 3: 4.11:1 on a line; bug hunt #25). */
+.parents-link > span, .who { background: var(--paper); }
 
 /* The end screen: the rounds played, solved (R10, pedagogy 5.10). */
 .end-thumbs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -179,6 +187,11 @@ main {
 .hand svg[data-icon] { width: 64px; height: 64px; filter: drop-shadow(0 0 2px var(--surface)); }
 .hand.is-tapping { animation: hand-tap 300ms var(--ease); }
 @keyframes hand-tap { 50% { scale: 0.8; } }
+
+/* A press and hold is a tap on the child's screens: no iOS link menu or preview, no text selection (Safari 16.4 reads
+   only the prefixed user-select). The parents page and #/dev keep selection (bug hunt #17, design 10). */
+main:not([data-screen="parents"]):not([data-screen="dev"]):not([data-screen="export"]) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.dev-json { -webkit-user-select: text; user-select: text; }
 
 /* #/dev (a tool for the owner, not a child's screen). */
 /* The list is ltr: its bullets hang in the padding on the left (they hung 2px past the page's edge). */

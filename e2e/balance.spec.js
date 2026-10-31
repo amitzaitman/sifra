@@ -661,6 +661,8 @@ test('a round after "show me how": the demo, then the same round from the start;
   await look(page);
   await card(page, answerAt).click();
   await expect(main).toHaveAttribute('data-solved', '');
+  // The attempt is written once the closing has run, by "הַבָּא" (3.9).
+  await expect(page.locator('[data-next]')).toBeVisible();
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'help', wrong: [round.choices[i].rule], help: ['how'], demo: ['how'] });
 });
 

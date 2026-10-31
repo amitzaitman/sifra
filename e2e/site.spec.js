@@ -442,6 +442,127 @@ test('a card the shell focused shows no ring until a key is pressed; a pointer h
   expect(await ring()).toBe('none');
 });
 
+test('"הַבָּא" the shell focused shows no ring until a key is pressed, after a direct load into a demo (design 6.9, bug hunt #7)', async ({ page }) => {
+  // A fresh store: #/play/ten-frame opens level 1's demo; its solve focuses "הַבָּא" with no tap before it.
+  await open(page, `${INDEX}#/play/ten-frame`);
+  const next = page.locator('main[data-screen="demo"] [data-next]');
+  await expect(next).toBeVisible({ timeout: 15000 });
+  await expect(next).toBeFocused();
+  const ring = () => next.evaluate((el) => `${getComputedStyle(el).outlineStyle} ${getComputedStyle(el).outlineWidth}`);
+  expect(await ring()).toMatch(/^none/);
+  await page.keyboard.press('Shift');
+  expect(await ring()).toBe('solid 4px');
+});
+
+test('a press and hold is a tap: no iOS link menu or text selection on the child\'s screens; the parents page and #/dev keep selection (bug hunt #17)', async ({ page }) => {
+  const select = (locator) => locator.evaluate((el) => { const s = getComputedStyle(el); return s.userSelect || s.webkitUserSelect; });
+  await open(page, `${INDEX}#/`);
+  await expect(page.locator('.next-step')).toBeVisible();
+  expect(await select(page.locator('.next-step'))).toBe('none');
+  expect(await select(page.locator('[data-card]').first())).toBe('none');
+  await page.evaluate(() => { location.hash = '#/play/balance'; });
+  await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toBeVisible();
+  for (const sel of ['.eq', '.card']) expect(await select(page.locator(sel).first()), sel).toBe('none');
+  await page.evaluate(() => { location.hash = '#/parents'; });
+  await expect(page.locator('main[data-screen="parents"]')).toBeVisible();
+  expect(await select(page.locator('main[data-screen="parents"] a').first())).not.toBe('none');
+  await page.evaluate(() => { location.hash = '#/dev/balance/1/1'; });
+  await expect(page.locator('[data-dev]')).toBeVisible();
+  expect(await select(page.locator('[data-dev]'))).toBe('text');
+});
+
+test('a locked card does not sink under the finger; held until the lock ends, it sinks, and on release it is taken (design 6.5, bug hunt #18)', async ({ page }) => {
+  await open(page, `${INDEX}#/dev/balance/2/5`);
+  await look(page);
+  const { round, answerAt } = await roundOf(page);
+  const [first, second] = round.choices.flatMap((c, i) => (i === answerAt ? [] : [i]));
+  await page.locator(`button[data-index="${first}"]`).click();
+  await expect(page.locator('[data-choices]')).toHaveAttribute('data-locked', '');
+  const other = page.locator(`button[data-index="${second}"]`);
+  const box = await other.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  const moved = () => other.evaluate((el) => getComputedStyle(el).transform);
+  await page.waitForTimeout(150);
+  await expect(page.locator('[data-choices]')).toHaveAttribute('data-locked', '');
+  expect(await moved()).toBe('none');
+  await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
+  await expect.poll(moved).toBe('matrix(1, 0, 0, 1, 0, 3)');
+  await page.mouse.up();
+  await expect(other).toHaveClass(/is-retired/);
+});
+
+test('a wide exercise never widens the page\'s column: the gutters stay and the row shrinks or wraps (design 5, 6.4, bug hunt #9)', async ({ page }) => {
+  // 10 + 10 = ? + 18, the widest exercise of balance level 8 (seeds 379, 577, 699 of 3000).
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await open(page, `${INDEX}?w=${width}#/dev/balance/8/379`);
+    await expect(page.locator('[data-choices]')).toBeVisible();
+    const m = await page.evaluate(() => {
+      const main = document.querySelector('main');
+      const s = getComputedStyle(main);
+      const content = main.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+      const boxes = [...document.querySelectorAll('main > [data-area], main > .bar, [data-choices]')].map((el) => el.getBoundingClientRect());
+      const row = document.querySelector('.eq');
+      return { column: parseFloat(s.gridTemplateColumns), content, left: Math.min(...boxes.map((b) => b.left)), right: Math.max(...boxes.map((b) => b.right)),
+        over: row.scrollWidth - row.clientWidth, font: parseFloat(getComputedStyle(row).fontSize), wrapped: row.classList.contains('is-wrapped') };
+    });
+    const where = `${width}×${height}`;
+    expect(Math.abs(m.column - m.content), `${where}: the column, px`).toBeLessThan(0.5);
+    expect(m.left, `${where}: left gutter`).toBeGreaterThanOrEqual(16 - 0.5);
+    expect(m.right, `${where}: right gutter`).toBeLessThanOrEqual(width - 16 + 0.5);
+    expect(m.over, `${where}: the row fits its box`).toBeLessThanOrEqual(0);
+    expect(m.font >= 28 || m.wrapped, `${where}: 28px or more, or wrapped`).toBe(true);
+  }
+});
+
+test('the equation row is one atomic live region per round: the solve fills the same node, so a reader says the solved exercise (design 6.4, bug hunt #12)', async ({ page }) => {
+  for (const [route, solved] of [['ten-frame/2/1', null], ['balance/10/1', '8=1+7']]) {
+    await open(page, `${INDEX}?r=${route}#/dev/${route}`);
+    await look(page);
+    const row = await page.locator('[data-area="equation"] .eq').elementHandle();
+    await expect(page.locator('[data-area="equation"] .eq')).toHaveAttribute('aria-atomic', 'true');
+    await expect(page.locator('[data-area="equation"] .eq')).toHaveAttribute('aria-live', 'polite');
+    const { answerAt } = await roundOf(page);
+    await page.locator(`button[data-index="${answerAt}"]`).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    expect(await row.evaluate((el) => el.isConnected), `${route}: the same node`).toBe(true);
+    if (solved) expect(await row.evaluate((el) => el.textContent), route).toBe(solved);
+  }
+});
+
+test('a solve paints the card before it writes the log: the card is correct before the stored attempts change, and the attempt is stored by "הַבָּא" (design 6.5, bug hunt #20)', async ({ page }) => {
+  const attempts = Array.from({ length: 300 }, (_, i) => ({ t: NOW.toISOString(), day: TODAY, game: 'parts', level: 2, i }));
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') }, attempts }));
+  await open(page, `${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  const { answerAt } = await roundOf(page);
+  await page.evaluate(() => {
+    const count = () => { const v = JSON.parse(localStorage.getItem('sifra')); return v.children[v.current].attempts.length; };
+    window.atCorrect = null;
+    new MutationObserver(() => { if (window.atCorrect === null && document.querySelector('.card.is-correct')) window.atCorrect = count(); })
+      .observe(document.querySelector('[data-choices]'), { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+  await page.locator(`button[data-index="${answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  expect(await page.evaluate(() => window.atCorrect)).toBe(300);
+  expect((await stored(page)).child.attempts).toHaveLength(301);
+});
+
+test('the soft-grey small text has paper behind it, off the grid lines: the parents page and its link on home (design 3, bug hunt #25)', async ({ page }) => {
+  await page.route((url) => url.pathname.endsWith('/data/videos.js'), async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, body: (await res.text()).replace('export const VERIFIED = false;', 'export const VERIFIED = true;') });
+  });
+  const paper = 'rgb(250, 246, 236)';
+  await open(page, `${INDEX}#/`);
+  await expect(page.locator('[data-parents] > span')).toHaveCSS('background-color', paper);
+  await page.evaluate(() => { location.hash = '#/parents'; });
+  await expect(page.locator('main[data-screen="parents"]')).toBeVisible();
+  for (const who of await page.locator('.who').all()) await expect(who).toHaveCSS('background-color', paper);
+});
+
 test('parents page: plain links that open YouTube in a new tab, and the home button', async ({ page }) => {
   await open(page, `${INDEX}#/parents`);
   const links = page.locator('main[data-screen="parents"] a');

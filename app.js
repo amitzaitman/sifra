@@ -9,7 +9,7 @@ import {
 } from './shell/planner.js';
 import { rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
-import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
+import { CAPS, capped, childOf, exportFile, load, refresh, save } from './shell/store.js';
 import { byPointer, tapWindow } from './shell/taps.js';
 import { RULES } from './data/errors.js';
 import { SKILLS } from './data/skills.js';
@@ -35,7 +35,19 @@ let S = null;
 
 const today = () => dayOf(S.now());
 const child = () => childOf(S.store);
-const persist = () => save(S.store);
+/** Writes the store now; a solved round's write waits for its closing (S.unsaved, 3.9). */
+const persist = () => {
+  S.unsaved = false;
+  return save(S.store);
+};
+/**
+ * Reads storage again before a write (3.9): another tab may have written since. A write still waiting for its
+ * closing goes first, so the read never drops it.
+ */
+const sync = () => {
+  if (S.unsaved) persist();
+  return refresh(S.store, S.newId, { t: S.now().toISOString(), day: today() });
+};
 /** Records a change under the finger, on the clock events are stamped with (shell/taps.js). */
 const changed = () => S.taps.changed(new Event('change').timeStamp);
 const event = (e) => capped(child().events, { t: S.now().toISOString(), day: today(), ...e }, CAPS.events);
@@ -105,7 +117,7 @@ function screen(name, title, attrs = {}) {
  */
 function thumb(game, level, seed = 1, solved = false) {
   const host = h('div', { class: 'thumb', 'data-thumb': true, 'data-game': game.meta.id, 'data-solved': solved, 'aria-hidden': 'true' });
-  const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, build() {}, onAttempt() {} };
+  const ctx = { signal: S.ctl.signal, mode: 'thumb', solved, setEquation() {}, build() {}, relabel() {}, onAttempt() {} };
   S.thumbs.push(() => {
     try { game.render(host, dealt(game, level(), seed), ctx); } catch (err) { host.replaceChildren(); host.dataset.broken = ''; console.error(err); }
   });
@@ -126,7 +138,7 @@ function home() {
   const card = (g) => h('a', { class: 'game-card btn', href: `#/play/${g.meta.id}`, 'data-card': true },
     thumb(g, () => still(g, ladderIndex(g))), h('span', {}, g.meta.title));
   if (S.games.length) main.append(h('h2', { class: 'all' }, T.all), h('nav', { class: 'games' }, S.games.map(card)));
-  if (VERIFIED) main.append(h('a', { class: 'parents-link', href: '#/parents', 'data-parents': true }, T.parents));
+  if (VERIFIED) main.append(h('a', { class: 'parents-link', href: '#/parents', 'data-parents': true }, h('span', {}, T.parents)));
   drawThumbs();
 }
 
@@ -148,6 +160,7 @@ function goNext() {
 function play(game) {
   const c = child();
   c.sessions += 1;
+  persist();
   const seed = seedFrom(S.seeds);
   const mix = rng((seed ^ MIX) >>> 0);
   const rounds = planSession(c, S.games, game, today(), SKILLS, rng(seed), mix);
@@ -172,6 +185,7 @@ function apart(session, spec) {
 
 function nextRound(session) {
   if (session.i >= session.rounds.length) return end(session);
+  sync();
   const spec = session.rounds[session.i];
   if (spec.index < 0) {
     // A new round takes the ladder's level now, in the session's game (it moves after a stuck return).
@@ -190,7 +204,9 @@ function nextRound(session) {
       apart(session, spec);
       // Seen once the hand has tapped the answer (3.4): a reload or leaving mid-demo brings it back.
       const seen = () => {
-        child().games[game.meta.id] = sawDemo(child().games[game.meta.id], level.id);
+        sync();
+        const now = child().games[game.meta.id];
+        if (now) child().games[game.meta.id] = sawDemo(now, level.id);
         persist();
       };
       return demo(game, spec, () => mount(session, spec), session.done.length, seen);
@@ -217,10 +233,12 @@ function mount(session, spec) {
 
 /** A solved counted round: the ladder (3.4), the review schedule (3.5), a stuck return (3.7), then the attempt (3.9). */
 function finish(session, spec, level, round, outcome) {
+  sync();
   const [c, game, day, rec] = [child(), S.byId.get(spec.game), today(), spec.record];
   const [id, before, last] = [game.meta.id, c.games[game.meta.id], c.skills[level.skill]?.last];
   let [passed, stuck] = [null, false];
-  if (spec.kind !== 'review') {
+  // Another tab may have moved this game's ladder since the round began (3.9): only a ladder still at the round's level steps.
+  if (spec.kind !== 'review' && before?.level === level.id) {
     ({ state: c.games[id], passed, stuck } = step(before, game.levels, { outcome, kind: spec.kind, session: session.n }));
   }
   schedule(c.skills, level.skill, { day, kind: spec.kind, outcome, passed: passed !== null });
@@ -242,7 +260,8 @@ function finish(session, spec, level, round, outcome) {
     taps: { ...rec.taps }, options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]),
     sinceDays: last ? daysBetween(last, day) : null,
   }, CAPS.attempts);
-  persist();
+  // Written once the closing has run (solve, 3.9): a long log's write would hold up the card's "correct" (design 6.5).
+  S.unsaved = true;
 }
 
 /** Mounts a round screen and runs it (2.5): cards, misses and help steps, the closing, "הַבָּא". A demo locks the cards. */
@@ -269,23 +288,34 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   // Locked while a display runs (R5); [data-locked] tells tests when a tap is taken again.
   const lock = (on) => { busy = on; cards.row.toggleAttribute('data-locked', on); };
   lock(busy);
-  // A new row is fully built: setEquation also ends a story's build (2.4).
-  const setEquation = (equation) => fitEquation(Object.assign(eq, drawEquation(eqArea, equation, round.answer, cover)).row);
-  // After the solve (every token shown) and after abort (the screen is gone), build does nothing.
-  const build = (indices) => { if (!solved && !signal.aborted) buildEquation(eq.row, indices); };
-  const answerAt = round.choices.findIndex((c) => same(c.value, round.answer));
-  const ctx = { signal, mode: mode === 'demo' ? 'demo' : 'play', solved: false, setEquation, build, onAttempt() {} };
-  const view = game.render(host, round, ctx) ?? {};
-  const help = (kind) => Boolean(rec.help.includes(kind) || rec.help.push(kind));
+  /** @type {RoundView} */
+  let view = {};
+  // The picture's description, read from the view each time: it changes with the solve and a move (2.4).
   const label = () => {
     if (!shown || !view.label) return;
     host.setAttribute('role', 'img');
     host.setAttribute('aria-label', view.label);
   };
+  // A new row is fully built: setEquation also ends a story's build (2.4).
+  const setEquation = (equation) => {
+    fitEquation(Object.assign(eq, drawEquation(eqArea, equation, round.answer, cover)).row);
+    label();
+  };
+  // After the solve (every token shown) and after abort (the screen is gone), build does nothing.
+  const build = (indices) => { if (!solved && !signal.aborted) buildEquation(eq.row, indices); };
+  const answerAt = round.choices.findIndex((c) => same(c.value, round.answer));
+  const ctx = { signal, mode: mode === 'demo' ? 'demo' : 'play', solved: false, setEquation, build, relabel: label, onAttempt() {} };
+  view = game.render(host, round, ctx) ?? {};
+  const help = (kind) => Boolean(rec.help.includes(kind) || rec.help.push(kind));
   const picture = (asked) => {
     if (shown) return;
     shown = true;
-    host.querySelector('[data-show-picture]')?.remove();
+    const button = host.querySelector('[data-show-picture]');
+    // It goes as it is pressed: a keyboard or reader's focus moves on first, to "הַבָּא" or the first live card (design 6.5).
+    if (button?.contains(document.activeElement)) {
+      (cardsArea.querySelector('[data-next]') ?? cards.buttons.find((b) => b.isConnected && !b.inert))?.focus({ preventScroll: true });
+    }
+    button?.remove();
     if (asked && !solved) help('picture');   // after the solve the button still draws, but the record is closed
     view.picture?.();
     label();
@@ -310,7 +340,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     misses += 1;
     rec.wrong.push(rule);
     cards.retire(i);
-    const n = Math.min(3, misses + (round.choices.length === 4 ? 0 : 1));
+    const n = /** @type {1 | 2 | 3} */ (Math.min(3, misses + (round.choices.length === 4 ? 0 : 1)));
     if (n >= 2) help('hint');
     if (n === 3) rec.tour = help('tour');
     picture(false);
@@ -330,10 +360,16 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     // Every token, and out of aria-busy, before the cover lifts: a tap during a story's event comes here first (2.5).
     buildEquation(eq.row, null);
     solveEquation(eq);
-    await Promise.all([settle(eqArea, signal), view.solve?.()]);
+    try {
+      await Promise.all([settle(eqArea, signal), view.solve?.()]);
+    } finally {
+      // The attempt is written once the closing has run, also when the round is left (3.9).
+      if (S.unsaved) persist();
+    }
     if (signal.aborted) return;
-    const label = `<span>${T.next}</span>${svg('next')}`;
-    const button = h('button', { type: 'button', class: 'next btn btn-action', 'data-next': true, 'data-control': true, html: label });
+    label();
+    const html = `<span>${T.next}</span>${svg('next')}`;
+    const button = h('button', { type: 'button', class: 'next btn btn-action', 'data-next': true, 'data-control': true, html });
     button.addEventListener('click', next, { signal });
     cardsArea.replaceChildren(button);
     changed();
@@ -480,6 +516,7 @@ function errorScreen() {
 }
 
 function route() {
+  sync();
   const [, a, b, c, d, e] = (location.hash || '#/').split('/');
   const game = S.byId.get(b);
   if (a === 'next') return goNext();
@@ -502,7 +539,7 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
     store = null;
   }
   const ordered = homeOrder(games, SKILLS);
-  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [],
+  S = { root, games: ordered, byId: new Map(ordered.map((g) => [g.meta.id, g])), now, storage: store, ctl: null, thumbs: [], unsaved: false, newId: null,
     seeds: rng(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]), taps: tapWindow() };
   // A tap within 300 ms of a new screen or of "הַבָּא" appearing never acts on what the change put
   // under the finger (design 6.9): event times, no timer, nothing locked; the next tap is taken.
@@ -514,8 +551,12 @@ export function start({ root, games, now = () => new Date(), storage, seed }) {
   // and a ring the child did not ask for reads as "this one" (playtest 2026-10-31).
   addEventListener('keydown', () => document.documentElement.setAttribute('data-keys', ''), { capture: true });
   addEventListener('pointerdown', () => document.documentElement.removeAttribute('data-keys'), { capture: true });
-  const newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-  S.store = load(store, newId, { t: S.now().toISOString(), day: today() });
+  S.newId = () => `c${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  S.store = load(store, S.newId, { t: S.now().toISOString(), day: today() });
+  // A write waiting for its closing is not lost when the page goes (3.9).
+  const flush = () => { if (S.unsaved) persist(); };
+  addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   navigator.storage?.persist?.().catch(() => null);
   // The first route waits for every game's stylesheet (load or error, no timer): drawn before it, a
   // story's event finds no animation to settle on and a render measures an unstyled host (3.1).

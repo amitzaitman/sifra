@@ -8,7 +8,9 @@ const span = (className, text) => Object.assign(document.createElement('span'), 
 /**
  * Draws the equation into host. The answer is drawn from the start in .eq-answer, hidden until
  * the screen has data-solved (and from screen readers until solved: see solveEquation); the
- * k-th '?' shows the k-th number of an array answer.
+ * k-th '?' shows the k-th number of an array answer. The row is one atomic polite live region per
+ * round: a redraw (setEquation) refills the row already there, as the solve does, so a reader says
+ * the whole new row; a live region put in already filled is not reliably read (design 6.4).
  * @param {HTMLElement} host
  * @param {Equation | null} equation
  * @param {unknown} answer
@@ -16,11 +18,17 @@ const span = (className, text) => Object.assign(document.createElement('span'), 
  * @returns {{ row: HTMLElement, covers: HTMLElement[] }}
  */
 export function drawEquation(host, equation, answer, makeCover) {
-  const row = document.createElement('p');
+  const old = host.querySelector(':scope > p.eq');
+  const row = old instanceof HTMLParagraphElement ? old : document.createElement('p');
   row.className = 'eq';
   row.dir = 'ltr';
   row.dataset.math = '';
+  row.removeAttribute('style');
+  row.removeAttribute('aria-busy');
   row.setAttribute('aria-live', 'polite');
+  row.setAttribute('aria-atomic', 'true');
+  /** @type {Node[]} */
+  const nodes = [];
   const answers = Array.isArray(answer) ? answer : [answer];
   /** @type {HTMLElement[]} */
   const covers = [];
@@ -28,7 +36,7 @@ export function drawEquation(host, equation, answer, makeCover) {
   const side = (tokens) => {
     for (const token of tokens) {
       if (token !== '?') {
-        row.append(span(SOFT.has(String(token)) ? 'eq-op' : 'eq-term', String(token)));
+        nodes.push(span(SOFT.has(String(token)) ? 'eq-op' : 'eq-term', String(token)));
         continue;
       }
       const [slot, lid] = [span('eq-slot'), makeCover('?')];
@@ -36,21 +44,22 @@ export function drawEquation(host, equation, answer, makeCover) {
       value.setAttribute('aria-hidden', 'true');
       slot.append(value, lid);
       covers.push(lid);
-      row.append(slot);
+      nodes.push(slot);
     }
   };
   if (equation) {
     side(equation.left);
-    row.append(span('eq-term', '='));
+    nodes.push(span('eq-term', '='));
     side(equation.right);
   }
-  host.replaceChildren(row);
+  row.replaceChildren(...nodes);
+  if (row !== old) host.replaceChildren(row);
   return { row, covers };
 }
 
 /**
  * Solves the row: the covers lift and leave the accessibility tree, and each answer is put back
- * as a new node, so the polite live region says the solved equation (design 6.4).
+ * as a new node; the row is atomic, so the polite live region says the whole solved equation (design 6.4).
  * @param {{ row: HTMLElement, covers: HTMLElement[] }} eq
  */
 export function solveEquation({ row, covers }) {

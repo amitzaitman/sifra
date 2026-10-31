@@ -133,6 +133,12 @@ test('the Safari 16.4 scan catches the features the bug hunt added (S9): each sa
   assert.doesNotMatch('.g { font-size-adjust: 0.5; }', NEWER[0][1]);
 });
 
+test('a press and hold is a tap on the child\'s screens: no iOS callout, no selection, the prefixed form for Safari 16.4 (bug hunt #17)', () => {
+  const rule = read('app.css').split('\n').find((l) => l.startsWith('main:not([data-screen="parents"])'));
+  assert.ok(rule, 'a rule on main outside the parents page');
+  for (const decl of ['-webkit-touch-callout: none', '-webkit-user-select: none', 'user-select: none']) assert.ok(rule.includes(decl), decl);
+});
+
 test('zoom: no maximum-scale, user-scalable, gesturestart or touchmove (design 10)', () => {
   assert.doesNotMatch(read('index.html'), /maximum-scale|user-scalable/);
   none(scan(site, /gesturestart|touchmove/, 'a zoom blocker'));

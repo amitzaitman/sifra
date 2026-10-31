@@ -228,6 +228,59 @@ test('a stuck return into another game: the rest of the session plays the target
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-kind', 'new');
 });
 
+test('two tabs: each reads the store again before it writes, so neither undoes the other\'s progress (3.9, bug hunt #8)', async ({ page, context }) => {
+  // A plays parts and B scale, in one context (one localStorage), as a second tab a WhatsApp link opens.
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10'), scale: ladderAt('right') } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const b = await context.newPage();
+  await b.clock.install({ time: NOW });
+  await b.goto(`${FIXTURE}?seed=2#/play/scale`);
+  await expect(b.locator('main[data-screen="round"]')).toBeVisible();
+  await look(b);
+  await card(b, (await roundOf(b)).answerAt).click();
+  await expect(b.locator('[data-next]')).toBeVisible();
+  // A goes on in its old tab.
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const { data, child } = await stored(page);
+  expect(Object.keys(data.children)).toEqual([data.current]);
+  expect(child.attempts.map((a) => a.game)).toEqual(['parts', 'scale', 'parts']);
+  expect(child.games.scale.streak).toBe(1);
+  expect(child.games.parts.streak).toBe(2);
+});
+
+test('"תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key hands its focus on, to the first live card, or to "הַבָּא" after the solve (design 6.5)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const first = await playAt(page, 'parts', 'split-sym');
+  await page.locator('[data-show-picture]').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-show-picture]')).toHaveCount(0);
+  await expect(page.locator('button[data-index]').first()).toBeFocused();
+  await look(page);
+  await card(page, first.answerAt).click();
+  await look(page);
+  await page.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
+  // Solved first: the button stays (a symbols level) and draws the solved picture; focus goes to "הַבָּא".
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await look(page);
+  await page.locator('[data-show-picture]').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-show-picture]')).toHaveCount(0);
+  await expect(page.locator('[data-next]')).toBeFocused();
+});
+
 test('"show me how" on a symbols level draws the help picture in the demo', async ({ page }) => {
   await page.clock.install({ time: NOW });
   await page.goto(`${FIXTURE}#/dev/parts/3/1`);
@@ -401,14 +454,16 @@ test('story: a right tap during the event is taken; the row shows every token an
 
 test('story: a wrong tap during the event finishes it, gets its display, and setEquation draws the row whole', async ({ page }) => {
   const { round, answerAt } = await holdStory(page, '#/dev/story/1/1');
-  await page.locator('[data-area="equation"] .eq').evaluate((row) => row.setAttribute('data-before', ''));
+  await page.locator('[data-area="equation"] .eq').evaluate((row) => [row, ...row.children].forEach((n) => n.setAttribute('data-before', '')));
   const wrong = answerAt === 0 ? 1 : 0;
   await card(page, wrong).click();
   await expect(page.locator(`[data-display="${RULES[round.choices[wrong].rule].display}"]`)).toBeVisible();
   await unlocked(page);
   await expect(page.locator('[data-event]')).toHaveCount(0);
-  // The fixture finishes its event on a miss with setEquation: a new row, fully built, not busy.
-  await expect(page.locator('[data-area="equation"] .eq')).not.toHaveAttribute('data-before');
+  // The fixture finishes its event on a miss with setEquation: the row refilled in place (one atomic live region per
+  // round, design 6.4), its tokens new, fully built, not busy.
+  await expect(page.locator('[data-area="equation"] .eq')).toHaveAttribute('data-before');
+  await expect(page.locator('[data-area="equation"] .eq > [data-before]')).toHaveCount(0);
   expect(await rowNow(page)).toMatchObject({ busy: null, shown: [0, 1, 2, 3, 4], unbuilt: 0 });
   expect(await page.locator('[data-area="equation"] .eq').ariaSnapshot()).toBe(spoken(round.equation, '?'));
   await card(page, answerAt).click();

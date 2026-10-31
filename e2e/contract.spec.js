@@ -40,6 +40,8 @@ const fixedCover = (game, level) => (game.meta.id === 'balance' && level.model =
 const passing = (game, level, display) => game.meta.id === 'stories' && level.unknown === 'change' && display !== 'flash';
 
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
+/** What a solved picture's aria-label no longer says: a cover (מִכְסֶה, מִכְסִים) or something empty (רֵיק, רֵיקָה, רֵיקִים). */
+const SOLVED_NOT = /מִכְס|רֵיק/;
 /** A tour can count twenty things, 150 ms each, with motion: the cards may stay locked a few seconds. */
 const unlocked = (page) => expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
 /** @type {(tokens: any[]) => number} */
@@ -137,6 +139,8 @@ async function shellPath(page, hash, game) {
   await card(page, answerAt).click();
   await expect(page.locator('[data-next]'), where('"הַבָּא" after the solve')).toBeVisible();
   expect(await shownCovers(page, 'main'), where('no cover shown after the solve')).toEqual([]);
+  // The description says what the solved picture shows: no cover, no empty pan or place (design 6.3, bug hunt #24).
+  expect(await panel.getAttribute('aria-label') ?? '', where('the label after the solve')).not.toMatch(SOLVED_NOT);
   if (level.look === 'symbols') {
     await openRound(page, hash);
     await card(page, answerAt).click();
@@ -146,6 +150,7 @@ async function shellPath(page, hash, game) {
     await expect(panel.locator('[data-show-picture]')).toHaveCount(0);
     await expect(panel.locator(':scope > *').first(), where('the picture after the solve is drawn')).toBeAttached();
     expect(await shownCovers(page, 'main'), where('no cover shown in the picture after a first try')).toEqual([]);
+    expect(await panel.getAttribute('aria-label') ?? '', where('the label of the picture after a first try')).not.toMatch(SOLVED_NOT);
   }
   return { answer: round.answer, covers };
 }

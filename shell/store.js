@@ -80,6 +80,11 @@ const readRaw = (storage) => { try { return storage.getItem(KEY); } catch { retu
 /** @type {(raw: string | null) => any} the parsed value, or the raw text when it does not parse */
 const parse = (raw) => { try { return raw === null ? null : JSON.parse(raw); } catch { return raw; } };
 
+/** @type {(data: any) => boolean} a schema newer than this code */
+const newer = (data) => Number.isInteger(data?.schema) && data.schema > SCHEMA;
+/** @type {(data: any) => boolean} a stored value this code reads: a schema, children, and the current child */
+const valid = (data) => map(data) && Number.isInteger(data.schema) && data.schema >= 1 && map(data.children) && map(data.children[data.current]);
+
 /**
  * Parses and upgrades a stored value. A schema newer than this code, whatever its shape: a new
  * value that is never written, so the newer data stays. Missing, unparsable or broken (no current
@@ -94,9 +99,8 @@ export function migrate(raw, newId, when) {
   const data = parse(raw);
   const id = newId();
   const fresh = { schema: SCHEMA, current: id, children: { [id]: newChild(when.day) } };
-  if (Number.isInteger(data?.schema) && data.schema > SCHEMA) return { data: fresh, writable: false };
-  const valid = map(data) && Number.isInteger(data.schema) && data.schema >= 1 && map(data.children) && map(data.children[data.current]);
-  if (!valid) {
+  if (newer(data)) return { data: fresh, writable: false };
+  if (!valid(data)) {
     if (raw) fresh.children[id].events.push(repair(when, { '*': data }));
     return { data: fresh, writable: true };
   }
@@ -106,7 +110,29 @@ export function migrate(raw, newId, when) {
 }
 
 /** @type {(storage: Storage | null, newId: () => string, when: { t: string, day: string }) => Store} reads and migrates; never throws */
-export const load = (storage, newId, when) => ({ storage, ...migrate(readRaw(storage), newId, when) });
+export const load = (storage, newId, when) => {
+  const raw = readRaw(storage);
+  return { storage, raw, ...migrate(raw, newId, when) };
+};
+
+/**
+ * Reads storage again before a write (architecture 3.9): another tab of the site may have written since this one
+ * read or wrote, and a save writes the whole store, so it would undo that tab's progress. A stored text other than
+ * the last one this tab read or wrote replaces memory (migrated), when this code can read it or it is newer (then
+ * not writable). A failed read, nothing stored, or a broken value keeps memory, and the next save writes it.
+ * @param {Store} store
+ * @param {() => string} newId
+ * @param {{ t: string, day: string }} when
+ * @returns {boolean} whether memory was replaced
+ */
+export function refresh(store, newId, when) {
+  const raw = readRaw(store.storage);
+  if (raw === null || raw === store.raw) return false;
+  const data = parse(raw);
+  if (!newer(data) && !valid(data)) return false;
+  Object.assign(store, { raw, ...migrate(raw, newId, when) });
+  return true;
+}
 
 /** @type {(store: Store) => Child} */
 export const childOf = (store) => store.data.children[store.data.current];
@@ -117,22 +143,38 @@ export function capped(list, item, cap) {
   list.splice(0, Math.max(0, list.length - cap));
 }
 
+/** @type {(err: any) => boolean} */
+const isQuota = (err) => ['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(err?.name) || err?.code === 22;
+
 /**
- * Writes the store. On a quota error the oldest half of the attempts goes and it tries once more.
+ * Writes the store. On a quota error the oldest half of the attempts is set aside and it tries once
+ * more; if the retry fails too, nothing was written, so the half comes back: memory never loses what
+ * the next save could still write (bug hunt #21).
  * @param {Store} store
  * @returns {boolean} whether it was written
  */
 export function save(store) {
-  for (let tries = 0; store.writable && tries < 2; tries++) {
-    try {
-      store.storage.setItem(KEY, JSON.stringify(store.data));
-      return true;
-    } catch (err) {
-      if (!['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(err?.name) && err?.code !== 22) return false;
-      childOf(store).attempts.splice(0, Math.ceil(childOf(store).attempts.length / 2));
-    }
+  if (!store.writable) return false;
+  const write = () => {
+    const text = JSON.stringify(store.data);
+    store.storage.setItem(KEY, text);
+    store.raw = text;
+  };
+  try {
+    write();
+    return true;
+  } catch (err) {
+    if (!isQuota(err)) return false;
   }
-  return false;
+  const { attempts } = childOf(store);
+  const dropped = attempts.splice(0, Math.ceil(attempts.length / 2));
+  try {
+    write();
+    return true;
+  } catch {
+    attempts.unshift(...dropped);
+    return false;
+  }
 }
 
 /**

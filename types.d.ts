@@ -91,7 +91,8 @@ interface RoundView {
   solve?(): Promise<void>;
   picture?(): void;
   demo?(hand: Hand): Promise<void>;
-  label?: string;
+  /** the picture's description, read again after the solve, setEquation and ctx.relabel() (a getter where it changes) */
+  readonly label?: string;
 }
 
 interface RenderContext {
@@ -106,6 +107,8 @@ interface RenderContext {
    * solve and after abort; setEquation draws a fully built row.
    */
   build(indices: number[] | null): void;
+  /** reads the view's label again, after a change the shell does not see (a counter moved, bug hunt #24); a no-op in thumbs */
+  relabel(): void;
   onAttempt(value: any): void;
 }
 
@@ -187,4 +190,5 @@ interface Child {
 }
 
 interface Stored { schema: number; current: string; children: Record<string, Child> }
-interface Store { storage: Storage | null; data: Stored; writable: boolean }
+/** raw: the stored text this tab read or wrote last (refresh, architecture 3.9) */
+interface Store { storage: Storage | null; data: Stored; writable: boolean; raw: string | null }
