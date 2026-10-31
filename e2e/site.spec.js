@@ -516,6 +516,24 @@ test('a wide exercise never widens the page\'s column: the gutters stay and the 
   }
 });
 
+test('a turned phone fits the exercise again: shrunk on the narrow screen, full size back on the wide one (design 5, 6.4)', async ({ page }) => {
+  // 10 + 10 = ? + 18 fits at 48px held sideways and needs 31.2px at 320: fitted once, turned, it spilled 8px into each gutter.
+  await page.setViewportSize({ width: 568, height: 320 });
+  await open(page, `${INDEX}#/dev/balance/8/379`);
+  await expect(page.locator('[data-choices]')).toBeVisible();
+  const row = () => page.locator('[data-area="equation"] .eq').evaluate((el) => ({ over: el.scrollWidth - el.clientWidth, font: parseFloat(getComputedStyle(el).fontSize), wrapped: el.classList.contains('is-wrapped') }));
+  expect(await row()).toEqual({ over: 0, font: 48, wrapped: false });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(async () => (await row()).over, '320×568: the row fits its box').toBeLessThanOrEqual(0);
+  expect((await row()).font, '320×568: shrunk, 28px or more').toBeGreaterThanOrEqual(28);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect.poll(async () => (await row()).font, '568×320: full size again').toBe(48);
+  // The solved row is fitted the same way.
+  await solve(page);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(async () => (await row()).over, '320×568 solved').toBeLessThanOrEqual(0);
+});
+
 test('the equation row is one atomic live region per round: the solve fills the same node, so a reader says the solved exercise (design 6.4, bug hunt #12)', async ({ page }) => {
   for (const [route, solved] of [['ten-frame/2/1', null], ['balance/10/1', '8=1+7']]) {
     await open(page, `${INDEX}?r=${route}#/dev/${route}`);

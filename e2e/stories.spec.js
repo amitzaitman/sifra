@@ -2,7 +2,7 @@
 // scene.js, the glyphs inside their discs and chips and on top, the event that builds the exercise
 // (a tap during it is an attempt like any other), R6's role colours, every rule's display on every
 // level, and the game spec's list: a first try, three misses to the tour, the first levels' four cards,
-// every demo, a session to the end screen.
+// every demo, a session to the end screen, and a turned phone.
 import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
 import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
@@ -184,7 +184,7 @@ const CALIBRATED = [
   { id: 'take-10', s: 10, k: 9, rest: ['obj-0', 'out-9', 'dome', 'wrap-0'], overflow: ['obj-0', 'ghost-1', 'ghost-18', 'ring-0'], hint: ['wrap-0'], tour: ['digit-0', 'dome'], solved: ['answer', 'digit-0', 'wrap-0'] },
   { id: 'add-change', s: 5, k: 4, rest: ['obj-0', 'lid', 'chip-start', 'chip-whole', 'whole-0'], overflow: ['obj-4', 'ghost-5', 'ghost-18', 'ring-18', 'chip-whole'], hint: ['cover-0', 'chip-start', 'chip-whole'], tour: ['obj-5', 'digit-8'], solved: ['obj-8', 'chip-whole', 'whole-0'] },
 ];
-for (const vp of /** @type {[number, number][]} */ ([[320, 568], [568, 320], [390, 844]])) {
+for (const vp of /** @type {[number, number][]} */ ([[320, 568], [568, 320], [844, 390], [390, 844]])) {
   test(`${vp.join('×')}: --u and every mark where scene.js puts them, at rest, in a four-row overflow, at the hint, in the tour and solved (10 − 9 = ?, 5 + ? = 9)`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: vp[0], height: vp[1] });
@@ -927,14 +927,13 @@ test('a session at a level of nine stories deals eight different exercises; two 
   expect((await stored(page)).child.attempts.map((a) => a.levelId)).toEqual(Array(8).fill('add-5'));
 });
 
-test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await playAt(page, 'take-10');
+/** Plays the session on screen to its end screen, each round on a first try. */
+async function playToEnd(page) {
   for (let n = 0; n < 20; n++) {
     const screen = page.locator('main[data-screen]');
     await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
     const name = await screen.getAttribute('data-screen');
-    if (name === 'end') break;
+    if (name === 'end') return;
     if (name === 'round') {
       await look(page);
       const { answerAt } = await roundOf(page);
@@ -944,8 +943,63 @@ test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
     await look(page);
     await page.locator('[data-next]').click();
   }
+}
+
+test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await playAt(page, 'take-10');
+  await playToEnd(page);
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb] .st-stage')).toHaveCount(8);
   await expectThumbsDrawn(page);
   expect((await stored(page)).child.attempts.every((a) => a.outcome === 'first')).toBe(true);
+});
+
+// ---------- A turned phone (design 5; the balance's bug hunt #11, checked here too) ----------
+
+// The unit is solved in CSS from the stage (game.css), and nothing in view.js measures a size, so a turned phone
+// draws everything at the new screen's size: these hold that, as the balance's thumbs and squeezed numbers did not.
+test('a turned phone: the tour drawn where scene.js puts it on the new screen, its digits inside their discs', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // 9 + 1's tour of 10 in the basket (the narrowest digits, architecture 4.9), and 4 + 5's tour from 5 to 9.
+  for (const [id, s, k, rules] of /** @type {[string, number, number, string[]][]} */ ([['whole-10', 9, 1, ['op.other', 'given.part', 'slip.near']], ['add-10', 4, 5, []]])) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const { round } = await devAt(page, id, storySeed(id, s, k, undefined, rules));
+    for (const i of wrongOf(round)) {
+      await card(page, i).click();
+      await unlocked(page);
+    }
+    await expect(page.locator('[data-tour]')).toHaveText(tourOf(round));
+    const state = { hint: true, tour: tourOf(round).length };
+    for (const vp of /** @type {[number, number][]} */ ([[844, 390], [390, 844], [568, 320], [320, 568]])) {
+      await page.setViewportSize({ width: vp[0], height: vp[1] });
+      const where = `${id} ${s} + ${k} turned to ${vp.join('×')}`;
+      await expect.poll(() => calibrate(page, round, state, vp, []), where).toEqual([]);
+      await expect(page.locator('[data-tour]'), where).toHaveText(tourOf(round));
+      expect(await glyphProblems(page, where)).toEqual([]);
+    }
+  }
+});
+
+test('a turned phone: home\'s and an end screen\'s thumbs drawn sideways stay inside their cards', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  /** Each stories thumb's drawing inside its card, by 1px. */
+  const inside = () => page.evaluate(() => [...document.querySelectorAll('.thumb[data-game="stories"]')].map((t) => {
+    const [b, d] = [t.getBoundingClientRect(), t.querySelector('.st-draw').getBoundingClientRect()];
+    return d.left >= b.left - 1 && d.right <= b.right + 1 && d.top >= b.top - 1 && d.bottom <= b.bottom + 1;
+  }));
+  await page.setViewportSize({ width: 568, height: 320 });
+  await playAt(page, 'take-10');
+  await playToEnd(page);
+  await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb] .st-draw')).toHaveCount(8);
+  expect(await inside(), 'the end screen at 568×320').toEqual(Array(8).fill(true));
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(inside, 'the end screen turned to 320×568').toEqual(Array(8).fill(true));
+  await page.setViewportSize({ width: 568, height: 320 });
+  await look(page);
+  await page.locator('main[data-screen="end"] .end-home > *').click();
+  await expect(page.locator('main[data-screen="home"] .thumb[data-game="stories"] .st-draw').first()).toBeVisible();
+  expect((await inside()).every(Boolean), 'home at 568×320').toBe(true);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(async () => (await inside()).every(Boolean), 'home turned to 320×568').toBe(true);
 });

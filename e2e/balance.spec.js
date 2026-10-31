@@ -1778,6 +1778,29 @@ test('a phone on its side: the balance\'s picture is as tall as on a 320px phone
   }
 });
 
+/** Plays the session on screen to its end screen, each round on a first try. */
+async function playToEnd(page) {
+  for (let n = 0; n < 20; n++) {
+    const screen = page.locator('main[data-screen]');
+    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
+    const name = await screen.getAttribute('data-screen');
+    if (name === 'end') return;
+    if (name === 'round') {
+      await look(page);
+      const { answerAt } = await roundOf(page);
+      await card(page, answerAt).click();
+    }
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+}
+/** In the page: every balance thumb's stage inside its card, by 1px. */
+const thumbsInside = (page) => page.evaluate(() => [...document.querySelectorAll('.thumb[data-game="balance"]')].every((t) => {
+  const [b, s] = [t.getBoundingClientRect(), t.querySelector('.bl-stage').getBoundingClientRect()];
+  return s.left >= b.left - 1 && s.right <= b.right + 1 && s.top >= b.top - 1 && s.bottom <= b.bottom + 1;
+}));
+
 test('a turned phone: the thumbs keep inside their cards, and a tour\'s squeezed numbers are measured again (design 5; bug hunt #11)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 568, height: 320 });
@@ -1785,10 +1808,7 @@ test('a turned phone: the thumbs keep inside their cards, and a tour\'s squeezed
   await page.goto(`${INDEX}#/`);
   await expectThumbsDrawn(page);
   await page.setViewportSize({ width: 320, height: 568 });
-  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.thumb[data-game="balance"]')].every((t) => {
-    const [b, s] = [t.getBoundingClientRect(), t.querySelector('.bl-stage').getBoundingClientRect()];
-    return s.left >= b.left - 1 && s.right <= b.right + 1 && s.top >= b.top - 1 && s.bottom <= b.bottom + 1;
-  }))).toBe(true);
+  await expect.poll(() => thumbsInside(page)).toBe(true);
   // 19 = 3 + ?'s tour at 390×844, then turned: each two-digit number inside its smaller cube, and back to 1 turned back.
   await page.setViewportSize({ width: 390, height: 844 });
   const { round } = await picturedAt(page, 'missing-symbols-20', 9);
@@ -1808,23 +1828,24 @@ test('a turned phone: the thumbs keep inside their cards, and a tour\'s squeezed
   await expect.poll(async () => (await squeezed()).every((d) => d.sx === '1.000')).toBe(true);
 });
 
+test('a turned phone: an end screen played sideways keeps its eight thumbs inside their cards (design 5; bug hunt #11)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 568, height: 320 });
+  await playAt(page, 'missing-left');
+  await playToEnd(page);
+  await expect(page.locator('main[data-screen="end"] .bl-stage.is-thumb')).toHaveCount(8);
+  expect(await thumbsInside(page), '568×320').toBe(true);
+  // Turned: each card 138px wide, its stage scaled for a 262px card; turned back, 262px again.
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect.poll(() => thumbsInside(page), '320×568').toBe(true);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect.poll(() => thumbsInside(page), '568×320 again').toBe(true);
+});
+
 test('a session of 8 rounds ends on the solved pictures', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await playAt(page, 'missing-left');
-  for (let n = 0; n < 20; n++) {
-    const screen = page.locator('main[data-screen]');
-    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
-    const name = await screen.getAttribute('data-screen');
-    if (name === 'end') break;
-    if (name === 'round') {
-      await look(page);
-      const { answerAt } = await roundOf(page);
-      await card(page, answerAt).click();
-    }
-    await expect(page.locator('[data-next]')).toBeVisible();
-    await look(page);
-    await page.locator('[data-next]').click();
-  }
+  await playToEnd(page);
   await expect(page.locator('main[data-screen="end"] .end-thumbs > [data-thumb][data-solved]')).toHaveCount(8);
   await expect(page.locator('main[data-screen="end"] .bl-stage.is-thumb')).toHaveCount(8);
   await expectThumbsDrawn(page);

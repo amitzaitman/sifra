@@ -285,6 +285,9 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   const dots = level.cardDots !== false && level.look !== 'symbols' && round.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
   const cards = drawCards(cardsArea, round.choices, { dots, face: game.face && ((el, v) => game.face(el, v, round)) }, signal);
   fitEquation(eq.row);
+  // A turned phone changes the row's box and --fs-eq: fitted again, it shrinks on the narrow screen and comes back to
+  // full size on the wide one (design 6.4). setEquation refills eq, so this fits the row on screen.
+  addEventListener('resize', () => fitEquation(eq.row), { signal });
   // Locked while a display runs (R5); [data-locked] tells tests when a tap is taken again.
   const lock = (on) => { busy = on; cards.row.toggleAttribute('data-locked', on); };
   lock(busy);
