@@ -219,6 +219,7 @@ const DISPLAYS = [
   ['split-pairs', 'given.whole'], ['split-pairs', 'op.other'], ['split-pairs', 'zero.counted-as-one'], ['split-pairs', 'slip.near'],
   ['teen-bundle', 'pv.teen-reversed'], ['teen-bundle', 'pv.digits-added'], ['teen-bundle', 'pv.ones-only'], ['teen-bundle', 'slip.near'],
   ['bridge-frames', 'bridge.whole-second'], ['bridge-frames', 'bridge.leftover-only'], ['bridge-frames', 'bridge.stopped-at-ten'],
+  ['bridge-frames', 'count.start-included'],
   ['teen-symbols', 'given.whole'], ['teen-symbols', 'given.part'], ['teen-symbols', 'slip.near'], ['split-5', 'op.other'],
 ];
 
@@ -988,6 +989,37 @@ for (const level of ['bridge-frames', 'bridge-move']) {
   });
 }
 
+// Two frames, counted on from the first addend's last counter, itself counted (count.start-included, the sum
+// minus 1; decisions.md 2026-10-31, "קפיצות בשתי מסגרות"): a on that counter, then on over the second addend's
+// counters, one short; the counter left over is ringed in its cell, as in the count that stops (design 7.3).
+// No arcs: the frames count with numbers on the counters. Fixed frames and level 10 before a move.
+for (const level of ['bridge-frames', 'bridge-move']) {
+  test(`${level} at 320px: jumps count on from the first addend's last counter and land one short (design 7.3)`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 320, height: 568 });
+    const { round } = await devAt(page, level, (r) => holds('count.start-included')(r) && r.equation.left[0] >= 3);
+    const [a, , b] = round.equation.left;
+    await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
+    await unlocked(page);
+    const shown = page.locator('[data-display="jumps"]');
+    const digits = await textBoxes(shown.locator('.tf-digit'));
+    expect(digits.map((d) => d.text)).toEqual(Array.from({ length: b }, (_, j) => String(a + j)));
+    expectApart(digits);
+    await expect(shown.locator('.tf-ghost')).toHaveCount(0);
+    await expect(shown.locator('.tf-ring')).toHaveCount(1);
+    // a on the first addend's last counter (cell a - 1), the rest on the second frame's (cells 10 on); the ring on its last.
+    const cells = await page.locator('[data-area="picture"] .tf-base .tf-cell').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    const cellAt = (x, y) => cells.findIndex((c) => x > c.left && x < c.right && y > c.top && y < c.bottom);
+    expect(digits.map((d) => cellAt((d.left + d.right) / 2, (d.top + d.bottom) / 2))).toEqual([a - 1, ...Array.from({ length: b - 1 }, (_, j) => 10 + j)]);
+    const ring = await shown.locator('.tf-ring').boundingBox();
+    expect(cellAt(ring.x + ring.width / 2, ring.y + ring.height / 2)).toBe(10 + b - 1);
+    await expect(page.locator('[data-area="picture"] .tf-blink')).toHaveCount(1);
+    expect(await page.evaluate(ringsBare)).toEqual([]);
+    expect(await page.evaluate(ringInCell)).toEqual([]);
+    await expectInPanel(page);
+  });
+}
+
 /**
  * Pixels of the part's yellow or its edge left beside shown sticks and their bundle, at the
  * screen's own device pixels: a veil that stays on a layer of its own after its motion is snapped
@@ -1241,6 +1273,9 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     // The count that stops at ten: the counters left over keep a ring each, in their cells.
     ['bridge-frames', () => true, ['bridge.stopped-at-ten']],
     ['bridge-move', () => true, ['bridge.stopped-at-ten']],
+    // The jumps' count lands one short: the counter left over keeps a ring in its cell (decisions.md 2026-10-31).
+    ['bridge-frames', () => true, ['count.start-included']],
+    ['bridge-move', () => true, ['count.start-included']],
     ['teen-bundle', () => true, ['pv.ones-only']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
@@ -1274,7 +1309,7 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
       // is read on the part's rings, which keep 1.2px to spare; a ghost's ring has 0.2px (see ringsBare).
       const here = `${width}px ${level} ${JSON.stringify(round.equation)} ${cards}`;
       if (level.startsWith('bridge-')) expect(await page.evaluate(ringsBare), here).toEqual([]);
-      if (level.startsWith('bridge-') ? cards.includes('bridge.stopped-at-ten') || cards.includes('slip.near') : /^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), here).toEqual([]);
+      if (level.startsWith('bridge-') ? ['bridge.stopped-at-ten', 'slip.near', 'count.start-included'].some((rule) => cards.includes(rule)) : /^(split-(5|10)|ten-)/.test(level)) expect(await page.evaluate(ringInCell), here).toEqual([]);
     }
     // On a bond the dots stand too close for a ring each: what does not fit is one group in one
     // outline per part, its line halfway between dots, a pixel or more off each (also where the

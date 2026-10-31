@@ -784,6 +784,22 @@ export const BRIDGE = {
       left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part in-cell'));
       return blink(pic, left);
     },
+    /**
+     * Counted on from the first addend's last counter, itself counted (count.start-included): its
+     * number on it, then on over the counters after it, so the count lands one short; the counter left
+     * over blinks and stays ringed, as in the count that stops (design 7.3). The frames count with
+     * numbers on the counters, so these jumps have no arcs.
+     */
+    jumps(pic, root, { value }) {
+      const { a, b } = pic.d;
+      if (!(value >= a && value < a + b)) throw new Error(`ten-frame: jumps on the two frames land from ${a} to ${a + b - 1}, not on ${value}`);
+      const { counters, boxes } = bridgeNow(pic);
+      const n = value - a + 1;
+      for (let j = 0; j < n; j++) digit(root, boxes[a - 1 + j], String(a + j), stagger(j, n, 120), a + j < 10 ? 'on-disc' : 'on-disc is-two');
+      const left = counters.slice(value);
+      left.forEach((_, j) => ring(root, grow(boxes[value + j], 0.1), '300ms', 'is-round on-part in-cell'));
+      return blink(pic, left);
+    },
     /** The full first frame is the ten that was forgotten. */
     'label-ten'(pic, root) {
       const { top, bottom, boxes, free } = bridgeNow(pic);

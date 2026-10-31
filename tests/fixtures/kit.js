@@ -19,7 +19,7 @@ export function choose(round, options, rules, order, rng) {
   const predicted = order.filter((id) => !id.startsWith('slip.')).map((id) => rules[id](round));
   /** @type {(v: number) => 'below' | 'above'} */
   const side = (v) => (v < round.answer ? 'below' : 'above');
-  /** @type {(room: { below: number, above: number }, leave: (rule: string) => boolean) => Choice[]} */
+  /** @type {(room: { below: number, above: number }, leave: (rule: string, value: any) => boolean) => Choice[]} */
   const deal = (room, leave) => {
     const left = { ...room };
     const taken = [round.answer];
@@ -33,17 +33,19 @@ export function choose(round, options, rules, order, rng) {
       const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
       const before = [...earlier];
       earlier.push(...candidates);
-      if (leave(id)) continue;
-      const ok = (v) => Number.isInteger(v) && v >= 0 && !taken.includes(v) && !before.includes(v) && (!id.startsWith('slip.') || !predicted.includes(v)) && left[side(v)] > 0;
-      const pick = candidates.find(ok);
-      if (pick === undefined) continue;
+      const ok = (v) => !leave(id, v) && Number.isInteger(v) && v >= 0 && !taken.includes(v) && !before.includes(v) && (!id.startsWith('slip.') || !predicted.includes(v)) && left[side(v)] > 0;
+      const fits = candidates.filter(ok);
+      if (!fits.length) continue;
+      const pick = fits.length > 1 ? rng.pick(fits) : fits[0];
       left[side(pick)] -= 1;
       taken.push(pick);
       wrong.push({ value: pick, rule: id });
     }
     return wrong;
   };
-  const wrong = place(options, deal, (c) => side(c.value) === 'below', rng) ?? [];
+  /** @type {any[]} what the skill's slips give on this round (lib/place.js) */
+  const slips = order.filter((id) => id.startsWith('slip.')).flatMap((id) => { const v = rules[id](round); return v !== null && typeof v === 'object' ? v.oneOf : [v]; });
+  const wrong = place(options, deal, (c) => side(c.value) === 'below', rng, (v) => slips.includes(v)) ?? [];
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }
 

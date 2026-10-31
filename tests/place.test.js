@@ -1,13 +1,13 @@
 // lib/place.js, the answer's place (R4; decisions.md 2026-10-31, "מקום התשובה"), on a made-up round:
 // the answer 5, real errors a (9, over it), b (2) and c (3) under it, d (7, over it) and e (1, under
-// it) after the others, and a slip 4 or 6.
+// it) after the others, f (6, the slip's value over it) after them, and a slip 4 or 6.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { place } from '../lib/place.js';
 import { rng } from '../shell/rng.js';
 
 const ANSWER = 5;
-const RULES = { a: [9], b: [2], c: [3], d: [7], e: [1], 'slip.near': [4, 6] };
+const RULES = { a: [9], b: [2], c: [3], d: [7], e: [1], f: [6], 'slip.near': [4, 6] };
 /** @type {(c: { value: number }) => boolean} */
 const below = (c) => c.value < ANSWER;
 
@@ -16,14 +16,17 @@ const below = (c) => c.value < ANSWER;
  * @param {string[]} order
  * @param {number} n
  */
-const dealer = (order, n) => (/** @type {{ below: number, above: number }} */ room, /** @type {(rule: string) => boolean} */ leave) => {
+const dealer = (order, n) => (/** @type {{ below: number, above: number }} */ room, /** @type {(rule: string, value: number) => boolean} */ leave) => {
   const left = { ...room };
   /** @type {{ value: number, rule: string }[]} */
   const wrong = [];
+  /** @type {number[]} the values of the rules before, dealt or not: a value two rules give is the first's (R4) */
+  const earlier = [];
   for (const rule of order) {
     if (wrong.length === n - 1) break;
-    if (leave(rule)) continue;
-    const value = RULES[rule].find((v) => left[v < ANSWER ? 'below' : 'above'] > 0);
+    const before = [...earlier];
+    earlier.push(...RULES[rule]);
+    const value = RULES[rule].find((v) => !leave(rule, v) && !before.includes(v) && left[v < ANSWER ? 'below' : 'above'] > 0);
     if (value === undefined) continue;
     left[value < ANSWER ? 'below' : 'above'] -= 1;
     wrong.push({ value, rule });
@@ -32,11 +35,11 @@ const dealer = (order, n) => (/** @type {{ below: number, above: number }} */ ro
 };
 
 /** The sets place() deals over 3000 seeds, by their values in order, with how often. */
-function dealt(order, n) {
+function dealt(order, n, slipValue = (/** @type {number} */ v) => RULES['slip.near'].includes(v)) {
   /** @type {Map<string, number>} */
   const seen = new Map();
   for (let seed = 1; seed <= 3000; seed++) {
-    const set = place(n, dealer(order, n), below, rng(seed)) ?? [];
+    const set = place(n, dealer(order, n), below, rng(seed), slipValue) ?? [];
     const key = set.map((c) => `${c.value}:${c.rule}`).sort().join(' ');
     seen.set(key, (seen.get(key) ?? 0) + 1);
   }
@@ -63,4 +66,14 @@ test('place: a set with fewer real errors than R4\'s two is not dealt; with no o
   // The free deal's own slip crosses the answer: a and the slip 4, or a and the slip 6.
   assert.deepEqual([...dealt(['a', 'slip.near'], 3).keys()].sort(), ['4:slip.near 9:a', '6:slip.near 9:a']);
   assert.equal(place(4, () => null, below, rng(1)), null);
+});
+
+test('place: moving down, a real error that gives the slip\'s value over the answer takes its place, so the slip does not stand on one side only because a real error holds the other (decisions.md 2026-10-31, "הטעות המקרית ליד התשובה")', () => {
+  // f gives 6, the slip's value over the answer, after the free deal is full: the slip may not take 6 (R4: a
+  // value two rules give is the first's), so moved down the card 6 is f's. Up, the slip 4 stands under the answer.
+  assert.deepEqual([...dealt(['a', 'b', 'c', 'f', 'slip.near'], 4).keys()].sort(), ['2:b 3:c 4:slip.near', '2:b 3:c 9:a', '2:b 6:f 9:a']);
+  // Without the slip's values the answer cannot move down: the slip only ever stood under it.
+  assert.deepEqual([...dealt(['a', 'b', 'c', 'f', 'slip.near'], 4, () => false).keys()].sort(), ['2:b 3:c 4:slip.near', '2:b 3:c 9:a']);
+  // A skill with no slip gives no slip's value: no other later real error comes in (d's 7 does not).
+  assert.deepEqual([...dealt(['a', 'b', 'c', 'd'], 4, () => false).keys()].sort(), ['2:b 3:c 9:a']);
 });

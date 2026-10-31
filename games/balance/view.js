@@ -638,8 +638,8 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     s.rest();
     void s.scene.offsetWidth;
     s.scene.classList.remove('is-instant');
-    // A first miss keeps its display to the next tap: step 1, or step 2 on a 3-option level,
-    // where the hint joins it (architecture 2.5 step 4). A later miss's display runs and leaves,
+    // A first miss keeps its display to the next tap: step 1, or step 2 on a 3-option level (none
+    // since 2026-10-31), where the hint joins it (architecture 2.5 step 4). A later miss's display runs and leaves,
     // so the start picture, cover included, gets the hint; with reduced motion it is skipped.
     if (first || !reduced()) {
       const root = await s.show(display, value, rule, lift);

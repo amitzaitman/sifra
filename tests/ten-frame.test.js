@@ -9,6 +9,7 @@ import { pictureOf } from '../games/ten-frame/picture.js';
 import { displayOf } from '../games/ten-frame/help.js';
 import { rng } from '../shell/rng.js';
 import { SKILLS } from '../data/skills.js';
+import { cuesOf } from './cues.js';
 
 const SEEDS = 200;
 const level = (id) => game.levels.find((l) => l.id === id);
@@ -247,11 +248,30 @@ test('choices: real errors before slips, and pairs sorted by their first then se
     'counting on from the bundle never counts down below it');
 });
 
+test('the bridge (levels 10-12): the answer on cards 2, 3 and 4, each in a fifth of the rounds or more; last beside count.start-included\'s card (decisions.md 2026-10-31, "קפיצות בשתי מסגרות")', () => {
+  // Before, the answer was card 3 or 2, and always "the second card that is not 10" (the generic deal
+  // now fails that at 80%): count.start-included had no drawing on the two frames, so the answer never
+  // moved up past it. Three places each alike leave such a rule two of them (about 67%).
+  for (const id of ['bridge-move', 'bridge-frames', 'bridge-symbols']) {
+    const all = rounds(id, 5000);
+    const at = [0, 0, 0, 0];
+    for (const r of all) at[r.choices.findIndex((c) => c.rule === null)] += 1;
+    assert.ok(at[0] === 0 && at.slice(1).every((n) => n >= 1000), `${id}: ${JSON.stringify(at)}`);
+    for (const r of all.filter((x) => x.choices.at(-1).rule === null)) {
+      assert.equal(r.choices.find((c) => c.rule === 'count.start-included')?.value, r.answer - 1, JSON.stringify(r.choices));
+    }
+    const best = cuesOf(game, level(id), 5000).reduce((a, b) => (b.found > a.found ? b : a));
+    assert.ok(best.found < 0.7 * 5000, `${id}: "${best.rule}" finds the answer in ${best.found} of 5000`);
+  }
+});
+
 test('displays: a table per kind of picture, by display id; a display a kind has no drawing for throws, as does a drawing that lacks what it needs (architecture 2.1)', () => {
-  assert.deepEqual([...game.displays].sort(), ['build', 'count-up', 'empty-plate', 'flash', 'label-ten', 'overflow']);
+  assert.deepEqual([...game.displays].sort(), ['build', 'count-up', 'empty-plate', 'flash', 'jumps', 'label-ten', 'overflow']);
   assert.equal(typeof displayOf('frame', 'overflow'), 'function');
   // Before, the bridge drew a jumps display as label-ten, and the bond an empty plate as overflow ghosts.
-  assert.throws(() => displayOf('bridge', 'jumps'), /the bridge picture has no jumps display/);
+  // The two frames draw jumps since 2026-10-31 (decisions.md, "קפיצות בשתי מסגרות"); one frame does not.
+  assert.equal(typeof displayOf('bridge', 'jumps'), 'function');
+  assert.throws(() => displayOf('frame', 'jumps'), /the frame picture has no jumps display/);
   assert.throws(() => displayOf('tree', 'empty-plate'), /the tree picture has no empty-plate display/);
   assert.throws(() => displayOf('frame', 'constructor'), /no constructor display/);
   /** @type {(kind: string, display: string, pic: any, value: number) => any} */
@@ -264,8 +284,13 @@ test('displays: a table per kind of picture, by display id; a display a kind has
   const ten = rounds('teen-bundle').find((r) => r.answer === 10);
   assert.equal(game.canShow(ten, { value: 9, rule: 'slip.near' }), false);
   assert.equal(game.canShow(ten, { value: 11, rule: 'slip.near' }), true);
+  // The two frames' jumps count on from the first addend's last counter: they land from a to the sum minus 1.
   const bridge = rounds('bridge-frames', 1)[0];
-  assert.equal(game.canShow(bridge, { value: bridge.answer - 1, rule: 'count.start-included' }), false);
+  const [a] = bridge.equation.left;
+  assert.equal(game.canShow(bridge, { value: bridge.answer - 1, rule: 'count.start-included' }), true);
+  assert.equal(game.canShow(bridge, { value: bridge.answer, rule: 'count.start-included' }), false);
+  assert.equal(game.canShow(bridge, { value: a - 1, rule: 'count.start-included' }), false);
+  assert.throws(() => drawOn('bridge', 'jumps', { d: { a: 8, b: 5 } }, 13), /jumps on the two frames land from 8 to 12, not on 13/);
   const split = rounds('split-10');
   assert.equal(game.canShow(split.find((r) => r.answer === 0), { value: 1, rule: 'zero.counted-as-one' }), true);
   assert.equal(game.canShow(split.find((r) => r.answer > 0), { value: 1, rule: 'zero.counted-as-one' }), false);

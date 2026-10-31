@@ -17,6 +17,7 @@ import { MODEL_ORDER } from '../data/models.js';
 import { SKILLS } from '../data/skills.js';
 import { SKILLS as SKILLS_MD, parseParams, read } from '../scripts/docs-parse.js';
 import { variants } from '../scripts/lock-rounds.js';
+import { cues } from './cues.js';
 
 const SEEDS = 200;
 /** The deal's seeds for the shares: the balance's old drift, 16% for 20% on level 5 (architecture 6), is 6 sigma out. */
@@ -213,11 +214,11 @@ function checkForms(level) {
 
 /** The share of a level's rounds at which one card holding the answer fails the deal (R4, decisions.md 2026-10-31). */
 const SAME_PLACE = 0.8;
-
 /**
  * The deal of a level (architecture 4.2): over seeds 1-DEAL every form is dealt and its share is
- * within slack() of its weight in the level's forms; no card holds the answer in SAME_PLACE of the
- * rounds or more, unless the level says why in `samePlace` (and then one does); over seeds 1-COVER
+ * within slack() of its weight in the level's forms; no simple rule (cues: a card, a card among those
+ * that are not a landmark value, the larger or smaller of the one neighbouring pair) finds the answer
+ * in SAME_PLACE of the rounds or more, unless the level says why in `samePlace` (and then one does); over seeds 1-COVER
  * every whole number of the level's range [min, max] is dealt as an answer (either number of a
  * pair), or the level lists it in exclude, and no excluded number is dealt. A planner-picked
  * structure or ask: per value for the shares and the place, all together for answers.
@@ -234,14 +235,14 @@ export function checkDeal(game, base) {
     const where = level === base ? '' : ` (${level.structure ?? level.ask})`;
     /** @type {Map<string, number>} */
     const dealt = new Map();
-    /** @type {number[]} rounds by the answer's card */
-    const at = [];
+    /** @type {{ values: any[], card: number }[]} */
+    const cards = [];
     for (let seed = 1; seed <= DEAL; seed++) {
       const round = game.makeRound(level, rng(seed));
       const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
       dealt.set(pair, (dealt.get(pair) ?? 0) + 1);
       const card = (round.choices ?? []).findIndex((c) => isDeepStrictEqual(c.value, round.answer));
-      if (card >= 0) at[card] = (at[card] ?? 0) + 1;
+      if (card >= 0) cards.push({ values: round.choices.map((c) => c.value), card });
       if (seed > COVER) continue;
       const values = [round.answer].flat();
       if (values.every((v) => typeof v === 'number')) values.forEach((v) => answers.add(v));
@@ -259,13 +260,13 @@ export function checkDeal(game, base) {
       }
     }
     for (const pair of dealt.keys()) if (forms.length && !forms.some((f) => pairOf(level, f) === pair)) problems.push(`${pair} is dealt${where} but is no form of the level`);
-    const counts = Array.from(at, (n) => n ?? 0);
-    const most = Math.max(0, ...counts);
-    const card = counts.indexOf(most) + 1;
-    if (most >= SAME_PLACE * DEAL && !base.samePlace) {
-      problems.push(`card ${card} holds the answer in ${(100 * most / DEAL).toFixed(1)}% of ${DEAL} rounds${where}: vary its place (R4), or say why in samePlace`);
+    const found = cues(cards).filter((c) => c.found >= SAME_PLACE * DEAL);
+    if (!base.samePlace) {
+      for (const { rule, found: n } of found) {
+        problems.push(`${rule.startsWith('card ') && !rule.includes(' of ') ? `${rule} holds the answer` : `"${rule}" finds the answer`} in ${(100 * n / DEAL).toFixed(1)}% of ${DEAL} rounds${where}: vary its place (R4), or say why in samePlace`);
+      }
     }
-    if (base.samePlace && most < SAME_PLACE * DEAL) problems.push(`samePlace says why the answer keeps its card, but no card holds it in ${100 * SAME_PLACE}% of the rounds${where}`);
+    if (base.samePlace && !found.length) problems.push(`samePlace says why the answer keeps its card, but no card holds it in ${100 * SAME_PLACE}% of the rounds${where}`);
   }
   if (numbers && typeof base.max === 'number') {
     const exclude = base.exclude ?? [];
@@ -761,6 +762,31 @@ test('the deal checks catch an answer that keeps its card: 80% of the rounds on 
   assert.doesNotMatch(reason('the answer is a relation, always last'), /samePlace/);
   assert.match(reason(true), /samePlace is the reason, in words/);
   assert.match(reason(' '), /samePlace is the reason, in words/);
+});
+
+test('the deal checks catch an answer found by a simple rule other than its card: a landmark set aside, or a neighbouring pair (decisions.md 2026-10-31)', () => {
+  // 6 + 7 = ?, the bridge's two sets before 2026-10-31: the answer on card 3 or 2, but always the second card that is not 10.
+  const bridge = cues([{ values: [3, 10, 13, 17], card: 2 }, { values: [3, 13, 14, 17], card: 1 }]);
+  /** @type {(rule: string) => number | undefined} */
+  const found = (rule) => bridge.find((c) => c.rule.startsWith(rule))?.found;
+  assert.equal(found('card 3'), 1);
+  assert.equal(found('card 2 of those that are not 10'), 2);
+  // A landmark that is the answer is set aside too: the rule misses it.
+  assert.equal(cues([{ values: [3, 10, 13, 17], card: 1 }]).find((c) => c.rule.startsWith('card 2 of those that are not 10'))?.found, 0);
+  assert.equal(found('the smaller of the one pair of neighbouring numbers, else card 3'), 2);
+  assert.equal(found('the larger of the one pair of neighbouring numbers, else card 3'), 1);
+  // A slip always over the answer, as it stood on one side: the answer moves, the smaller of the pair finds it.
+  const level = parts.levels[1];
+  const beside = { ...parts, makeRound: (l, r) => {
+    const round = parts.makeRound(l, r);
+    const a = round.answer;
+    const values = r.next() < 0.5 ? [a - 7, a - 5, a, a + 1] : [a, a + 1, a + 5, a + 7];
+    return { ...round, choices: values.map((value) => ({ value, rule: value === a ? null : 'slip.near' })) };
+  } };
+  const caught = checkDeal(beside, level).join('\n');
+  assert.match(caught, /"the smaller of the one pair of neighbouring numbers, else card 1" finds the answer in 100\.0% of 5000 rounds: vary its place \(R4\), or say why in samePlace/);
+  assert.doesNotMatch(caught, /^card \d holds/m);
+  assert.deepEqual(checkDeal(beside, { ...level, samePlace: 'a test of the opt-out' }), []);
 });
 
 test('R4 with the answer\'s place: a real error on no card leaves room only to rules before it on its side, but for a slip that crossed for another (lib/place.js)', () => {

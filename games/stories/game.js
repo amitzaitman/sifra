@@ -8,7 +8,7 @@ import { pickWeighted } from '../../lib/weights.js';
 import { lidAt, planScene, rowsFor } from './scene.js';
 import { DISPLAYS, renderScene } from './view.js';
 
-export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 3, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 4, css: new URL('game.css', import.meta.url).href };
 
 /** A third of the rounds reversed (R8): the last level of each one-structure skill. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -116,7 +116,7 @@ export function budget(round, { value, rule }) {
  * (canShow: a 0) or the budget refuses is left out and the next rule takes its place; a slip only
  * where no real error gives the value (R4). The rng draws the answer's place (lib/place.js): a value
  * with no room on its side of the answer gives way to the next rule too, and the slip goes to the side
- * that has room (decisions.md 2026-10-31). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
+ * that has room, the rng's where both have (decisions.md 2026-10-31). Ascending. Every pair of every pool deals a full set (tests/stories.test.js),
  * so nothing is drawn again and the shares cannot drift.
  * @param {Round} round
  * @param {Level} level
@@ -129,7 +129,7 @@ function choose(round, level, rng) {
   const real = listed.filter((id) => !isSlip(id)).map((id) => rules[id](round));
   /** @type {(v: number) => 'below' | 'above'} */
   const side = (v) => (v < round.answer ? 'below' : 'above');
-  /** @type {(room: { below: number, above: number }, leave: (id: string) => boolean) => Choice[]} */
+  /** @type {(room: { below: number, above: number }, leave: (id: string, value: any) => boolean) => Choice[]} */
   const deal = (room, leave) => {
     const left = { ...room };
     const taken = [round.answer];
@@ -143,17 +143,19 @@ function choose(round, level, rng) {
       const candidates = value !== null && typeof value === 'object' ? value.oneOf : [value];
       const before = [...earlier];
       earlier.push(...candidates);
-      if (leave(id)) continue;
-      const pick = candidates.find((v) => Number.isInteger(v) && canShow(round, { value: v, rule: id }) && !taken.includes(v) && !before.includes(v)
+      const fits = candidates.filter((v) => !leave(id, v) && Number.isInteger(v) && canShow(round, { value: v, rule: id }) && !taken.includes(v) && !before.includes(v)
         && (!isSlip(id) || !real.includes(v)) && left[side(v)] > 0 && budget(round, { value: v, rule: id }) === null);
-      if (pick === undefined) continue;
+      if (!fits.length) continue;
+      const pick = fits.length > 1 ? rng.pick(fits) : fits[0];
       left[side(pick)] -= 1;
       taken.push(pick);
       wrong.push({ value: pick, rule: id });
     }
     return wrong;
   };
-  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng) ?? [];
+  /** @type {any[]} what the skill's slips give on this round (lib/place.js) */
+  const slips = listed.filter(isSlip).flatMap((id) => { const v = rules[id](round); return v !== null && typeof v === 'object' ? v.oneOf : [v]; });
+  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng, (v) => slips.includes(v)) ?? [];
   if (wrong.length < level.options - 1) throw new Error(`stories: ${level.id} has no ${level.options} cards for ${JSON.stringify(storyOf(round))}`);
   return [{ value: round.answer, rule: null }, ...wrong].sort((a, b) => a.value - b.value);
 }

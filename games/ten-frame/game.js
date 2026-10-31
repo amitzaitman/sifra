@@ -14,7 +14,7 @@ import { KINDS, displayOf, draws, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 4,
+  version: 5,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -32,11 +32,10 @@ const teen = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'who
 /** Ten and a missing part (level 9): the answer is the ones, 1 to 9, so the level has no min. @type {Base} */
 const teenPart = { skill: 'pv.teens.ten-and', structure: 'part-whole', unknown: 'part', max: 20, model: 'bundles', look: 'symbols', options: 4, demo: false, terms: false };
 /**
- * a and b are 9 at most, so the sum is 18 at most. undrawn (architecture 2.2): count.start-included, whose
- * jumps the two frames have no drawing for.
+ * a and b are 9 at most, so the sum is 18 at most.
  * @type {Base}
  */
-const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false, exclude: [19, 20], undrawn: ['count.start-included'] };
+const bridge = { skill: 'addsub.facts.bridge-add', structure: 'equation', unknown: 'result-right', min: 11, max: 20, bridge: 'ten', model: 'frame', look: 'dots', options: 4, demo: false, terms: false, exclude: [19, 20] };
 
 /** whole = part + ? in a third of the rounds (R8: 25% at least), part + ? = whole in the rest. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -171,6 +170,8 @@ export function canShow(round, { value, rule }) {
   if (kind === 'bundles' && display === 'count-up') return value >= 10;
   // The two frames' count lands on a counter, or on one ghost past the last (help.js).
   if (kind === 'bridge' && display === 'count-up') return value <= data.a + data.b + 1;
+  // Their jumps count on from the first addend's last counter and land on a counter before the last.
+  if (kind === 'bridge' && display === 'jumps') return value >= data.a && value < data.a + data.b;
   if (kind === 'frame' && display === 'empty-plate') return data.unknown === 0;
   return true;
 }
@@ -201,7 +202,7 @@ function choose(round, level, rng) {
   const key = (v) => (Array.isArray(v) ? v[0] * 100 + v[1] : v);
   /** @type {(v: any) => 'below' | 'above'} */
   const side = (v) => (key(v) < key(round.answer) ? 'below' : 'above');
-  /** @type {(room: { below: number, above: number }, leave: (id: string) => boolean) => Choice[]} */
+  /** @type {(room: { below: number, above: number }, leave: (id: string, value: any) => boolean) => Choice[]} */
   const deal = (room, leave) => {
     const left = { ...room };
     const taken = [round.answer];
@@ -209,9 +210,8 @@ function choose(round, level, rng) {
     const wrong = [];
     for (const [i, id] of order.entries()) {
       if (wrong.length === level.options - 1) break;
-      if (leave(id)) continue;
       const earlier = order.slice(0, i).flatMap((q) => options(rules[q](round)));
-      const fits = options(rules[id](round)).filter((v) => ok(v) && canShow(round, { value: v, rule: id }) && !taken.some((t) => same(t, v))
+      const fits = options(rules[id](round)).filter((v) => !leave(id, v) && ok(v) && canShow(round, { value: v, rule: id }) && !taken.some((t) => same(t, v))
         && !earlier.some((e) => same(e, v)) && left[side(v)] > 0);
       if (!fits.length) continue;
       const value = fits.length > 1 ? rng.pick(fits) : fits[0];
@@ -221,7 +221,9 @@ function choose(round, level, rng) {
     }
     return wrong;
   };
-  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng) ?? [];
+  /** @type {any[]} what the skill's slips give on this round (lib/place.js) */
+  const slips = order.filter((id) => id.startsWith('slip.')).flatMap((id) => options(rules[id](round)));
+  const wrong = place(level.options, deal, (c) => side(c.value) === 'below', rng, (v) => slips.some((s) => same(s, v))) ?? [];
   return [{ value: round.answer, rule: null }, ...wrong].sort((x, y) => key(x.value) - key(y.value));
 }
 

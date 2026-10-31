@@ -222,7 +222,7 @@ function stateOf(state) {
  * What the picture holds in one state (design 6.10, 7.3): the objects in rows of five from place 0
  * (R6: the start first, then what came, the leavers last), lines, covers, chips, rings, ghosts,
  * digits and arcs. Displays: { display, rule, value } (step 1); the hint and the tour (steps 2-3) come
- * back to the rest picture; on 3-option levels a display keeps its marks beside the hint.
+ * back to the rest picture; on 3-option levels (none since 2026-10-31) a display keeps its marks beside the hint.
  * @param {any} round
  * @param {string | Record<string, any>} state
  * @returns {Plan}

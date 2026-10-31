@@ -1,35 +1,35 @@
 {
   "balance": {
-    "version": 5,
+    "version": 6,
     "levels": {
-      "same": "bc72457a5f4d91a2bca29654fab878dca720d52d3183a1857b27b26b2eb00298",
+      "same": "c2184d6b4abb5cdb04b41a1b79cf6a19e830add120e90a70948f299ad1ace213",
       "missing-right": "07a554d108be36f307d200a2ec494d97e9edf162f12cdb1be4633c317cd31c5d",
       "missing-left": "12e0a03fbf72921b024d1e88e5669f4ee9bbf171934fa4acda383f2cbd56ffaa",
       "missing-reversed": "aea3a0004fd16ec80d5bf3516596f806127cffaf3f619cdf0853a7297342e8ee",
       "missing-symbols": "3652c95171d1ebc5a2c7938fc5180642530c125b9e4103339dcf2865a0bd7216",
       "missing-symbols-20": "e4ea746f5cc0eb58743cacab372e083f4ff4d00d69cd623435949a85f507a152",
       "both-sides": "4d52737dab28374c6403eb2aad805eacabc69d0529bee8785b215b2eb9d011d1",
-      "both-sides-symbols": "51a60fe274ee3f52ba93319dbfab77f75881c3bfc2505fa7577f478a9a229d73",
+      "both-sides-symbols": "80ec998271759908db713d543af3ee29ba6f7b03f4fac95c966159ae2ba278df",
       "turn": "b8947bbade394d472a1088bcf3091fc0aa902b1e58fa0479c26c4e93f210b531",
       "true-false": "b404507390bbe53a53482740dec3a50c5cb30110a90a2dd8290a0014dc7346c8",
       "relational": "a28f25f7c7390896c9d2785f6affab53cc985d44fccbe424be1d064c7b54f39c"
     }
   },
   "stories": {
-    "version": 3,
+    "version": 4,
     "levels": {
       "add-5": "710b6e9828f5a168d221e37656d40045daab6263d8313716dd2301b5d81ad07f",
       "add-10": "5bb33021b9d1f9bc44e9da3474aa1ba562bdb8d5bc9135c8b881e6b1b7957931",
-      "add-change": "4c184ecf6188c7428d8fdb17b0b3c1ee3fa3412adf9687a9d5997e86c67e69c3",
-      "take-5": "1f5b0fd9e3ba88320ad4f04665b940e149a32f7cbcda29721f6edc833ff50a94",
-      "take-10": "3740254f5908da88f85570bac0cd49290c649065175139e22257ded08a4fe302",
-      "whole-5": "c60fa33929efadd50d071be079a064ae10348d4aa1f55fd4ee64c717302de8a9",
-      "whole-10": "41c7be30acd2e126c5d9352abe24f1e0c77ab9c99721dd4045f9d64eb6ee0a2e",
-      "mixed-10": "d6fef1e9c49ddc7cb8fc835f6c45b6fbd0e9dcf980c537eb87c58c268f1e7f62"
+      "add-change": "1c3196310f3c328f40b40f9d496404c3205a0d4d6c15d51109e05891153f502b",
+      "take-5": "74461ce98bdec3941e045fa60fefba62cc1a8e91fc043a8e118ac2bf413f57fe",
+      "take-10": "6e82fbbb652b8042b0a56e0fc38ff6b9c8b64b686b091ba9a8b42a4a9c3ed98c",
+      "whole-5": "bd660073df9aabf3ae547d6f7a8545d92a8131417fe4528484d92bf002a84987",
+      "whole-10": "f14ff94bff8dac710dadb5c6ac080a451750e57d5c17807934fb62972fd918d7",
+      "mixed-10": "0a22a020c44f95d7b669a0f253ee41dfb3d0997f9f9df20a8e31ffc02cf78c0f"
     }
   },
   "ten-frame": {
-    "version": 4,
+    "version": 5,
     "levels": {
       "split-5": "d1a1875e5fa9306c6f11a06ba2f0a26dfa71a0cf942221880613d5a540a36e1e",
       "split-10": "ad5be65f43e2383a3c0b08440ce7cbb1cf426bfa05051ca9bb89331974fd3259",
@@ -40,9 +40,9 @@
       "ten-symbols": "ae59a71edd3bc899d84ec1568ba860fc9db5d44153d93e4d9d2449a51cadcc8a",
       "teen-bundle": "4dd27c0442bb046f2283f91fc14ac7090b0301e6ebc8f2489bdf209e4b332d93",
       "teen-symbols": "fbc8aab26dede5b495935bae997df2bb6919fdbb6987e0c1bb20c6c4cefa24a3",
-      "bridge-move": "2008103a0713c32c153beaf4688de819493842a9e61f849203af7afe2b9e89bd",
-      "bridge-frames": "e5c43d7e3cd349344adfa2b3fb1bbf2d385fedc3901b3a03b77b06d9033d2f7c",
-      "bridge-symbols": "4187d69fd6692eb71c99fe1d431d62f8eb4e1050bb708271d47bbdefc98e5469"
+      "bridge-move": "238ff4f5a15d68d4ec8c5d54cbaa3c7ff5fd21eaed0c4e1a0b72f92e883bcacf",
+      "bridge-frames": "cab765399588e75811faf04541f8e5585c7bc58eb8551a33b94b9fbb840c4637",
+      "bridge-symbols": "fccf5dc51e22edf0b40aa2af626bb30625410842956f2893da0edf235332dfa1"
     }
   }
 }

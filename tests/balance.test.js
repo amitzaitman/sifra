@@ -273,6 +273,21 @@ test('slip.near goes either side of the answer (#16): on levels 7 and 8 each sid
   }
 });
 
+test('slip.near takes its side from the rng where both fit (#16, decisions.md 2026-10-31): it asks the rng, not the first of its two values', () => {
+  let asked = 0;
+  let over = 0;
+  for (let seed = 1; seed <= 2000; seed++) {
+    /** @type {any[][]} */
+    const lists = [];
+    const r = rng(seed);
+    const round = balance.makeRound(level('both-sides-symbols'), { ...r, pick: (list) => (lists.push(list), r.pick(list)) });
+    const both = lists.filter((l) => l.length === 2 && l[0] === round.answer - 1 && l[1] === round.answer + 1);
+    asked += both.length ? 1 : 0;
+    over += both.length && round.choices.some((c) => c.rule === 'slip.near' && c.value === round.answer + 1) ? 1 : 0;
+  }
+  assert.ok(asked >= 200 && over > 0, `the rng asked in ${asked} rounds, over in ${over}`);
+});
+
 test('the zero round: 1 is zero.counted-as-one, and nothing else is offered twice', () => {
   const zeros = rounds('missing-right').filter((r) => r.answer === 0);
   assert.ok(zeros.length >= 10, `${zeros.length} rounds with answer 0 in 200`);

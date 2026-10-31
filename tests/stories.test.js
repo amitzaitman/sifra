@@ -11,6 +11,7 @@ import { GLYPH, PX, ROLE_TOKEN, ROUND, THUMB, builtAt, layoutScene, len, lidAt, 
 import { RULES } from '../data/errors.js';
 import { rng } from '../shell/rng.js';
 import { variants } from '../scripts/lock-rounds.js';
+import { cuesOf } from './cues.js';
 
 const level = (/** @type {string} */ id) => stories.levels.find((l) => l.id === id);
 /** @type {(id: string, s: number, k: number, eqform?: string, structure?: string) => any} the first round of a level with this story */
@@ -142,8 +143,14 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
     [[1, 'op.other'], [4, 'given.part'], [6, 'count.start-included'], [7, null]],
     [[1, 'op.other'], [4, 'given.part'], [7, null], [8, 'slip.near']],
   ]);
-  // 9 − 4: no slip fits on either side (4 is given.part's, 6 count.start-included's), so one place.
-  assert.deepEqual(setsOf('take-10', 9, 4), [[[4, 'given.part'], [5, null], [9, 'given.whole'], [13, 'op.other']]]);
+  // 9 − 4: no slip fits on either side (4 is given.part's, 6 count.start-included's). Moved down, the
+  // slip's 6 over the answer is count.start-included's card (R4: a value is its first rule's), so the
+  // slip does not stand under the answer only because a real error holds the place over it
+  // (decisions.md 2026-10-31, "הטעות המקרית ליד התשובה").
+  assert.deepEqual(setsOf('take-10', 9, 4), [
+    [[4, 'given.part'], [5, null], [9, 'given.whole'], [13, 'op.other']],
+    [[5, null], [6, 'count.start-included'], [9, 'given.whole'], [13, 'op.other']],
+  ]);
   // 4 + ? = 7: count.start-included gives 4 too, and given.part, first in the list, keeps it; moved
   // up, the last real error over the answer (that 4) gives way to a slip under it.
   assert.deepEqual(setsOf('add-change', 4, 3), [
@@ -185,6 +192,37 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
   // op.other leaves level 3 in 7 of its 34 stories (2s + r over 20); elsewhere only where it is 0 (s = k: nothing to draw).
   const capped = stories.poolOf(level('add-change')).filter(({ s, k }) => setsOf('add-change', s, k).every((set) => !set.some(([, rule]) => rule === 'op.other')));
   assert.deepEqual(capped.map(({ s, r }) => 2 * s + r > 20), Array(7).fill(true));
+});
+
+test('the one-sided slip (levels 3, 4, 5, the mixed take): count.start-included\'s card stands over the answer as the slip stands under it, so no simple rule finds the answer in 60% of 5000 rounds (decisions.md 2026-10-31, "הטעות המקרית ליד התשובה")', () => {
+  // The slip over the answer is count.start-included's value (R4), so the slip stands only under it. When it alone
+  // stood beside the answer, "the larger of the one pair of neighbouring numbers, else card 2" found it in 61-64%.
+  for (const [id, structure] of [['add-change'], ['take-5'], ['take-10'], ['mixed-10', 'change-take']]) {
+    const passed = structure ? { ...level(id), structure } : level(id);
+    const best = cuesOf(stories, passed, 5000).reduce((a, b) => (b.found > a.found ? b : a));
+    assert.ok(best.found < 0.6 * 5000, `${id} ${structure ?? ''}: "${best.rule}" finds the answer in ${best.found} of 5000`);
+    let under = 0;
+    let over = 0;
+    for (let seed = 1; seed <= 2000; seed++) {
+      const r = stories.makeRound(passed, rng(seed));
+      under += r.choices.some((c) => c.rule === 'slip.near' && c.value === r.answer - 1) ? 1 : 0;
+      over += r.choices.some((c) => c.rule === 'count.start-included' && c.value === r.answer + 1) ? 1 : 0;
+      assert.ok(!r.choices.some((c) => c.rule === 'slip.near' && c.value === r.answer + 1), `${id} ${seed}: a slip on count.start-included's value`);
+    }
+    assert.ok(over >= under / 3, `${id} ${structure ?? ''}: the slip under the answer in ${under} rounds, count.start-included over it in ${over}`);
+  }
+});
+
+test('slip.near takes its side from the rng where both fit (decisions.md 2026-10-31), as the ten-frame\'s and the balance\'s do', () => {
+  let asked = 0;
+  for (let seed = 1; seed <= 2000; seed++) {
+    /** @type {any[][]} */
+    const lists = [];
+    const r = rng(seed);
+    const round = stories.makeRound(level('whole-10'), { ...r, pick: (list) => (lists.push(list), r.pick(list)) });
+    asked += lists.some((l) => l.length === 2 && l[0] === round.answer - 1 && l[1] === round.answer + 1) ? 1 : 0;
+  }
+  assert.ok(asked >= 200, `the rng asked in ${asked} rounds`);
 });
 
 test('labels: the locked templates, singular where a number is 1', () => {
@@ -363,7 +401,7 @@ function cases() {
 }
 const CASES = cases();
 
-/** The states of a round (architecture 4.9): the event's phases, rest, each card's display (with the hint on 3-option levels), the hint, each tour step, solved. */
+/** The states of a round (architecture 4.9): the event's phases, rest, each card's display (with the hint on 3-option levels, none since 2026-10-31, kept for one that gets three), the hint, each tour step, solved. */
 function statesOf(base, round) {
   const wrong = round.choices.filter((c) => c.rule).map((c) => ({ display: RULES[c.rule].display, rule: c.rule, value: c.value }));
   const N = round.structure === 'change-take' ? round.story.r : round.story.k;

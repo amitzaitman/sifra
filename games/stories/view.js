@@ -470,7 +470,7 @@ export function renderScene(host, round, ctx) {
     // The previous display goes at once; the new one runs (R5, design 7.2).
     const base = { ...st, display: null, tour: 0 };
     if (st.display) apply(base, 'instant');
-    // A first miss keeps its display to the next tap (on a 3-option level the hint joins it); a later
+    // A first miss keeps its display to the next tap (on a 3-option level, none since 2026-10-31, the hint joins it); a later
     // one runs, then the picture comes back to its start, cover down, with the hint drawn as it does.
     // With reduced motion a later display is skipped. On level 3 a display that lifts the dome shows
     // the places under it, so the answer: a first miss's runs and comes back too, the dome down and no
