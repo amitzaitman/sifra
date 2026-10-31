@@ -8,6 +8,7 @@ import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
+import { demoSeedFor, plainDemo } from '../shell/planner.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored,
@@ -185,6 +186,24 @@ test('R9: leaving a level\'s first demo for home brings it back on the next step
   expect(child.games.parts.demoSeen).toEqual(['split-5']);
   expect(child.attempts).toEqual([]);
 });
+
+// Seeds where the raw demo seed, demoSeed(seed), deals the round's own answer, so a shell that skipped
+// demoSeedFor fails here (a fixture, and a real game with a mixed level).
+for (const [site, route] of [[FIXTURE, 'parts/1/3'], [INDEX, 'ten-frame/1/3'], [INDEX, 'balance/4/2'], [INDEX, 'stories/8/1']]) {
+  test(`R9: the hand shows how on the round demoSeedFor picks: other answer, plain (3.8): ${route}`, async ({ page }) => {
+    await open(page, `${site}#/dev/${route}`);
+    const real = await roundOf(page);
+    await look(page);
+    await page.locator('[data-how]').click();
+    await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+    const shown = await roundOf(page);
+    const make = (/** @type {number} */ s) => real.game.makeRound(real.level, rng(s));
+    expect(Number(shown.data.seed)).toBe(demoSeedFor(make, Number(real.data.seed)));
+    expect(shown.level).toEqual(real.level);
+    expect(shown.round.answer).not.toEqual(real.round.answer);
+    expect(plainDemo(shown.round)).toBe(true);
+  });
+}
 
 // The double-tap window (design 6.9, shell/taps.js): the shell drops a tap that comes within 300 ms
 // of a new screen or of "הַבָּא" appearing, by the events' timeStamps. The page's clock stamps the
