@@ -240,38 +240,10 @@ async function loop({ url, levels, seeds }) {
     for (const v of Object.values(data)) frozen(v);
     return data;
   };
-  // A macrotask that the page's fake clock does not hold.
-  const tick = () => new Promise((resolve) => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => resolve(undefined);
-    channel.port2.postMessage(0);
-  });
-  // A story's event (2.4) runs on its own from the mount, a phase at a time: while [data-event] is
-  // in the page it is not over, even between two phases when nothing runs.
-  const event = () => document.querySelector('[data-event]') !== null;
-  /**
-   * Awaits a promise, finishing every animation as it starts, until it has settled, nothing runs
-   * (what it started without awaiting included, as the hint) and no event is left. An infinite
-   * animation cannot finish: a promise that waits on one never settles, and fails; so does an
-   * event that never ends.
-   */
-  const drive = async (promise) => {
-    let [done, error] = [false, null];
-    Promise.resolve(promise).then(() => { done = true; }, (e) => { [done, error] = [true, e]; });
-    for (let k = 0; k < 400; k++) {
-      const running = document.getAnimations().filter((a) => a.playState === 'running');
-      if (done && !running.length && !event()) break;
-      for (const a of running) {
-        try { a.finish(); } catch { /* infinite */ }
-      }
-      // What the finished animations release runs in microtasks; a macrotask only when it waits on more.
-      for (let j = 0; j < 8; j++) await null;
-      if (!done || event() || document.getAnimations().some((a) => a.playState === 'running')) await tick();
-    }
-    if (error) throw error;
-    if (!done) throw new Error('it never settled (an animation that cannot finish?)');
-    if (event()) throw new Error('its event never ended ([data-event] is still there)');
-  };
+  // Awaits a promise, finishing every animation as it starts, until it has settled and no animation
+  // or story event is left; one that reads finished is over only once its finished promise has
+  // settled, as WebKit applies an end its clock passed between two frames at the next frame.
+  const { drive } = await import('/e2e/drive.js');
   const name = (n) => `${n?.getAttribute?.('class') || n?.tagName} "${(n?.textContent ?? '').slice(0, 12)}"`;
   /** @type {(root: Element, where: string, o: { solved: boolean, top: boolean }) => void} */
   const check = (root, where, { solved, top }) => {

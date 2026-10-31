@@ -53,8 +53,9 @@ scripts/              gen-data.js, docs-parse.js (the parsers now in tests/docs.
 start.js              static server from AlefBet: node start.js [port]; fails if the port is taken; opens no browser
 tests/                node:test (section 4), with three fixture games in tests/fixtures/ and rounds.lock.json (4.1);
                       game 3 adds stories.test.js (4.1)
-e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js (4.8), <id>.spec.js per game
-                      (ten-frame, balance, stories: 4.7; the stories' calibration, glyphs and event: 4.9)
+e2e/                  Playwright: helpers.js, fixture.html, site.spec.js, contract.spec.js and its wait drive.js (4.8),
+                      <id>.spec.js per game (ten-frame, balance, stories: 4.7; the stories' calibration, glyphs and
+                      event: 4.9)
 playwright.config.js  tsconfig.json  package.json  .github/workflows/ci.yml
 ```
 
@@ -568,7 +569,8 @@ doc's topic column notes for the owner; a test checks its URLs against the doc. 
   and is in no table (its delimiter row is missing or malformed, so GitHub shows text) fails; `tests/sync.test.js`
   regenerates data/ in memory and compares byte for byte (and the videos.js URLs with the doc's);
   `tests/games.test.js` (4.2); `tests/rng.test.js`, `tests/ladder.test.js`, `tests/planner.test.js`,
-  `tests/store.test.js`, `tests/taps.test.js` (4.3); `tests/code.test.js` (4.4); `tests/tokens.test.js` (design 3
+  `tests/store.test.js`, `tests/taps.test.js` (4.3); `tests/code.test.js` (4.4); `tests/drive.test.js` (4.8, the
+  contract loop's wait on fake animations); `tests/tokens.test.js` (design 3
   and 10: the colour tokens measured from app.css, the role fills, `--role-removed` and the part's second shade
   apart, text and graphics contrast);
   `tests/<id>.test.js` per game, from its branch (layout functions, R6 [unit]).
@@ -828,7 +830,12 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   that is live while it draws, as the shell's screen signal is; its ctx has no-op `setEquation` and `build`. Every
   animation is finished as it starts (`Animation.finish()`; an infinite one cannot finish, and its wait fails), and a
   wait is over only when no `[data-event]` is left (a story's event goes on a phase at a time, with nothing running
-  between two phases; one that never ends fails). After each step: nothing
+  between two phases; one that never ends fails) and every animation listed is over: one that reads `finished` counts
+  only once its `finished` promise has settled, and is finished too until then. WebKit runs an animation's clock
+  between frames and applies its end at the next frame, so in between the target keeps its last frame's style and
+  what waits on the promise waits (CI runs 16 and 18: at step 2 the balance's leaving display kept its last frame's
+  opacity, 0.0009 in a local WebKit run, and its ghosts over the cover; a child sees the 200 ms fade end). The wait is `drive` in e2e/drive.js, which the loop
+  imports from the test server; tests/drive.test.js runs it on fake animations. After each step: nothing
   threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
   inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
   shown; in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
