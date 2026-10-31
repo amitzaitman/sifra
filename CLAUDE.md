@@ -37,7 +37,7 @@ Pages; a game goes live (its link is shared with children) only after the owner'
 
 ## Ready to grow (enforced, not optional)
 
-1. A game exports `meta`, `levels`, `makeRound(level, rng)` and `render(host, round, { signal, onAttempt })`. `makeRound` is pure: no DOM, no storage, no `Math.random`.
+1. A game exports `meta`, `levels`, `makeRound(level, rng)` and `render(host, round, { signal, onAttempt })`, with `text`, `rules`, `displays` and the optional ones (`docs/architecture.md` 2.1). `makeRound` is pure: no DOM, no storage, no `Math.random`.
 2. The shell owns levels, storage and the session. A session is a list of `{ game, level, seed }`; review rounds from earlier days use the same path.
 3. Every attempt is recorded: child, game, level, skill, seed, day, outcome (`first` | `help` | `shown`), wrong rules chosen, ms. The storage key is versioned, with `migrate()`.
 4. Every level names a skill id from `docs/skills.md`.
@@ -67,7 +67,7 @@ Pages; a game goes live (its link is shared with children) only after the owner'
 ## Tools
 
 - Plain JavaScript with JSDoc, checked by `tsc --checkJs` (`npm run typecheck`). `node:test` for logic. Playwright on Chromium (Pixel 7) and WebKit (iPhone 13). `npm run check` runs all three.
-- `npm test` runs `tests/*.test.js`: `tests/docs.test.js` keeps skill ids, error rules, displays, models, meteg, links and table rows consistent across the docs (run it after every docs change); `tests/games.test.js` is the generic test (every game x level x 200 seeds); the shell's units and the code scans (no grade, no timers, no storage in games, `lib/` imports nothing and stays under 600 lines, `shell/` imports only `lib/`, `data/` and `shell/`, no game imports `shell/`).
+- `npm test` runs `tests/*.test.js`: `tests/docs.test.js` keeps skill ids, error rules, displays, models, meteg, links and table rows consistent across the docs (run it after every docs change); `tests/games.test.js` is the generic test (every game x level x 200 seeds); the shell's units and the code scans (no grade, no timers, no storage in games, `lib/` imports nothing and stays under 600 lines, `shell/` imports only `lib/`, `data/` and `shell/`, no game imports `shell/`, nothing on a list of features newer than Safari 16.4).
 - `data/` is generated from the docs by `npm run gen` and never edited by hand, except `data/videos.js`; `tests/sync.test.js` fails when it is stale.
 - `tests/rounds.lock.json` locks each game's rounds (seeds 1-50 per level): `tests/lock.test.js` fails when they change without a `meta.version` bump or a locked level id goes; after a bump, `npm run lock`.
 - `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
