@@ -356,8 +356,9 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   const elapsed = () => performance.now() - rec.t0;
   const tap = async (i) => {
     if (busy || solved) return;
-    rec.firstMs ??= elapsed();
-    if (i === answerAt) return solve(i);
+    const at = elapsed();
+    rec.firstMs ??= at;
+    if (i === answerAt) return solve(i, at);   // a first tap that solves: one moment for firstMs and ms
     const { value, rule } = round.choices[i];
     lock(true);
     misses += 1;
@@ -374,8 +375,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   };
   cards.buttons.forEach((b, i) => b.addEventListener('click', () => tap(i), { signal }));
   const next = () => { ctl.abort(); host.replaceChildren(); onNext(); };
-  const solve = async (i) => {
-    [solved, rec.ms] = [true, elapsed()];
+  const solve = async (i, at = elapsed()) => {
+    [solved, rec.ms] = [true, at];
     lock(true);
     onSolved?.(rec.tour ? 'shown' : rec.wrong.length || rec.help.length ? 'help' : 'first');
     cards.correct(i);

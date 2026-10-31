@@ -53,13 +53,12 @@ for (const [game, level] of [['parts', 'split-10'], ['scale', 'right']]) {
       taps: { picture: 1, equation: 0, other: 0 }, version: 1, params: expect.objectContaining({ id: level }),
     });
     // The 300 ms of look() and the 2000 ms run, in whole ms; the installed clock also runs in real time, so no tight
-    // top bound. The first tap is the solve: firstMs and ms are one moment, rounded apart by 1 ms at most.
+    // top bound. The first tap is the solve: the shell reads the clock once for both, so they are equal.
     const { firstMs, ms } = await lastAttempt(page);
     expect(Number.isInteger(ms) && Number.isInteger(firstMs)).toBe(true);
     expect(ms).toBeGreaterThanOrEqual(2300);
     expect(ms).toBeLessThan(30000);
-    expect(ms - firstMs).toBeGreaterThanOrEqual(0);
-    expect(ms - firstMs).toBeLessThanOrEqual(1);
+    expect(ms).toBe(firstMs);
   });
 
   test(`${game}: the help ladder: display, hint, then the tour ends on the answer`, async ({ page }) => {
