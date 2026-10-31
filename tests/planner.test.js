@@ -6,10 +6,10 @@ import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import {
-  addDays, dayOf, daysBetween, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, prereqs, reviews, schedule,
-  skillPassed, stuckTarget,
+  TRIES, addDays, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, plainDemo, prereqs,
+  reviews, same, schedule, skillPassed, stuckTarget,
 } from '../shell/planner.js';
-import { rng } from '../shell/rng.js';
+import { demoSeed, rng } from '../shell/rng.js';
 import { newChild } from '../shell/store.js';
 import { SKILLS } from '../data/skills.js';
 import { learningOrder } from '../scripts/gen-data.js';
@@ -342,4 +342,42 @@ test('exerciseOf: what the child sees, so a reversed row or another verb is the 
   assert.notEqual(exerciseOf('stories', x), exerciseOf('stories', y));
   // Without an exercise, the picture tells rounds apart.
   assert.notEqual(exerciseOf('g', { ...a, equation: null, picture: [1] }), exerciseOf('g', { ...a, equation: null, picture: [2] }));
+});
+
+/** A round with only what the demo's choice reads: its row and its answer. */
+const exercise = (left, right, answer) => /** @type {Round} */ ({ equation: { left, right }, answer, picture: [] });
+
+test('plainDemo: no 0 in the answer and no answer the row shows (R9, architecture 3.8)', () => {
+  assert.equal(plainDemo(exercise([3, '+', '?'], [5], 2)), true);
+  assert.equal(plainDemo(exercise([10, '+', '?'], [10], 0)), false, 'an edge round: 10 + ? = 10');
+  assert.equal(plainDemo(exercise([2, '+', '?'], [4], 2)), false, 'a double: the answer reads as the given part');
+  assert.equal(plainDemo(exercise(['?'], [4, '−', 2], 2)), false, 'the answer is a number of the row, on either side');
+  assert.equal(plainDemo(exercise(['?', '+', '?'], [5], [2, 3])), true);
+  assert.equal(plainDemo(exercise(['?', '+', '?'], [5], [0, 5])), false, 'a pair with 0');
+  assert.equal(plainDemo(exercise(['?', '+', '?'], [6], [3, 3])), true, 'a double pair: no number of it is shown');
+  assert.equal(plainDemo({ ...exercise([], [], 8), equation: null }), true, 'no row: only 0 is out');
+  assert.equal(plainDemo({ ...exercise([], [], 0), equation: null }), false);
+  assert.equal(plainDemo({ ...exercise([], [], { left: [5], right: [5] }), equation: null }), true, 'a judging card is no number');
+});
+
+test('demoSeedFor: other numbers than the round, plain if any within TRIES, else other numbers (architecture 3.8)', () => {
+  const seed = 7;
+  const first = demoSeed(seed);
+  /** Deals rounds[s - first] from the demo seed on, the real round at the seed itself. */
+  const dealer = (real, rounds) => (s) => (s === seed ? real : rounds[s - first] ?? rounds.at(-1));
+  const real = exercise([3, '+', '?'], [5], 2);
+  // The same answer, then the same row with another answer (a pair), then an edge round, then a plain one.
+  const pairs = exercise(['?', '+', '?'], [5], [1, 4]);
+  assert.equal(demoSeedFor(dealer(pairs, [exercise(['?', '+', '?'], [5], [2, 3]), exercise(['?', '+', '?'], [6], [2, 4])]), seed), first + 1);
+  const rounds = [exercise([2, '+', '?'], [4], 2), exercise([1, '+', '?'], [3], 2), exercise([5, '+', '?'], [5], 0), exercise([4, '+', '?'], [7], 3)];
+  assert.equal(demoSeedFor(dealer(real, rounds), seed), first + 3);
+  // Only edge rounds with other numbers: the first of them.
+  assert.equal(demoSeedFor(dealer(real, [real, exercise([5, '+', '?'], [5], 0), exercise([6, '+', '?'], [6], 0)]), seed), first + 1);
+  // Nothing but the round itself: the first demo seed, and TRIES rounds looked at.
+  let dealt = 0;
+  assert.equal(demoSeedFor((s) => { dealt += 1; return s === seed ? real : exercise([3, '+', '?'], [5], 2); }, seed), first);
+  assert.equal(dealt, 1 + TRIES);
+  // An answer card is compared as data, whatever its key order.
+  assert.equal(same({ left: [5], right: [1, '+', 4] }, { right: [1, '+', 4], left: [5] }), true);
+  assert.equal(same([1, 4], [4, 1]), false);
 });

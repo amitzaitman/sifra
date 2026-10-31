@@ -1,7 +1,7 @@
 // The generic game test (architecture 4.2, dev-spec A.2, decisions.md condition 5): every
-// registered game and both fixtures, every level, seeds 1-200, and the deal (each form's share
-// over seeds 1-5000, every answer of the range over seeds 1-2000), in Node with no DOM and no
-// storage. A new game gets all of it without writing a test. Choice rounds only for now: the
+// registered game and the fixtures, every level, seeds 1-200, the deal (each form's share over
+// seeds 1-5000, every answer of the range over seeds 1-2000) and the demo's round (R9, seeds
+// 1-2000), in Node with no DOM and no storage. A new game gets all of it without writing a test. Choice rounds only for now: the
 // build and estimate checks of A.2 come with the first game that has such rounds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,6 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { GAMES } from './all-games.js';
 import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
+import { demoSeedFor, exerciseOf, plainDemo } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import { RULES } from '../data/errors.js';
 import { FORMS } from '../data/forms.js';
@@ -490,6 +491,33 @@ export function checkRound(game, level, index, round) {
   return problems;
 }
 
+/**
+ * R9's demo round (architecture 3.8), as the shell picks it (demoSeedFor), for seeds 1-2000: other
+ * numbers than the round it shows how to solve (another answer and, where both have one, another
+ * exercise row in either order), and on a `demo: true` level a plain round (no 0 in its answer, no
+ * answer its row shows). "Show me how" at any level gets the same choice; only a demo level must
+ * find a plain one (the balance's `turn` answers with a number of its own row).
+ * @param {Game} game
+ * @param {Level} base
+ * @returns {string[]}
+ */
+export function checkDemo(game, base) {
+  const problems = [];
+  const row = (round) => exerciseOf(game.meta.id, { ...round, answer: null });
+  for (const level of variants(base)) {
+    const make = (seed) => game.makeRound(level, rng(seed));
+    for (let seed = 1; seed <= COVER; seed++) {
+      const where = `seed ${seed}${level === base ? '' : ` ${level.structure ?? level.ask}`}`;
+      const [real, demo] = [make(seed), make(demoSeedFor(make, seed))];
+      const text = `${show(demo.equation ?? demo.picture)} = ${show(demo.answer)}`;
+      if (isDeepStrictEqual(demo.answer, real.answer)) problems.push(`${where}: the demo's answer is the round's: ${text}`);
+      else if (demo.equation && real.equation && row(demo) === row(real)) problems.push(`${where}: the demo's row is the round's: ${text}`);
+      if (base.demo && !plainDemo(demo)) problems.push(`${where}: the demo is no plain round: ${text}`);
+    }
+  }
+  return problems;
+}
+
 for (const game of GAMES) {
   test(`${game.meta.id}: meta, levels and R3`, () => {
     const problems = checkGame(game);
@@ -524,6 +552,10 @@ for (const game of GAMES) {
     test(`${game.meta.id} level ${index + 1} (${base.id}): the deal, forms over ${DEAL} seeds and answers over ${COVER}`, () => {
       const problems = checkDeal(game, base);
       assert.ok(problems.length === 0, problems.join('\n'));
+    });
+    test(`${game.meta.id} level ${index + 1} (${base.id}): R9, the demo's round over ${COVER} seeds`, () => {
+      const problems = checkDemo(game, base);
+      assert.ok(problems.length === 0, `${problems.length} problem(s), the first:\n  ${problems.slice(0, 8).join('\n  ')}`);
     });
   });
 }
@@ -585,6 +617,26 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkRound({ ...parts, canShow: (r, c) => c.rule !== 'given.part' }, level, 1, good).join('\n'), /R5: \d+ \(given\.part\): canShow says the picture cannot draw its flash/);
   assert.match(checkGame({ ...parts, displays: undefined }).join('\n'), /displays must be exported/);
   assert.match(checkGame({ ...parts, displays: ['flash', 'jump', 'flash'] }).join('\n'), /flash is listed twice[^]*jump is no display of the §4\.2 catalogue/);
+});
+
+test('the demo check catches a demo with the round\'s answer or row, and an edge round on a demo level (R9)', () => {
+  const level = { ...parts.levels[0], demo: true };
+  /** @type {(make: (r: Rng) => any) => Game} a game that deals only these rounds */
+  const dealing = (make) => ({ ...parts, makeRound: (_, r) => make(r) });
+  const one = checkDemo(dealing(() => ({ equation: { left: [2, '+', '?'], right: [5] }, answer: 3, picture: [] })), level);
+  assert.match(one[0], /^seed 1: the demo's answer is the round's/);
+  const pairs = dealing((r) => {
+    const a = r.int(1, 4);
+    return { equation: { left: ['?', '+', '?'], right: [5] }, answer: [a, 5 - a], picture: [] };
+  });
+  assert.ok(checkDemo(pairs, level).some((p) => /the demo's row is the round's/.test(p)));
+  // Only doubles: the answer is always the given part.
+  const edges = dealing((r) => {
+    const n = r.int(1, 9);
+    return { equation: { left: [n, '+', '?'], right: [2 * n] }, answer: n, picture: [] };
+  });
+  assert.match(checkDemo(edges, level)[0], /^seed 1: the demo is no plain round: \{"left":\[(\d),"\+","\?"\],"right":\[\d+\]\} = \1$/);
+  assert.deepEqual(checkDemo(edges, { ...level, demo: false }), [], 'only a demo level must find a plain round');
 });
 
 test('the undrawn checks catch a rule the picture cannot draw that the level does not name, and a stale one (architecture 2.2)', () => {

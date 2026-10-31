@@ -27,7 +27,7 @@ shell/                the shell's own modules: only app.js (and the tests) impor
                       Each imports only lib/, data/ and shell/, and no game imports shell/ or app.js (an engineering
                       decision the owner may reverse, section 6)
   cards.js  equation.js                       answer cards (AlefBet answer-choices.js), equation row (design §6.4)
-  ladder.js  planner.js  store.js             levels (3.4), session/review/next step/stuck (3.3-3.7), storage (3.9)
+  ladder.js  planner.js  store.js             levels (3.4), session/review/next step/stuck/demo (3.3-3.8), storage (3.9)
   rng.js                                      seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
   taps.js                                     the double-tap window (3.2)
 lib/                  code the games share: a game imports each module; each imports nothing; under 600 lines together
@@ -254,10 +254,10 @@ meaning (from the mount).
 ### 2.6 Demo and "show me how" (R9)
 
 - The demo screen, `main[data-screen="demo"]`, has an overlay `[data-demo]` with the hand `[data-hand]`; its round
-  comes from a derived seed (3.8); the cards stay locked; in `symbols` look the shell calls `view.picture()` at once,
-  so the hand works on the help picture; the bar keeps the session's rounds done. `await view.demo?.(hand)`, then
-  the hand taps the answer card and step 5 runs; "הַבָּא" leads to the real round. No attempt is written; the
-  next one lists the demo in `demo`.
+  comes from a derived seed (3.8), a plain round with other numbers than the round it shows how to solve; the cards
+  stay locked; in `symbols` look the shell calls `view.picture()` at once, so the hand works on the help picture;
+  the bar keeps the session's rounds done. `await view.demo?.(hand)`, then the hand taps the answer card and step 5
+  runs; "הַבָּא" leads to the real round. No attempt is written; the next one lists the demo in `demo`.
 - It runs on entry to a level with `demo: true` as 3.4 says (never in a review round), and once at any level after a
   stuck return (3.7).
 - The hand button (always in the bar) aborts the round, runs a demo at its level, then mounts the same round again
@@ -535,10 +535,27 @@ to the prerequisite and its demo. When the target is in another game, the stuck 
 ### 3.8 Random
 
 `rng(seed)` is mulberry32 over a uint32: `{ next(), int(lo, hi), pick(list), shuffle(list) }` (a number in [0, 1),
-an integer with both ends included, an element, a new array). makeRound uses nothing else. A demo seed is
-`(seed ^ 0x9e3779b9) >>> 0`, plus 1 while its round is the real one's exercise (`exerciseOf`, 3.3), 50 tries at most:
-a demo that deep-equal skipped could solve the child's own exercise with the other verb or in the reversed form, and
-the round after it was answered (1.4% to 5.3% of the stories' demos, playtest 2026-10-31).
+an integer with both ends included, an element, a new array). makeRound uses nothing else.
+
+The demo's seed (R9: the watching round, then a round "with other numbers"; 2.6) is `demoSeedFor(make, seed)` in
+shell/planner.js, pure and tested: from `demoSeed(seed)`, `(seed ^ 0x9e3779b9) >>> 0`, it goes up by 1 to the first
+round that has other numbers than the round it shows how to solve and is plain, `TRIES` (50) at most.
+
+- Other numbers: another answer (`same`, deep and key-order free, so never the same exercise in any form or
+  drawing), and, where both rounds have an exercise row, another row, its two sides in either order: `? + ? = 5`
+  dealt twice is one exercise with two answers (ten-frame level 4, 11.9% of its demos before).
+- Plain (`plainDemo`): no number of the answer is 0 or a number the row shows. A worked example is then not an
+  edge round (`10 + ? = 10`, `a + ? = a`, a pair with 0) and not a double whose answer is the given part
+  (`2 + ? = 4` reads as given.part's card). A judging card is no number; a round without a row checks only 0.
+- None within 50: the first with other numbers, else the first demo seed. Only the balance's `turn` (level 9, no
+  demo of its own; "show me how" reaches it) gets there: its answer is always a number of its row (`5 + 4 = 4 + ?`).
+
+Before 2026-10-31 the seed went up only while its round was the real one's exercise (`exerciseOf`, 3.3; first
+deep-equal): the hand tapped the round's own answer in up to a third of a demo level's demos (the stories' level 6
+33.4%, ten-frame 1 22.4%, balance 1 12.5%: `3 + 5` and the 8-pile, then a round whose answer is 8), solved an edge
+round in up to 30% (ten-frame 4 29.9%, a pair with 0; ten-frame 5 26.9%, `10 + ? = 10` or `5 + ? = 10`), and a
+copied tap was logged `first` and fed the fast climb. tests/games.test.js checks every game, fixtures included, at
+every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
 
 ### 3.9 Storage (§5.11, dev-spec A.4)
 
@@ -561,9 +578,8 @@ the round after it was answered (1.4% to 5.3% of the stories' demos, playtest 20
   home always opens. The catch sees only a synchronous throw, so `render` draws a thumb before it returns (2.4): a
   rejection from a chain a thumb started would reach the error screen, and its home button would land on the same
   thumb again.
-- Written after each solved round, each demo start and each jump. Caps: 4000 attempts and 500 events, oldest first
-  out; on a quota error drop the oldest half of the attempts and retry once. `navigator.storage.persist()` runs once
-  per start.
+- Written after each solved round, each demo start and each jump. Caps: 4000 attempts and 500 events, oldest first out; on a quota error drop the
+  oldest half of the attempts and retry once. `navigator.storage.persist()` runs once per start.
 - An attempt (CLAUDE.md "ready to grow" 3, §5.11): `t`, `day`, `session`, `child`, `game`, `level`, `levelId`,
   `skill`, `seed`, `version`, `params` (the level as passed), `answer`, `kind`, `outcome` (`shown` if the tour ran;
   `help` after any miss, `picture` or `how`; else `first`), `wrong` (rules in tap order), `firstMs` and `ms` (from
@@ -682,6 +698,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   level 5, 55.4% for 50% on level 4) fails it; over seeds 1 to 2000 every whole number of the range is dealt as an
   answer (either number of a pair), or the level lists it in `exclude`, and no listed one is dealt. The answer is
   the fact checked: the facts beyond it (which pairs make each whole) depend on the skill, and no level states them.
+- R9, the demo's round, a test of its own per level (`checkDemo`, every value of a mixed structure or ask): over
+  seeds 1 to 2000 the round `demoSeedFor` picks (3.8) has another answer than the round and, where both have a row,
+  another row; on a `demo: true` level it is also plain. A test with made-up games shows that it catches each case.
 
 ### 4.3 Units
 
@@ -703,7 +722,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   offers is skipped and counts as met when it is a prerequisite; a conditional prerequisite holds back the level
   that meets it. The §5.12 walk: a child who is always right, from an empty store, follows the next step until
   every offered skill is passed; each opens only after its offered prerequisites, in SKILLS order. The same walk
-  over games/registry.js: each game's levels open in list order (pedagogy §6.2, §6.3).
+  over games/registry.js: each game's levels open in list order (pedagogy §6.2, §6.3). `exerciseOf` (a reversed row
+  and the other verb are one exercise); `plainDemo` (0, a double, a pair with 0, a judging card) and `demoSeedFor`
+  on made-up rounds (the same answer, the same row with another answer, edge rounds only, nothing else: the first
+  demo seed after `TRIES` rounds).
 - store: importing with a storage that throws on any access does not throw; migrate cases, a newer schema of another
   shape included, and a broken value kept whole under `*` in the new child's `repair` event; a broken child mended
   so the planner runs (a ladder without `passed`, a child with only `created`, wrong-typed values, dropped records
@@ -1053,6 +1075,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | Hint and the lock | `miss()` resolves when the display (and the step-3 tour) ends; the hint's pulse is not awaited, nor a cover the hint lifts | design §7.1 locks the cards only while a display runs, §7.2: "the hint does not lock" |
 | Thumb hosts | In the page when `render` runs | design §6.8 sizes the balance from the stage width; one rule for every mode |
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
+| The demo's round | A plain round with other numbers: another answer and, where both have a row, another row (either order); plain: no 0 in the answer and no answer the row shows; from the demo seed up by 1, 50 tries, else the first with other numbers (3.8, `demoSeedFor` in shell/planner.js). Checked by the generic test for every game at every level. Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "סיבוב ההדגמה") | R9 shows the action on one round and gives the child a round "with other numbers". The demo was dealt like any round: the hand tapped the round's own answer in up to a third of a level's demos, and an edge round (`10 + ? = 10`, a pair with 0) or a double (`2 + ? = 4`, read as given.part) was the worked example |
 | Stuck target | Held (`hold`): the rest of the session, then the next step, until the child passes the target level | §5.4: "the child plays it" and sees the demo again, also when the stuck round was a session's last |
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |

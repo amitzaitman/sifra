@@ -166,6 +166,10 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   build 1194); WebKit not yet measured.
 - **R8 [auto]:** substitute `answer`, evaluate both sides, they are equal; exactly one `=`. In
   levels that mix `eqform`, at least 25% of 200 seeds are non-standard.
+- **R9 [auto]:** for seeds 1-2000 at every level, the demo's round (`demoSeedFor` in
+  shell/planner.js, architecture 3.8) has another answer than the round and, where both have an
+  exercise row, another row (its sides in either order); on a level with `demo: true` it is also
+  plain (`plainDemo`): no number of the answer is 0 or a number of the row.
 - **R9 [browser]:** first entry to a level with `demo: true` runs the demo, and no attempt is
   logged for the demo round. Tapping the hand icon logs help.
 - **R10 [browser]:** while a round waits, `document.getAnimations()` targets only elements with a

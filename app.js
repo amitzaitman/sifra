@@ -4,8 +4,10 @@ import { drawCards } from './shell/cards.js';
 import { cover } from './lib/cover.js';
 import { buildEquation, drawEquation, fitEquation, solveEquation } from './shell/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
-import { dayOf, daysBetween, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, schedule, stuckTarget } from './shell/planner.js';
-import { demoSeed, rng, seedFrom } from './shell/rng.js';
+import {
+  TRIES, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, same, schedule, stuckTarget,
+} from './shell/planner.js';
+import { rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
 import { CAPS, capped, childOf, exportFile, load, save } from './shell/store.js';
 import { byPointer, tapWindow } from './shell/taps.js';
@@ -31,10 +33,6 @@ const MIX = 0x5bd1e995;
 /** @type {any} the started shell: games, store, clock, the current screen's controller */
 let S = null;
 
-/** @type {(a: any, b: any) => boolean} deep equality of plain data, whatever the key order (an answer card is an object) */
-const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' &&
-  Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length &&
-  Object.keys(a).every((k) => Object.hasOwn(b, k) && same(a[k], b[k])));
 const today = () => dayOf(S.now());
 const child = () => childOf(S.store);
 const persist = () => save(S.store);
@@ -155,9 +153,6 @@ function play(game) {
   const rounds = planSession(c, S.games, game, today(), SKILLS, rng(seed), mix);
   nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds, seen: new Set() });
 }
-
-/** Tries for a round the session has not dealt, as a demo's for a round it does not show (3.3, 3.8). */
-const TRIES = 50;
 
 /**
  * A round's seed, once, as it starts (3.3): the planned one, plus 1 while its round is one the
@@ -350,10 +345,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
  */
 function demo(game, spec, then, done = 0) {
   const level = built(game, spec);
-  // Never the round it shows how to solve (3.8): not the same exercise, in any form or drawing.
-  const real = exerciseOf(game.meta.id, game.makeRound(level, rng(spec.seed)));
-  let seed = demoSeed(spec.seed);
-  for (let n = 0; n < TRIES && exerciseOf(game.meta.id, game.makeRound(level, rng(seed))) === real; n++) seed = (seed + 1) >>> 0;
+  // R9 (3.8): other numbers than the round it shows how to solve, and a plain round.
+  const seed = demoSeedFor((s) => game.makeRound(level, rng(s)), spec.seed);
   const round = dealt(game, level, seed);
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });

@@ -1,5 +1,7 @@
-// Sessions, review, the next step and the stuck child (architecture 3.3, 3.5-3.7). Pure functions
-// over the child's data; the shell passes the games, SKILLS and the random generators in.
+// Sessions, review, the next step and the stuck child (architecture 3.3, 3.5-3.7), and the demo's
+// round (3.8). Pure functions over the child's data; the shell passes the games, SKILLS and the
+// random generators in.
+import { demoSeed } from './rng.js';
 
 const DAY = 86400000;
 const GAPS = [1, 3, 7, 14];
@@ -29,19 +31,65 @@ export function homeOrder(games, skills) {
   return [...games].sort((a, b) => pos(a) - pos(b));
 }
 
+/** Tries for a round the session has not dealt, and for a demo's round (architecture 3.3, 3.8). */
+export const TRIES = 50;
+
+/** @type {(a: any, b: any) => boolean} deep equality of plain data, whatever the key order (an answer card is an object) */
+export const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' &&
+  Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length &&
+  Object.keys(a).every((k) => Object.hasOwn(b, k) && same(a[k], b[k])));
+
+/** @type {(round: Round) => any} the two sides of a round's exercise in either order; without one, its picture */
+const sidesOf = ({ equation, picture }) =>
+  (equation ? [equation.left, equation.right].map((side) => side.map(String).join(' ')).sort() : picture);
+
 /**
  * What the child sees of a round, as a key (architecture 3.3, 3.8): its game, its answer and the two
  * sides of its exercise in either order, so a reversed row (`? = 9 − 3`), another verb or another
  * drawing of the same exercise is the same, and `3 + 2` is not `2 + 3`; without an exercise, its
- * picture. A session deals no round twice, and a demo never the round it shows how to solve.
+ * picture. A session deals no round twice.
  * @param {string} game
  * @param {Round} round
  * @returns {string}
  */
 export function exerciseOf(game, round) {
-  const { equation } = round;
-  const sides = equation ? [equation.left, equation.right].map((side) => side.map(String).join(' ')).sort() : round.picture;
-  return JSON.stringify([game, round.answer, sides]);
+  return JSON.stringify([game, round.answer, sidesOf(round)]);
+}
+
+/** @type {(a: Round, b: Round) => boolean} other numbers: another answer and, where both have one, another exercise row */
+const otherNumbers = (a, b) => !same(a.answer, b.answer) && !(a.equation && b.equation && same(sidesOf(a), sidesOf(b)));
+
+/**
+ * A plain round for a demo (R9, architecture 3.8): no number of its answer is 0 or a number its
+ * exercise row shows. So the worked example is no edge round (`10 + ? = 10`, a pair with 0) and no
+ * double whose answer reads as the given part (`2 + ? = 4`, given.part's card). A judging card is no number.
+ * @type {(round: Round) => boolean}
+ */
+export const plainDemo = ({ answer, equation }) => {
+  const shown = equation ? [...equation.left, ...equation.right] : [];
+  return [answer].flat().every((n) => typeof n !== 'number' || (n !== 0 && !shown.includes(n)));
+};
+
+/**
+ * The demo's seed for a round's seed (R9, architecture 3.8): from demoSeed(seed) up by 1, the first
+ * round with other numbers than the round it shows how to solve (another answer, so never the same
+ * exercise, and, where both have a row, another row in either order: `? + ? = 5` twice is one
+ * exercise) that is also plain; TRIES at most, then the first with other numbers (the balance's
+ * `turn` answers with a number of its own row), else demoSeed(seed).
+ * @param {(seed: number) => Round} make the level's round for a seed (makeRound over rng(seed))
+ * @param {number} seed the round's seed
+ * @returns {number}
+ */
+export function demoSeedFor(make, seed) {
+  const real = make(seed);
+  let first = null;
+  for (let n = 0, s = demoSeed(seed); n < TRIES; n += 1, s = (s + 1) >>> 0) {
+    const round = make(s);
+    if (!otherNumbers(round, real)) continue;
+    if (plainDemo(round)) return s;
+    first ??= s;
+  }
+  return first ?? demoSeed(seed);
 }
 
 /** @type {(level: Level) => boolean} a level whose structure or ask the planner picks */
