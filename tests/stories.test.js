@@ -240,11 +240,22 @@ test('labels: the locked templates, singular where a number is 1', () => {
   assert.equal(stories.labelOf(take), take.story.verb === 'fly' ? 'הָיוּ 3, וְ-1 עָף' : 'הָיוּ 3, וְ-1 הִתְפּוֹצֵץ');
   assert.equal(stories.labelOf(roundOf('whole-5', 1, 3)), 'בַּסַּל 1 צָהֹב וְ-3 בְּהִירִים');
   assert.equal(stories.labelOf(roundOf('whole-5', 3, 1)), 'בַּסַּל 3 צְהֻבִּים וְ-1 בָּהִיר');
+  // Solved, the label names the unknown (bug hunt #24, hunt 2 #13): on level 3 the change the dome hid, elsewhere the total.
+  assert.equal(stories.labelOf(roundOf('add-change', 1, 6), true), 'הָיָה 1, וּבָאוּ עוֹד 6, וְעַכְשָׁיו יֵשׁ 7');
+  assert.equal(stories.labelOf(roundOf('add-change', 6, 1), true), 'הָיוּ 6, וּבָא עוֹד 1, וְעַכְשָׁיו יֵשׁ 7');
+  assert.equal(stories.labelOf(roundOf('add-10', 4, 3), true), 'הָיוּ 4, וּבָאוּ עוֹד 3, וְעַכְשָׁיו יֵשׁ 7');
+  assert.equal(stories.labelOf(take, true), `${stories.labelOf(take)}, וְעַכְשָׁיו יֵשׁ 2`);
+  assert.equal(stories.labelOf(roundOf('whole-5', 1, 3), true), 'בַּסַּל 1 צָהֹב וְ-3 בְּהִירִים, 4 בְּסַךְ הַכֹּל');
   for (const base of stories.levels) {
     for (const passed of variants(base)) {
       for (const { s, k } of stories.poolOf(passed)) {
-        const text = stories.labelOf(roundOf(base.id, s, k, 'standard', passed === base ? undefined : passed.structure));
-        assert.ok(!text.includes(String.fromCharCode(0x05bd)) && /[א-ת]/.test(text) && !/undefined|NaN/.test(text), text);
+        const round = roundOf(base.id, s, k, 'standard', passed === base ? undefined : passed.structure);
+        for (const text of [stories.labelOf(round), stories.labelOf(round, true)]) {
+          assert.ok(!text.includes(String.fromCharCode(0x05bd)) && /[א-ת]/.test(text) && !/undefined|NaN/.test(text), text);
+        }
+        const solved = stories.labelOf(round, true);
+        assert.notEqual(solved, stories.labelOf(round), `${base.id} ${s}, ${k}: the solved label is the one at rest`);
+        if (base.unknown === 'change') assert.ok(solved.includes(`עוֹד ${k}`), solved);
       }
     }
   }

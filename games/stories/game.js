@@ -244,29 +244,42 @@ const by = (n, one, many) => (n === 1 ? one : many);
 
 /**
  * The picture's aria-label (design 6.3): locked templates of pedagogy 6.4, singular where a number is
- * 1. Drafts for the owner's nikud review.
+ * 1. Solved, it names the unknown too (bug hunt #24, hunt 2 #13): level 3 the change the dome hid, the
+ * others the total (pedagogy 6.4). Drafts for the owner's nikud review.
  * @param {Round} round
+ * @param {boolean} [solved]
  * @returns {string}
  */
-export function labelOf(round) {
+export function labelOf(round, solved = false) {
   const { s, k, r, verb } = storyOf(round);
   const were = by(s, 'הָיָה', 'הָיוּ');
+  const came = `${by(k, 'וּבָא', 'וּבָאוּ')} עוֹד ${k}`;
+  const now = solved ? `, וְעַכְשָׁיו יֵשׁ ${r}` : '';
   switch (kindOf(round)) {
-    case 'add': return `${were} ${s}, ${by(k, 'וּבָא', 'וּבָאוּ')} עוֹד ${k}`;
-    case 'change': return `${were} ${s}, בָּאוּ עוֹד, וְעַכְשָׁיו יֵשׁ ${r}`;
-    case 'take': return `${were} ${s}, וְ-${k} ${verb === 'fly' ? by(k, 'עָף', 'עָפוּ') : by(k, 'הִתְפּוֹצֵץ', 'הִתְפּוֹצְצוּ')}`;
-    default: return `בַּסַּל ${s} ${by(s, 'צָהֹב', 'צְהֻבִּים')} וְ-${k} ${by(k, 'בָּהִיר', 'בְּהִירִים')}`;
+    case 'add': return `${were} ${s}, ${came}${now}`;
+    case 'change': return `${were} ${s}, ${solved ? came : 'בָּאוּ עוֹד'}, וְעַכְשָׁיו יֵשׁ ${r}`;
+    case 'take': return `${were} ${s}, וְ-${k} ${verb === 'fly' ? by(k, 'עָף', 'עָפוּ') : by(k, 'הִתְפּוֹצֵץ', 'הִתְפּוֹצְצוּ')}${now}`;
+    default: return `בַּסַּל ${s} ${by(s, 'צָהֹב', 'צְהֻבִּים')} וְ-${k} ${by(k, 'בָּהִיר', 'בְּהִירִים')}${solved ? `, ${r} בְּסַךְ הַכֹּל` : ''}`;
   }
 }
 
 /**
  * The picture (view.js): the event, the displays, the hint, the tour, the closing and the demo;
- * the label from its locked template.
+ * the label from its locked template, read again by the shell after the solve (2.4).
  * @param {HTMLElement} host
  * @param {Round} round
  * @param {RenderContext} ctx
  * @returns {RoundView}
  */
 export function render(host, round, ctx) {
-  return { ...renderScene(host, round, ctx), label: labelOf(round) };
+  const view = renderScene(host, round, ctx);
+  let solved = ctx.mode === 'thumb' && Boolean(ctx.solved);
+  return {
+    ...view,
+    async solve() {
+      solved = true;
+      await view.solve?.();
+    },
+    get label() { return labelOf(round, solved); },
+  };
 }

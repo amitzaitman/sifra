@@ -233,7 +233,8 @@ for (const { path, games } of SITES) {
  * and inside the host, and no inline style holds NaN; after a solve no cover and no written '?' are shown; in the panel,
  * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
  * is topmost (architecture 4.8); the view's label, at rest and solved, puts a hyphen after a one-letter word only
- * before a digit, and solved says no cover and nothing empty (design 6.3); after a miss it is the one at rest,
+ * before a digit, and solved says no cover and nothing empty (design 6.3), and differs from the one at rest where the
+ * unknown was covered (hunt 2 #13); after a miss it is the one at rest,
  * unless setEquation rewrote the row (help changes no label, 2.4). Returns what went wrong, the first 40 or so.
  * @param {{ url: string, levels: Level[], seeds: number }} arg
  * @returns {Promise<string[]>}
@@ -377,6 +378,9 @@ async function loop({ url, levels, seeds }) {
         await drive(view.solve?.());
         check(host, `${at} solved`, { solved: true, top: true });
         written(view, `${at} solved`, true);
+        // Solved, a picture whose unknown was covered at rest names it: the label changes (hunt 2 #13).
+        const covered = round.picture?.some((g) => g.role === 'unknown' && g.shown === 'covered');
+        if (covered && typeof rest === 'string' && view?.label === rest) out.push(`${at} solved: label "${rest}", the one at rest, though the unknown was covered`);
         if (symbols) {
           ctl.abort();
           const again = new AbortController();
@@ -393,6 +397,7 @@ async function loop({ url, levels, seeds }) {
           const small = render(thumb, round, 'thumb', solved, still.signal);
           check(thumb, `${at} thumb${solved ? ', solved' : ''}`, { solved, top: false });
           written(small, `${at} thumb${solved ? ', solved' : ''}`, solved);
+          if (solved && covered && typeof rest === 'string' && small?.label === rest) out.push(`${at} thumb, solved: label "${rest}", the one at rest`);
         }
       } catch (e) {
         out.push(`${at}: threw ${e?.stack ?? e}`);
