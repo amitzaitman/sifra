@@ -262,10 +262,16 @@ for (const [what, games, start] of /** @type {[string, Record<string, any>, numb
 
 /**
  * The middle of a demo: the hand held on its way to the answer, and let go (the page's clock does not move CSS
- * motion, dev-spec R10).
+ * motion, dev-spec R10). Only a motion with time left is held, and only a held one let go: a transition paused at its
+ * end, before its finish is sent, never settles its finished promise in WebKit (the fade-in, 2 in 20 runs), so the
+ * demo's settle waited for good; and play() runs a finished one again.
  */
 const holdHand = (page, hold = true) =>
-  page.locator('[data-hand]').evaluate((el, on) => el.getAnimations().forEach((a) => (on ? a.pause() : a.play())), hold);
+  page.locator('[data-hand]').evaluate((el, on) => el.getAnimations().forEach((a) => {
+    const left = Number(a.effect?.getComputedTiming().endTime) - Number(a.currentTime);
+    if (on && a.playState === 'running' && left > 50) a.pause();
+    else if (!on && a.playState === 'paused') a.play();
+  }), hold);
 
 test('R9: a level\'s first demo is seen only once the hand has tapped the answer: a reload mid-demo brings it back', async ({ page }) => {
   const demo = page.locator('main[data-screen="demo"]');
