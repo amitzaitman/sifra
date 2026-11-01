@@ -577,7 +577,8 @@ for (const [id, s, k, structure] of /** @type {[string, number, number, string?]
     const t = await page.evaluate(() => /** @type {any} */ (window).phases);
     const next = Object.keys(t).find((p) => p !== 'event:0');
     expect(Object.keys(t)[0]).toBe('event:0');
-    expect(t[next] - t['event:0'], `${next} after the picture`).toBeGreaterThanOrEqual(250);
+    // Half a millisecond for the timeline's float arithmetic: CI read 249.968 for a 250 ms entry.
+    expect(t[next] - t['event:0'], `${next} after the picture`).toBeGreaterThanOrEqual(249.5);
   });
 }
 
