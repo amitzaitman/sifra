@@ -230,7 +230,7 @@ for (const { path, games } of SITES) {
  * in order with the shell's step and first, then solved; in symbols look also solved first and the
  * picture asked for after; and the round as a thumb (unsolved at seed 1, solved at every seed).
  * Animations are finished as they start. After each step: nothing threw; every box shown is finite
- * and inside the host, and no inline style holds NaN; after a solve no cover is shown; in the panel,
+ * and inside the host, and no inline style holds NaN; after a solve no cover and no written '?' are shown; in the panel,
  * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
  * is topmost (architecture 4.8); the view's label, at rest and solved, puts a hyphen after a one-letter word only
  * before a digit, and solved says no cover and nothing empty (design 6.3); after a miss it is the one at rest,
@@ -306,6 +306,10 @@ async function loop({ url, levels, seeds }) {
     }
     const covers = nodes.filter((n) => n.matches('.cover') && shown(n));
     if (solved) for (const c of covers) out.push(`${where}: a cover shown after the solve, in ${name(c.parentElement)}`);
+    // Solved, no '?' is written in the picture either: a hint's chip reads the unknown's count, as the row does
+    // (design 6.9, 7.3; hunt 2 #3). A cover's '?' is drawn by CSS, so it is checked above.
+    const asks = nodes.filter((n) => shown(n) && [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && (c.textContent ?? '').includes('?')));
+    if (solved) for (const q of asks) out.push(`${where}: a '?' written after the solve, in ${name(q)}`);
     // Topmost, so the hit at its centre is what is painted there. A cover without a mark joins the
     // pieces of a cover over two rows, and the hint's ring may run along it in the same colour (the
     // balance, design 6.6): only a cover with its ? or digit is checked.

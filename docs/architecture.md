@@ -141,7 +141,7 @@ school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails
   The generic test fails a rule with such a round that is not listed, and a listed one that every round draws (4.2).
   No level lists one today: the balance's `eq.sign.missing` levels listed `count.start-included` until the pans drew its
   jumps on a missing part, and the ten-frame's bridge levels until the two frames drew them (both 2026-10-31, section 6).
-- `samePlace`: the reason, in words, why one card (or another simple rule, 4.2) finds the answer in 80% of the level's rounds or more (R4, 4.2). The
+- `samePlace`: the reason, in words, why one card (or another simple rule, 4.2) finds the answer in 80% of the level's rounds, or of one of its forms' rounds, or more (R4, 4.2). The
   cards go small to large, so a level whose rule values all fall on one side of the answer would leave it on one card;
   makeRound varies its place (lib/place.js), and a level that cannot says why here. No level has one today. The
   generic test fails a level at 80% without it, and one with it below 80%.
@@ -816,7 +816,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   20%, 2.8 at 50%), read from the level and never from the code; no card holds the answer in 80% of the rounds or
   more (each value of a mixed structure or ask apart), nor does another simple rule (`tests/cues.js`: a card among
   those that are not a value on a card in a quarter of the rounds or more, as the bridge's 10; the larger or the
-  smaller of the cards' one pair of neighbouring numbers, else a card), unless the level says why in `samePlace`
+  smaller of the cards' one pair of neighbouring numbers, else a card), nor in 80% of one form's rounds where the
+  level deals several forms and the form has 250 of the 5000 rounds or more (a child who reads the form plays it
+  alone: until 2026-11-01 the balance's `? = a + b` held the answer on the last card in every round of levels 4-6,
+  while each level as a whole passed; hunt 2 #4), unless the level says why in `samePlace`
   (2.2), and then one does (R4, the answer's place; before it ten-frame levels 8 and 10-12, balance level 1, stories
   levels 1, 4, 6 and 7 and the scale fixture's level 1 held it on one card in 82-100% of their rounds, and until
   2026-10-31 the bridge's answer was "the second card that is not 10" in every round, while "the smaller of the
@@ -1047,7 +1050,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   sideways scroll; the two-digit and last-number tour checks at 568×320 and 844×390 as well as 320 and 360 wide (the
   picture scrolled to the middle of the screen first: elementsFromPoint sees only what is on it); turned from
   568×320 to 320×568 home's thumbs and an end screen's eight inside their cards, and a tour's squeezed numbers
-  measured again at 844×390 and back to 1 at 390×844, none run together. ten-frame.spec.js: the solved thumbs with 0
+  measured again at 844×390 and back to 1 at 390×844, none run together. Since hunt 2: the hint's chips solved read
+  the unknown's count in its colour, on levels 1 and 2 and after each demo (#3); `? = 6 + 4` with the slip over the
+  answer as well as with the jumps under it (#4). ten-frame.spec.js: the solved thumbs with 0
   at four sizes (the 0 at 14px inside its ring's hole), the leftover-only display's removed marks with no gold pixel
   (a Pixel 7 and 320×568 at dpr 2), and level 10's description following the counters to the full ten.
 
@@ -1094,7 +1099,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   imports from the test server; tests/drive.test.js runs it on fake animations. After each step: nothing
   threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
   inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
-  shown; in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
+  shown, and no shown node's own text holds a `?` (a cover's `?` is drawn by CSS; the balance's hint chip kept its
+  `?` in the solved picture: hunt 2 #3, decisions.md 2026-11-01, "המספר מתחת לכף בסגירה"); in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
   topmost at its centre, by `elementFromPoint` with the painted nodes taking hits as `paintedOver` (4.7) does, and a
   digit's text fits its box (`scrollWidth`), or is centred on it (a 10 on one dot of the ten-frame's pair cards,
   design 7.2). A cover without a mark, the bridge between the pieces of a cover over two rows, is not checked as
@@ -1340,6 +1346,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | A level of fewer exercises than a session deals (stories level 6) | When every try is an exercise the session dealt, the one dealt longest ago comes back, never the last one while another can (`apartSeed`, 3.3); `whole-5` keeps its 7 exercises, named in tests/games.test.js's `SMALL`, and every other level deals at least 8. Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "רמה עם פחות תרגילים ממפגש") | `whole-5` has 7 exercises since "כרטיס 0" (no 0 and no equal parts in the basket): a child who stays at the level, with no review round, gets a repeat by round 8, and the 51st try was a random one of the 7, the previous round's in 14% of sessions. Widening the level to 6 breaks §6.4's whole of at most 5, and bringing back `1 + 1` and `2 + 2` reverses "כרטיס 0" (hunt 2 #11, option B) |
 | Off-target taps | A press of the primary pointer on no button, link or `[data-target]`, counted at its pointerup, with no pointercancel and no second finger between: a scroll and a pinch are no taps (3.2). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "נגיעה שלא במטרה היא רק נגיעה") | Counted on pointerdown, one swipe was a tap on the picture and a pinch two; on a phone held sideways every round needs a scroll to reach its cards, so nearly every landscape round logged a tap that never was, in the log that should show what a child who cannot read thinks is tappable (§5.7; hunt 2 #6) |
 | The address after a stuck return | Into another game, the address becomes `#/play/<target game>` by `history.replaceState`, only while it still names the session's game (3.1, 3.7). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "הכתובת אחרי חזרה של ילד תקוע") | A reload or a restored tab opened the stuck game at the stuck level, its stuck counter reset, instead of the prerequisite and its demo. Without the check, home tapped during the closing opened the target's session: `route()` applies the solved round before it reads the address (hunt 2 #12) |
+| A slip in `? = a + b` (balance, R4) | `slip.near` is last in `eq.sign.missing`'s rules (skills.md), and the balance offers it in `? = a + b` alone (`SLIP_FORMS` in games/balance/game.js): there every real error is under the answer (`equal.copy` a, `op.other` the difference, `count.start-included` a + b − 1; `equal.add-all` is the answer and drops), so lib/place.js can now move the answer one place down, with the answer plus 1 over it in place of `count.start-included`, drawn as `count-up` (ghosts on the empty pan, one past the unknown's places, the beam tipped). The answer is the third card or the fourth there, about 48/52, and the best simple rule finds it in 54-64%; every other form is unchanged, level 6's 99 first-card rounds too. The deal check (4.2) also checks each form of a mixed level alone. Balance version 8, the lock with it (levels 4-6 changed). Option A (★★★★★) of hunt 2 #4, decided 2026-11-01 by the owner's delegation; see decisions.md, "טעות מקרית ב-`? = a + b`" (an engineering decision the owner may reverse). Tests: tests/games.test.js (the per-form check and its self-test, red on balance levels 4-6 before), tests/balance.test.js (the card sets of `? = a + b`, the answer on card 3 or 4, no slip on a missing part) | `? = a + b` was the only form in the three games with the answer on one card in 80% of its rounds or more: 2503/2503 at level 4, 1009/1009 at levels 5 and 6, and a child who taps the largest card when `?` stands alone on the left won about 75% of level 4. Option B kept the cue under a `samePlace` per form; option C (`slip.near` in every form of the skill) would put a slip in place of a real error in 36-48% of the skill's rounds, levels 2-3 included, and move level 6's decided rounds |
 
 ### Open questions for the owner
 

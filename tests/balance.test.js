@@ -216,12 +216,23 @@ test('reversed forms: the equal.* rules come first (depth 4.9), standard forms k
       assert.equal(ruleOf(round, a + c), 'equal.add-all');
       if (a !== c) assert.equal(ruleOf(round, a), 'given.part');
     } else {
-      // ? = a + b: the copy, the difference, and counting on with the start counted.
+      // ? = a + b: the copy, the difference, and counting on with the start counted (a + b - 1, under the answer) or,
+      // where the answer's place moves left, a slip over it, a + b + 1 (decisions.md 2026-11-01, "טעות מקרית ב-? = a + b").
       const [a, , b] = round.equation.right;
-      assert.deepEqual(round.choices.filter((ch) => ch.rule).map((ch) => ch.rule).sort(), ['count.start-included', 'equal.copy', 'op.other']);
+      const wrong = round.choices.filter((ch) => ch.rule).map((ch) => ch.rule).sort();
+      assert.ok(['count.start-included,equal.copy,op.other', 'equal.copy,op.other,slip.near'].includes(String(wrong)), String(wrong));
       assert.equal(ruleOf(round, a), 'equal.copy');
-      assert.equal(ruleOf(round, a + b - 1), 'count.start-included');
+      if (wrong.includes('slip.near')) assert.equal(ruleOf(round, a + b + 1), 'slip.near');
+      else assert.equal(ruleOf(round, a + b - 1), 'count.start-included');
     }
+  }
+  // Both, so the answer is the third card or the fourth (it was always the fourth: hunt 2 #4).
+  const places = new Set(rounds('missing-reversed').filter((r) => r.unknown === 'result-left').map((r) => r.choices.findIndex((c) => c.rule === null)));
+  assert.deepEqual([...places].sort(), [2, 3]);
+  // The slip is in ? = a + b alone: the missing-part forms deal none (SLIP_FORMS).
+  for (const id of ['missing-right', 'missing-left', 'missing-reversed', 'missing-symbols', 'missing-symbols-20']) {
+    const slips = rounds(id).filter((r) => r.unknown !== 'result-left' && r.choices.some((c) => c.rule === 'slip.near'));
+    assert.equal(slips.length, 0, `${id}: a slip on a missing part`);
   }
   for (const round of rounds('missing-right')) {
     const [c] = round.equation.right;

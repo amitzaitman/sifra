@@ -215,10 +215,16 @@ function checkForms(level) {
 /** The share of a level's rounds at which one card holding the answer fails the deal (R4, decisions.md 2026-10-31). */
 const SAME_PLACE = 0.8;
 /**
+ * The rounds of DEAL from which a form of a mixed level is checked on its own too: a child who reads the form finds
+ * the answer by its place there (balance levels 4-6, ? = a + b on the last card in every round: hunt 2 #4).
+ */
+const FORM_ROUNDS = 250;
+/**
  * The deal of a level (architecture 4.2): over seeds 1-DEAL every form is dealt and its share is
  * within slack() of its weight in the level's forms; no simple rule (cues: a card, a card among those
  * that are not a landmark value, the larger or smaller of the one neighbouring pair) finds the answer
- * in SAME_PLACE of the rounds or more, unless the level says why in `samePlace` (and then one does); over seeds 1-COVER
+ * in SAME_PLACE of the rounds or more, nor in SAME_PLACE of one form's rounds where the level deals several and the
+ * form is FORM_ROUNDS of them or more, unless the level says why in `samePlace` (and then one does); over seeds 1-COVER
  * every whole number of the level's range [min, max] is dealt as an answer (either number of a
  * pair), or the level lists it in exclude, and no excluded number is dealt. A planner-picked
  * structure or ask: per value for the shares and the place, all together for answers.
@@ -237,12 +243,18 @@ export function checkDeal(game, base) {
     const dealt = new Map();
     /** @type {{ values: any[], card: number }[]} */
     const cards = [];
+    /** @type {Map<string, { values: any[], card: number }[]>} the cards of each form */
+    const byForm = new Map();
     for (let seed = 1; seed <= DEAL; seed++) {
       const round = game.makeRound(level, rng(seed));
       const pair = `${round.unknown}/${round.eqform ?? 'standard'}`;
       dealt.set(pair, (dealt.get(pair) ?? 0) + 1);
       const card = (round.choices ?? []).findIndex((c) => isDeepStrictEqual(c.value, round.answer));
-      if (card >= 0) cards.push({ values: round.choices.map((c) => c.value), card });
+      if (card >= 0) {
+        cards.push({ values: round.choices.map((c) => c.value), card });
+        if (!byForm.has(pair)) byForm.set(pair, []);
+        byForm.get(pair).push(cards.at(-1));
+      }
       if (seed > COVER) continue;
       const values = [round.answer].flat();
       if (values.every((v) => typeof v === 'number')) values.forEach((v) => answers.add(v));
@@ -261,12 +273,20 @@ export function checkDeal(game, base) {
     }
     for (const pair of dealt.keys()) if (forms.length && !forms.some((f) => pairOf(level, f) === pair)) problems.push(`${pair} is dealt${where} but is no form of the level`);
     const found = cues(cards).filter((c) => c.found >= SAME_PLACE * DEAL);
+    /** @type {(rule: string) => string} */
+    const finds = (rule) => (rule.startsWith('card ') && !rule.includes(' of ') ? `${rule} holds the answer` : `"${rule}" finds the answer`);
+    // A mixed level: each form on its own too, as a child who reads the form would play it.
+    const inForms = [...(dealt.size > 1 ? byForm : [])].filter(([, some]) => some.length >= FORM_ROUNDS)
+      .flatMap(([pair, some]) => cues(some).filter((c) => c.found >= SAME_PLACE * some.length).map((c) => ({ ...c, pair, of: some.length })));
     if (!base.samePlace) {
       for (const { rule, found: n } of found) {
-        problems.push(`${rule.startsWith('card ') && !rule.includes(' of ') ? `${rule} holds the answer` : `"${rule}" finds the answer`} in ${(100 * n / DEAL).toFixed(1)}% of ${DEAL} rounds${where}: vary its place (R4), or say why in samePlace`);
+        problems.push(`${finds(rule)} in ${(100 * n / DEAL).toFixed(1)}% of ${DEAL} rounds${where}: vary its place (R4), or say why in samePlace`);
+      }
+      for (const { rule, found: n, pair, of } of inForms) {
+        problems.push(`${finds(rule)} in ${(100 * n / of).toFixed(1)}% of the ${of} rounds of ${pair}${where}: vary its place (R4), or say why in samePlace`);
       }
     }
-    if (base.samePlace && !found.length) problems.push(`samePlace says why the answer keeps its card, but no card holds it in ${100 * SAME_PLACE}% of the rounds${where}`);
+    if (base.samePlace && !found.length && !inForms.length) problems.push(`samePlace says why the answer keeps its card, but no card holds it in ${100 * SAME_PLACE}% of the rounds${where}`);
   }
   if (numbers && typeof base.max === 'number') {
     const exclude = base.exclude ?? [];
@@ -891,6 +911,25 @@ test('the deal checks catch an answer that keeps its card: 80% of the rounds on 
   assert.doesNotMatch(reason('the answer is a relation, always last'), /samePlace/);
   assert.match(reason(true), /samePlace is the reason, in words/);
   assert.match(reason(' '), /samePlace is the reason, in words/);
+});
+
+test('the deal checks catch a form of a mixed level whose answer keeps its card, though the level\'s cards vary (R4, hunt 2 #4)', () => {
+  const level = parts.levels.find((l) => l.id === 'split-sym');
+  assert.deepEqual(checkDeal(parts, level), []);
+  // The reversed form's answer always last, the standard form's as dealt: the balance's ? = a + b before 2026-11-01.
+  const last = { ...parts, makeRound: (l, r) => {
+    const round = parts.makeRound(l, r);
+    if (round.eqform !== 'reversed') return round;
+    return { ...round, choices: [...round.choices.filter((c) => c.rule !== null), round.choices.find((c) => c.rule === null)] };
+  } };
+  const caught = checkDeal(last, level).join('\n');
+  assert.match(caught, /card 4 holds the answer in 100\.0% of the \d+ rounds of part\/reversed: vary its place \(R4\), or say why in samePlace/);
+  assert.doesNotMatch(caught, /of 5000 rounds/, 'the level as a whole passes');
+  assert.doesNotMatch(caught, /part\/standard/);
+  assert.deepEqual(checkDeal(last, { ...level, samePlace: 'a test of the opt-out' }), []);
+  // A form in fewer than 250 of the 5000 rounds is not checked alone (its share fails the deal here, not its card).
+  const rare = { ...last, makeRound: (l, r) => last.makeRound({ ...l, forms: [{ eqform: 'reversed', w: 0.04 }, { eqform: 'standard', w: 0.96 }] }, r) };
+  assert.doesNotMatch(checkDeal(rare, level).join('\n'), /holds the answer/);
 });
 
 test('the deal checks catch an answer found by a simple rule other than its card: a landmark set aside, or a neighbouring pair (decisions.md 2026-10-31)', () => {

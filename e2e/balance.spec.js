@@ -94,9 +94,10 @@ test('a first try: the pans stay level, the unknown shows in its colour, the ful
 });
 
 // Every rule the game offers, in rounds that show it, with what its display draws (design 7.1, 7.3).
-// 13 + 5 = ? + 12 (both-sides-symbols 9): slip.near's 5, where equal.add-all's 30 needs 9 rows.
+// 13 + 5 = ? + 12 (both-sides-symbols 9): slip.near's 5, where equal.add-all's 30 needs 9 rows. ? = 6 + 4 twice:
+// the slip's 11 over the answer (missing-reversed 10) and the jumps' 9 under it (148; decisions.md 2026-11-01).
 const DISPLAYS = [
-  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 129], ['missing-symbols-20', 31],
+  ['same', 1], ['missing-right', 11], ['missing-right', 3], ['missing-reversed', 10], ['missing-reversed', 148], ['missing-reversed', 129], ['missing-symbols-20', 31],
   ['both-sides', 1], ['both-sides-symbols', 9], ['turn', 1], ['true-false', 1], ['relational', 1],
 ];
 test('every wrong rule shows its display, and its card goes with its slot kept', async ({ page }) => {
@@ -296,6 +297,9 @@ test('the help ladder: display, then chips and the cover\'s outline, then the to
   await expect(page.locator('[data-tour]')).toHaveCount(Math.max(1, round.answer));
   await card(page, answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
+  // Solved, the chip's '?' reads the unknown's count in its colour, as the row does (design 6.9, 7.3; hunt 2 #3).
+  await expect(page.locator('.bl-chip')).toHaveText([`${round.equation.left[0]}+${round.answer}`, String(round.equation.right[0])]);
+  await expect(page.locator('.bl-chip .bl-q')).toHaveCSS('color', MAGENTA);
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', wrong: wrong.map((i) => round.choices[i].rule), help: ['hint', 'tour'] });
 });
 
@@ -330,6 +334,9 @@ test('same-as: four piles on the cards, each in its card at 320px; the help ladd
   await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
   await card(page, answerAt).click();
   await expect(page.locator('[data-next]')).toBeVisible();
+  // Solved, both chips read the answer, the right one in the unknown's colour (hunt 2 #3).
+  await expect(page.locator('.bl-chip')).toHaveText([String(round.answer), String(round.answer)]);
+  await expect(page.locator('.bl-chip[data-pan="right"] .bl-q')).toHaveCSS('color', MAGENTA);
   expect(await lastAttempt(page)).toMatchObject({ outcome: 'shown', options: 4, help: ['hint', 'tour'] });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
@@ -610,6 +617,9 @@ for (const level of ['same', 'missing-right', 'both-sides', 'true-false']) {
     await expect(page.locator('.bl-scene')).toHaveAttribute('data-tilt', 'level');
     expect((await stored(page)).child.attempts).toEqual([]);
     await look(page);
+    // The closed picture writes no '?': the hint's chip reads the unknown's count (hunt 2 #3).
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await expect(page.locator('.bl-chip', { hasText: '?' })).toHaveCount(0);
     await page.locator('[data-next]').click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', String(number(level)));
   });
@@ -941,7 +951,7 @@ test('a ring never paints over a cube or cover next to it, of another group or o
   // the other group, then the tour. Rings over two rows of one group: the tours of same, missing-left
   // and missing-symbols-20, and flashes of a whole and of a part of 6 to 9.
   const states = [['missing-left', 4, ['given.part']], ['missing-left', 4, ['given.part', 'given.whole', 'op.other']],
-    ['missing-reversed', 10, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
+    ['missing-reversed', 148, ['count.start-included']], ['relational', 1, ['equal.copy', 'equal.compensate-wrong']],
     ['relational', 1, ['equal.copy', 'equal.compensate-wrong', 'equal.add-to-equal']],
     ['same', 1, 'tour'], ['missing-left', 1, 'tour'], ['missing-symbols-20', 360, 'tour'],
     ['missing-right', 3, ['given.whole']], ['missing-symbols', 235, ['given.part']]];
@@ -1364,7 +1374,7 @@ test('the jumps: each arc hops from one mark\'s top to the next, drawn over the 
   // ? = 6 + 4 (one row), ? = 4 + 6 (an arc under the missed cube's ring), ? = 2 + 15 (three rows).
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 568 });
-    for (const [level, seed] of [['missing-reversed', 10], ['missing-reversed', 116], ['missing-symbols-20', 759]]) {
+    for (const [level, seed] of [['missing-reversed', 148], ['missing-reversed', 175], ['missing-symbols-20', 2428]]) {
       const { round } = await devAt(page, level, seed);
       await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
       await unlocked(page);
@@ -1460,7 +1470,7 @@ test('the jumps: the digits of a two-digit mark are condensed inside its ring an
   for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {
     await page.setViewportSize({ width, height });
     // ? = 12 + 4: the marks 12 to 15; ? = 3 + 10: the marks 3 to 12, where only 10, 11 and 12 have two digits.
-    for (const [seed, two] of [[545, ['12', '13', '14', '15']], [1386, ['10', '11', '12']]]) {
+    for (const [seed, two] of [[1660, ['12', '13', '14', '15']], [1386, ['10', '11', '12']]]) {
       const { round } = await devAt(page, 'missing-symbols-20', seed);
       await card(page, round.choices.findIndex((c) => c.rule === 'count.start-included')).click();
       await unlocked(page);

@@ -6,7 +6,7 @@ import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { DISPLAYS, displayRows, drawable, drawFace, renderBalance } from './view.js';
 
-export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 7, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'balance', title: 'מֹאזְנַיִם', version: 8, css: new URL('game.css', import.meta.url).href };
 
 // What levels share; each level is a complete object (architecture 2.2).
 // No dots under the cards' numbers: the pans show each number in rows of five, and the dots would let
@@ -169,12 +169,21 @@ export function budget(round, { value, rule }) {
 }
 
 /**
+ * The forms in which a skill's slips are dealt, where not in every form (decisions.md 2026-11-01, "טעות מקרית ב-? = a +
+ * b"): eq.sign.missing's real errors are all under the answer only in ? = a + b, where a slip over it moves the
+ * answer's card; elsewhere they lie on both sides, and a slip would take a real error's card (depth 4.9).
+ * @type {Record<string, string[]>}
+ */
+const SLIP_FORMS = { 'eq.sign.missing': ['result-left'] };
+
+/**
  * One wrong choice per rule in the skill's order, each value once, slips only where no real error
  * gives the value; ascending. A value whose display does not fit (budget: no drawing on this round,
  * canShow, or more than MAX_ROWS rows) is left out, and the next rule takes its place, like the
  * ten-frame's canShow. The rng draws the answer's place (lib/place.js, R4): a value with no room on
  * its side of the answer gives way to the next rule too, and the slip goes to the side that has room,
- * either side, the rng's where both have (decisions.md 2026-10-31). null when there are not enough, or fewer than two real errors
+ * either side, the rng's where both have (decisions.md 2026-10-31); a skill in SLIP_FORMS deals its slips only in those
+ * forms. null when there are not enough, or fewer than two real errors
  * where the skill lists two (R4). In a reversed form the equal.* rules come first (depth 4.9, eq.sign.missing; architecture 4.2).
  * @param {Round} round
  * @param {Level} level
@@ -182,9 +191,11 @@ export function budget(round, { value, rule }) {
  * @returns {Choice[] | null}
  */
 function choose(round, level, rng) {
-  const listed = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
-  const order = reversedForm(round) ? [...listed.filter(isEqual), ...listed.filter((id) => !isEqual(id))] : listed;
   const isSlip = (id) => id.startsWith('slip.');
+  const listed = SKILLS.find((s) => s.id === level.skill).rules.filter((id) => rules[id]);
+  const slipForms = SLIP_FORMS[level.skill];
+  const offered = !slipForms || slipForms.includes(/** @type {string} */ (round.unknown)) ? listed : listed.filter((id) => !isSlip(id));
+  const order = reversedForm(round) ? [...offered.filter(isEqual), ...offered.filter((id) => !isEqual(id))] : offered;
   const real = order.filter((id) => !isSlip(id)).map((id) => rules[id](round));
   /** @type {(v: number) => 'below' | 'above'} */
   const side = (v) => (v < round.answer ? 'below' : 'above');

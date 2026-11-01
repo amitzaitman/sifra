@@ -402,7 +402,11 @@ function balanceScene(host, round, solved, signal) {
       shift(hinted);
       tilt(closed ? 'level' : restTilt);
     },
-    close: () => judging && layCard(),
+    close: () => {
+      if (judging) layCard();
+      // Solved, the hint's '?' under a pan reads the unknown's count, in its colour, as the row does (design 6.9, 7.3).
+      if (ui >= 0) for (const q of scene.querySelectorAll('.bl-chip .bl-q')) q.textContent = String(data[u][ui].count);
+    },
     intro: () => {},
     /**
      * What a wrong choice says (design 7.1, 7.3), in a layer [data-display]: its display's drawing,

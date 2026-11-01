@@ -49,7 +49,7 @@ export const SKILLS = [
   {"id":"addsub.facts.think-addition","requires":{"base":["num.parts.split","count.on.continue"],"when":[]},"rules":["line.landing","given.part","count.start-included","op.other"]},
   {"id":"addsub.facts.teen","requires":{"base":["pv.teens.ten-and","num.parts.split"],"when":[]},"rules":["op.other","pv.ones-only","pv.teen-reversed","slip.near"]},
   {"id":"addsub.facts.bridge-add","requires":{"base":["num.parts.make-ten","pv.teens.ten-and"],"when":[]},"rules":["bridge.whole-second","bridge.leftover-only","bridge.stopped-at-ten","count.start-included","slip.near"]},
-  {"id":"eq.sign.missing","requires":{"base":["eq.sign.same-as","num.parts.split"],"when":[]},"rules":["given.whole","given.part","op.other","equal.add-all","equal.copy","zero.counted-as-one","count.start-included"]},
+  {"id":"eq.sign.missing","requires":{"base":["eq.sign.same-as","num.parts.split"],"when":[]},"rules":["given.whole","given.part","op.other","equal.add-all","equal.copy","zero.counted-as-one","count.start-included","slip.near"]},
   {"id":"eq.props.associative","requires":{"base":["num.parts.make-ten"],"when":[]},"rules":[]},
   {"id":"eq.inverse.ops","requires":{"base":["addsub.meaning.part-whole"],"when":[{"if":{"op":"=mul"},"add":["muldiv.meaning.equal-groups"]}]},"rules":["given.part","given.whole","op.other","slip.near"]},
   {"id":"eq.pattern.rule","requires":{"base":["count.skip.sequence"],"when":[]},"rules":[]},

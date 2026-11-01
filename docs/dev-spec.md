@@ -130,7 +130,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   for a slip that crossed the answer when the place moved down (`checkLeftOut`, architecture 4.2); over 5000 seeds no
   card holds the answer in 80% of a level's rounds or more, nor does another simple rule (a card among those that
   are not a value on a card in a quarter of the rounds, the larger or smaller of the one neighbouring pair, else a
-  card; `tests/cues.js`), unless the level says why in `samePlace` (R4, the answer's place; architecture 2.2);
+  card; `tests/cues.js`), nor in 80% of one form's rounds of a mixed level (a form with 250 of them or more; since
+  2026-11-01), unless the level says why in `samePlace` (R4, the answer's place; architecture 2.2);
   `keyword.*` present in text levels with inconsistent wording, absent in levels without text.
 - **R4 [auto], build and estimate rounds:** for every rule in the skill's list that has a formula,
   `classify(round, rules[r](round)) === r`; `classify(round, answer) === 'correct'`. Clock wind

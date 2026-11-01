@@ -1,13 +1,13 @@
 {
   "balance": {
-    "version": 7,
+    "version": 8,
     "levels": {
       "same": "c2184d6b4abb5cdb04b41a1b79cf6a19e830add120e90a70948f299ad1ace213",
       "missing-right": "07a554d108be36f307d200a2ec494d97e9edf162f12cdb1be4633c317cd31c5d",
       "missing-left": "12e0a03fbf72921b024d1e88e5669f4ee9bbf171934fa4acda383f2cbd56ffaa",
-      "missing-reversed": "aea3a0004fd16ec80d5bf3516596f806127cffaf3f619cdf0853a7297342e8ee",
-      "missing-symbols": "3652c95171d1ebc5a2c7938fc5180642530c125b9e4103339dcf2865a0bd7216",
-      "missing-symbols-20": "f17918772d03b078f4a3239849503505be8d5312a187bdbee565449daf57b646",
+      "missing-reversed": "e2860a3a0c0e13ec6e6e1de3447bc77359ddff25628aa8af3728a6795e6b27cf",
+      "missing-symbols": "15b478fa9b9bbd6b206374c92e2cd3853de2cc92ea744f9483c911c6d87585a1",
+      "missing-symbols-20": "c630b3e2175f705406ad06c62b34026db468cf24933b6fe6952b444c7266fad3",
       "both-sides": "4d52737dab28374c6403eb2aad805eacabc69d0529bee8785b215b2eb9d011d1",
       "both-sides-symbols": "80ec998271759908db713d543af3ee29ba6f7b03f4fac95c966159ae2ba278df",
       "turn": "b8947bbade394d472a1088bcf3091fc0aa902b1e58fa0479c26c4e93f210b531",
