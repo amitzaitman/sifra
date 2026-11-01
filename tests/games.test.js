@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { GAMES } from './all-games.js';
 import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
-import { demoSeedFor, exerciseOf, plainDemo, prereqs } from '../shell/planner.js';
+import { TRIES, apartSeed, demoSeedFor, exerciseOf, pickMix, plainDemo, prereqs } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import { RULES } from '../data/errors.js';
 import { FORMS } from '../data/forms.js';
@@ -587,6 +587,100 @@ export function checkDemo(game, base) {
   return problems;
 }
 
+/** The sessions the session check deals at each demo level (architecture 3.3). */
+const SESSIONS = 500;
+/**
+ * The levels with fewer exercises than a session's 8 rounds (architecture 3.3), by game/level, with how many: a session
+ * there deals one again, the one dealt longest ago. Stories level 6: the basket to 5 without 0 and equal parts.
+ */
+const SMALL = { 'stories/whole-5': 7 };
+
+/**
+ * How many exercises (exerciseOf, architecture 3.3) the levels deal together over DEAL seeds; counting stops at enough.
+ * @param {Game} game
+ * @param {Level[]} levels a level, or the structures of a mixed one
+ * @param {number} [enough]
+ * @returns {number}
+ */
+export function exercisesIn(game, levels, enough = Infinity) {
+  const keys = new Set();
+  for (let seed = 1; seed <= DEAL && keys.size < enough; seed++) {
+    for (const level of levels) keys.add(exerciseOf(game.meta.id, game.makeRound(level, rng(seed))));
+  }
+  return keys.size;
+}
+
+/** @typedef {{ apartSeed: typeof apartSeed, demoSeedFor: typeof demoSeedFor, counted: boolean }} Deal the shell's choices */
+/** The shell's: the demo's exercise counts as dealt. @type {Deal} */
+const SHELL = { apartSeed, demoSeedFor, counted: true };
+
+/**
+ * A session at one level as the shell deals it (app.js apart and demo, architecture 3.3, 3.8): 8 rounds from the
+ * session seed, each apart from the exercises dealt (apartSeed), and on a demo level the entry demo before the first,
+ * whose exercise counts as dealt (demoSeedFor). The demo's exercise (null without one) and the rounds', in order.
+ * @param {Game} game
+ * @param {Level} base
+ * @param {number} seed the session seed
+ * @param {Deal} [deal] a test swaps the shell's choices
+ * @returns {{ demo: string | null, rounds: string[] }}
+ */
+export function sessionOf(game, base, seed, deal = SHELL) {
+  const [seeds, mix, seen, rounds] = [rng(seed), rng((seed ^ 0x5bd1e995) >>> 0), new Map(), []];
+  let [prev, demo, dealt] = [null, null, 0];
+  for (let i = 0; i < 8; i++) {
+    const pick = pickMix(base, prev, mix);
+    prev = pick.structure ?? pick.ask ?? null;
+    const level = { ...base, ...pick };
+    const make = (/** @type {number} */ s) => game.makeRound(level, rng(s));
+    const keys = new Map();
+    const key = (/** @type {number} */ s) => keys.get(s) ?? keys.set(s, exerciseOf(game.meta.id, make(s))).get(s);
+    const s = deal.apartSeed(key, Math.floor(seeds.next() * 4294967296) >>> 0, seen);
+    seen.set(key(s), ++dealt);
+    if (i === 0 && base.demo) {
+      demo = exerciseOf(game.meta.id, make(deal.demoSeedFor(make, s, (round) => seen.get(exerciseOf(game.meta.id, round)))));
+      if (deal.counted) seen.set(demo, ++dealt);
+    }
+    rounds.push(key(s));
+  }
+  return { demo, rounds };
+}
+
+/**
+ * The session's exercises at a demo level (architecture 3.3, 3.8; hunt 2 #2, #11), over SESSIONS sessions: none twice
+ * in a row, the demo's before the first round included; the demo's exercise is not one of rounds 2-4, nor of any round
+ * where the level has at least 9 exercises (the demo and 8 rounds).
+ * @param {Game} game
+ * @param {Level} base
+ * @param {Deal} [deal]
+ * @returns {string[]}
+ */
+export function checkSession(game, base, deal = SHELL) {
+  if (!base.demo) return [];
+  const problems = [];
+  const many = exercisesIn(game, variants(base), 9) >= 9;
+  for (let seed = 1; seed <= SESSIONS; seed++) {
+    const { demo, rounds } = sessionOf(game, base, seed, deal);
+    const seq = [demo, ...rounds];
+    const twice = seq.findIndex((k, i) => i > 0 && k === seq[i - 1]);
+    if (twice > 0) problems.push(`session ${seed}: the same exercise twice in a row, ${twice === 1 ? 'the demo and round 1' : `rounds ${twice - 1} and ${twice}`}: ${seq[twice]}`);
+    const again = rounds.indexOf(/** @type {string} */ (demo));
+    if (again >= 0 && (again <= 3 || many)) problems.push(`session ${seed}: round ${again + 1} is the demo's exercise ${demo}`);
+  }
+  return problems;
+}
+
+test(`every level deals at least 8 exercises, each structure apart, or is named in SMALL with its count (architecture 3.3)`, () => {
+  const problems = [];
+  for (const game of GAMES) {
+    for (const base of game.levels) {
+      const id = `${game.meta.id}/${base.id}`;
+      const n = Math.min(...variants(base).map((level) => exercisesIn(game, [level], 9)));
+      if (id in SMALL ? n !== SMALL[id] : n < 8) problems.push(`${id} deals ${n} exercises${id in SMALL ? `, SMALL says ${SMALL[id]}` : ''}`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
 for (const game of GAMES) {
   test(`${game.meta.id}: meta, levels and R3`, () => {
     const problems = checkGame(game);
@@ -626,6 +720,12 @@ for (const game of GAMES) {
       const problems = checkDemo(game, base);
       assert.ok(problems.length === 0, `${problems.length} problem(s), the first:\n  ${problems.slice(0, 8).join('\n  ')}`);
     });
+    if (base.demo) {
+      test(`${game.meta.id} level ${index + 1} (${base.id}): a session's exercises after its demo, over ${SESSIONS} sessions`, () => {
+        const problems = checkSession(game, base);
+        assert.ok(problems.length === 0, `${problems.length} problem(s), the first:\n  ${problems.slice(0, 8).join('\n  ')}`);
+      });
+    }
   });
 }
 
@@ -711,6 +811,24 @@ test('the demo check catches a demo with the round\'s answer or row, and an edge
   });
   assert.match(checkDemo(edges, level)[0], /^seed 1: the demo is no plain round: \{"left":\[(\d),"\+","\?"\],"right":\[\d+\]\} = \1$/);
   assert.deepEqual(checkDemo(edges, { ...level, demo: false }), [], 'only a demo level must find a plain round');
+});
+
+test('the session check catches the demo\'s exercise dealt again and an exercise twice in a row (architecture 3.3, hunt 2 #2, #11)', () => {
+  // The shell before 2026-11-01: the rounds dealt, the planned seed after TRIES, and the demo not counted.
+  /** @type {Deal} */
+  const before = {
+    counted: false,
+    apartSeed: (/** @type {(s: number) => string} */ key, /** @type {number} */ seed, /** @type {Map<string, number>} */ seen) => {
+      for (let n = 0; n < TRIES && seen.has(key(seed)); n++) seed = (seed + 1) >>> 0;
+      return seed;
+    },
+    demoSeedFor: (/** @type {(s: number) => Round} */ make, /** @type {number} */ seed) => demoSeedFor(make, seed),
+  };
+  assert.match(checkSession(parts, parts.levels[0], before).join('\n'), /round [234] is the demo's exercise/);
+  const same = { ...before, apartSeed: () => 1 };
+  assert.match(checkSession(parts, parts.levels[0], same).join('\n'), /twice in a row, rounds 1 and 2/);
+  assert.deepEqual(checkSession(parts, parts.levels[0]), []);
+  assert.deepEqual(checkSession(parts, parts.levels[1], same), [], 'a level without a demo is not checked');
 });
 
 test('the undrawn checks catch a rule the picture cannot draw that the level does not name, and a stale one (architecture 2.2)', () => {

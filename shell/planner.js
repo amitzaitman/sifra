@@ -74,22 +74,48 @@ export const plainDemo = ({ answer, equation }) => {
  * The demo's seed for a round's seed (R9, architecture 3.8): from demoSeed(seed) up by 1, the first
  * round with other numbers than the round it shows how to solve (another answer, so never the same
  * exercise, and, where both have a row, another row in either order: `? + ? = 5` twice is one
- * exercise) that is also plain; TRIES at most, then the first with other numbers (the balance's
- * `turn` answers with a number of its own row), else demoSeed(seed).
+ * exercise) that is also plain and whose exercise the session has not dealt (`dealt`, 3.3); TRIES
+ * at most. Else, of the rounds with other numbers: one not dealt, then a plain one dealt, then any
+ * (the balance's `turn` answers with a number of its own row), the one dealt longest ago, else the
+ * first; with none, demoSeed(seed).
  * @param {(seed: number) => Round} make the level's round for a seed (makeRound over rng(seed))
  * @param {number} seed the round's seed
+ * @param {(round: Round) => number | undefined} [dealt] when the session dealt the round's exercise (undefined: not)
  * @returns {number}
  */
-export function demoSeedFor(make, seed) {
+export function demoSeedFor(make, seed, dealt = () => undefined) {
   const real = make(seed);
-  let first = null;
+  /** @type {{ s: number, tier: number, at: number } | null} */
+  let best = null;
   for (let n = 0, s = demoSeed(seed); n < TRIES; n += 1, s = (s + 1) >>> 0) {
     const round = make(s);
     if (!otherNumbers(round, real)) continue;
-    if (plainDemo(round)) return s;
-    first ??= s;
+    const [at, plain] = [dealt(round), plainDemo(round)];
+    if (at === undefined && plain) return s;
+    const tier = (at === undefined ? 0 : 2) + (plain ? 0 : 1);
+    if (!best || tier < best.tier || (tier === best.tier && (at ?? 0) < best.at)) best = { s, tier, at: at ?? 0 };
   }
-  return first ?? demoSeed(seed);
+  return best?.s ?? demoSeed(seed);
+}
+
+/**
+ * A round's seed apart from the exercises the session dealt (architecture 3.3): from the planned
+ * seed up by 1, the first whose exercise the session has not dealt, TRIES at most; else, when every
+ * try's exercise was dealt (a level of fewer exercises than a session deals), the try whose exercise
+ * was dealt longest ago, so the last one never comes back while another can.
+ * @param {(seed: number) => string} key the exercise of a seed's round (exerciseOf)
+ * @param {number} seed the planned seed
+ * @param {Map<string, number>} seen each exercise the session dealt, by when: a count that goes up
+ * @returns {number}
+ */
+export function apartSeed(key, seed, seen) {
+  let [best, oldest] = [seed, Infinity];
+  for (let n = 0, s = seed; n < TRIES; n += 1, s = (s + 1) >>> 0) {
+    const at = seen.get(key(s));
+    if (at === undefined) return s;
+    if (at < oldest) [best, oldest] = [s, at];
+  }
+  return best;
 }
 
 /** @type {(level: Level) => boolean} a level whose structure or ask the planner picks */

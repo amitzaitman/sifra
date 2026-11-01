@@ -5,7 +5,7 @@ import { cover } from './lib/cover.js';
 import { buildEquation, drawEquation, fitEquation, solveEquation } from './shell/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
 import {
-  TRIES, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, same, schedule, stuckTarget,
+  apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, same, schedule, stuckTarget,
 } from './shell/planner.js';
 import { rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
@@ -180,22 +180,27 @@ function play(game) {
   const seed = seedFrom(S.seeds);
   const mix = rng((seed ^ MIX) >>> 0);
   const rounds = planSession(c, S.games, game, today(), SKILLS, rng(seed), mix);
-  nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds, seen: new Set() });
+  // seen: each exercise the session dealt (a round's or a demo's), by when (dealt counts up).
+  nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds, seen: new Map(), dealt: 0 });
 }
+
+/** Counts an exercise as dealt in the session, now (3.3): its rounds and demos come apart from it. */
+const deal = (session, key) => session?.seen.set(key, ++session.dealt);
 
 /**
  * A round's seed, once, as it starts (3.3): the planned one, plus 1 while its round is one the
- * session dealt already (exerciseOf: the same answer and numbers), up to TRIES times. A small pool
- * (a level to 5 has 9 or 10 stories) otherwise deals the same exercise, its answer on the same card,
- * in most sessions. The seed recorded is the one played, so #/dev shows the round.
+ * session dealt already (exerciseOf: the same answer and numbers), up to TRIES times; then the try
+ * dealt longest ago (apartSeed). A small pool (a level to 5 has 7 to 9 stories) otherwise deals the
+ * same exercise, its answer on the same card, in most sessions. The seed recorded is the one played,
+ * so #/dev shows the round.
  */
 function apart(session, spec) {
   if (spec.apart) return;
   const game = S.byId.get(spec.game);
   const level = built(game, spec);
   const key = (seed) => exerciseOf(game.meta.id, game.makeRound(level, rng(seed)));
-  for (let n = 0; n < TRIES && session.seen.has(key(spec.seed)); n++) spec.seed = (spec.seed + 1) >>> 0;
-  session.seen.add(key(spec.seed));
+  spec.seed = apartSeed(key, spec.seed, session.seen);
+  deal(session, key(spec.seed));
   spec.apart = true;
 }
 
@@ -225,7 +230,7 @@ function nextRound(session) {
         if (now) child().games[game.meta.id] = sawDemo(now, level.id);
         persist();
       };
-      return demo(game, spec, () => mount(session, spec), session.done.length, seen);
+      return demo(game, spec, () => mount(session, spec), { done: session.done.length, seen, session });
     }
   }
   apart(session, spec);
@@ -243,7 +248,7 @@ function mount(session, spec) {
       // "Show me how" (2.6): a demo, then the same round from the start; the record goes on.
       if (!solved && !spec.record.help.includes('how')) spec.record.help.push('how');
       if (!solved && !(spec.demo ??= []).includes('how')) spec.demo.push('how');
-      demo(game, spec, solved ? r.next : () => mount(session, spec), session.done.length);
+      demo(game, spec, solved ? r.next : () => mount(session, spec), { done: session.done.length, session });
     } });
 }
 
@@ -406,13 +411,16 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
 /**
  * The demo (2.6): a round from the demo seed, cards locked, the help picture drawn in symbols look;
  * the game's steps, then the hand taps the answer and `seen` runs. Nothing else is written; the bar
- * keeps `done`.
+ * keeps `done`. In a session (none on #/dev) its exercise is one the session has not dealt, and
+ * counts as dealt (3.3, 3.8). Options: done, the rounds done for the bar; seen, the entry demo's mark; session.
  */
-function demo(game, spec, then, done = 0, seen = () => {}) {
+function demo(game, spec, then, { done = 0, seen = () => {}, session = null } = {}) {
   const level = built(game, spec);
-  // R9 (3.8): other numbers than the round it shows how to solve, and a plain round.
-  const seed = demoSeedFor((s) => game.makeRound(level, rng(s)), spec.seed);
+  const key = (round) => exerciseOf(game.meta.id, round);
+  // R9 (3.8): other numbers than the round it shows how to solve, a plain round, and not an exercise the session dealt.
+  const seed = demoSeedFor((s) => game.makeRound(level, rng(s)), spec.seed, (r) => session?.seen.get(key(r)));
   const round = dealt(game, level, seed);
+  deal(session, key(round));
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));

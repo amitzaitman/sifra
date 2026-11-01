@@ -6,6 +6,7 @@
 import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
 import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
+import { exerciseOf } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
   test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore, storeWith, stored,
@@ -911,32 +912,45 @@ for (const id of stories.levels.filter((l) => l.demo).map((l) => l.id)) {
   });
 }
 
-test('a session at a level of nine stories deals eight different exercises; two helped rounds keep it there (playtest 2026-10-31)', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await playAt(page, 'add-5');
-  const seen = [];
-  for (let n = 0; n < 20; n++) {
-    const screen = page.locator('main[data-screen]');
-    await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
-    const name = await screen.getAttribute('data-screen');
-    if (name === 'end') break;
-    if (name === 'round') {
+// A session at the first level of each skill, its demo first (3.3, 3.8; playtest 2026-10-31, hunt 2 #2, #11): the demo's
+// exercise counts as dealt, so no exercise comes twice before the level's run out (at least 8 of the demo and the 8
+// rounds, a level of 7 all 7), none twice in a row, and the demo's is none of rounds 2-4 (none at all on a level of 9).
+// Every round is helped, so the ladder would step down; these levels say down: false.
+for (const id of ['add-5', 'take-5', 'whole-5']) {
+  test(`a session at ${id} after its demo: no exercise twice until the level's run out, none twice in a row; two helped rounds keep it there`, async ({ page }) => {
+    const level = stories.levels[number(id) - 1];
+    const pool = new Set(Array.from({ length: 2000 }, (_, i) => exerciseOf('stories', stories.makeRound(level, rng(i + 1))))).size;
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await playAt(page, id, { demoSeen: [] });
+    /** the demo's exercise, then each round's, as the child sees them */
+    const seen = [];
+    for (let n = 0; n < 20; n++) {
+      const screen = page.locator('main[data-screen]');
+      await expect(screen).toHaveAttribute('data-screen', /^(round|demo|end)$/);
+      const name = await screen.getAttribute('data-screen');
+      if (name === 'end') break;
       await look(page);
       const { round, answerAt } = await roundOf(page);
-      seen.push(`${round.equation.left.join(' ')} = ${round.equation.right.join(' ')}`);
-      // One wrong card, then the answer: every round helped, so the ladder would step down; add-5 says down: false.
-      await card(page, wrongOf(round)[0]).click();
-      await unlocked(page);
-      await card(page, answerAt).click();
+      seen.push(exerciseOf('stories', round));
+      if (name === 'round') {
+        // One wrong card, then the answer: every round helped.
+        await card(page, wrongOf(round)[0]).click();
+        await unlocked(page);
+        await card(page, answerAt).click();
+      }
+      await expect(page.locator('[data-next]')).toBeVisible();
+      await look(page);
+      await page.locator('[data-next]').click();
     }
-    await expect(page.locator('[data-next]')).toBeVisible();
-    await look(page);
-    await page.locator('[data-next]').click();
-  }
-  expect(seen).toHaveLength(8);
-  expect(new Set(seen).size, seen.join(', ')).toBe(8);
-  expect((await stored(page)).child.attempts.map((a) => a.levelId)).toEqual(Array(8).fill('add-5'));
-});
+    const [demo, ...rounds] = seen;
+    expect(rounds, seen.join(', ')).toHaveLength(8);
+    expect(new Set(seen).size, seen.join(', ')).toBeGreaterThanOrEqual(Math.min(pool, 8));
+    expect(seen.some((k, i) => i > 0 && k === seen[i - 1]), seen.join(', ')).toBe(false);
+    expect(rounds.slice(1, 4), seen.join(', ')).not.toContain(demo);
+    if (pool >= 9) expect(rounds, seen.join(', ')).not.toContain(demo);
+    expect((await stored(page)).child.attempts.map((a) => a.levelId)).toEqual(Array(8).fill(id));
+  });
+}
 
 /** Plays the session on screen to its end screen, each round on a first try. */
 async function playToEnd(page) {

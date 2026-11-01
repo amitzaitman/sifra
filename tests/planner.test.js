@@ -6,7 +6,7 @@ import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import {
-  TRIES, addDays, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, plainDemo, prereqs,
+  TRIES, addDays, apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, plainDemo, prereqs,
   reviews, same, schedule, skillPassed, stuckTarget,
 } from '../shell/planner.js';
 import { demoSeed, rng } from '../shell/rng.js';
@@ -403,4 +403,55 @@ test('demoSeedFor: other numbers than the round, plain if any within TRIES, else
   // An answer card is compared as data, whatever its key order.
   assert.equal(same({ left: [5], right: [1, '+', 4] }, { right: [1, '+', 4], left: [5] }), true);
   assert.equal(same([1, 4], [4, 1]), false);
+});
+
+test('demoSeedFor: an exercise the session dealt is skipped; when every one was, a plain one dealt longest ago (architecture 3.3, 3.8, hunt 2 #2)', () => {
+  const seed = 7;
+  const first = demoSeed(seed);
+  const dealer = (real, rounds) => (s) => (s === seed ? real : rounds[s - first] ?? rounds.at(-1));
+  const real = exercise([3, '+', '?'], [5], 2);
+  const [a, b, c] = [exercise([1, '+', '?'], [5], 4), exercise([2, '+', '?'], [3], 1), exercise([4, '+', '?'], [7], 3)];
+  /** @type {(stamps: Map<Round, number>) => (round: Round) => number | undefined} when the session dealt a round */
+  const by = (stamps) => (round) => stamps.get(round);
+  // The first plain round the session has not dealt.
+  assert.equal(demoSeedFor(dealer(real, [a, b, c]), seed, by(new Map([[a, 1], [b, 2]]))), first + 2);
+  // Not dealt comes before plain: an edge round not dealt, over plain ones dealt.
+  const edge = exercise([5, '+', '?'], [5], 0);
+  assert.equal(demoSeedFor(dealer(real, [a, edge, b]), seed, by(new Map([[a, 1], [b, 2]]))), first + 1);
+  // Every one dealt: the one dealt longest ago, never the last; a plain one before an edge round dealt earlier.
+  assert.equal(demoSeedFor(dealer(real, [a, b, c]), seed, by(new Map([[a, 3], [b, 1], [c, 2]]))), first + 1);
+  assert.equal(demoSeedFor(dealer(real, [edge, b, c]), seed, by(new Map([[edge, 1], [b, 3], [c, 2]]))), first + 2);
+  // Without a session (#/dev), as before: the first plain round.
+  assert.equal(demoSeedFor(dealer(real, [a, b, c]), seed), first);
+});
+
+test('apartSeed: the first try not dealt; when every try was, the one dealt longest ago, so never the last (architecture 3.3, hunt 2 #11)', () => {
+  // Rounds of a pool of n exercises: the seed's exercise is seed mod n.
+  const pool = (n) => (/** @type {number} */ s) => `e${s % n}`;
+  const seen = new Map([['e0', 1], ['e1', 2]]);
+  assert.equal(apartSeed(pool(9), 0, seen), 2, 'the first not dealt');
+  assert.equal(apartSeed(pool(9), 4, seen), 4, 'the planned seed when its exercise is new');
+  // Every try dealt: the oldest of the tries, whatever the planned seed.
+  const all = new Map([['e0', 3], ['e1', 1], ['e2', 2]]);
+  assert.equal(pool(3)(apartSeed(pool(3), 0, all)), 'e1');
+  assert.equal(pool(3)(apartSeed(pool(3), 2, all)), 'e1');
+  // The tries stop at TRIES: an exercise past them is not reached.
+  let made = 0;
+  assert.equal(apartSeed((s) => { made += 1; return s < 1000 ? 'old' : 'new'; }, 0, new Map([['old', 1]])), 0);
+  assert.equal(made, TRIES);
+  // A session dealing a pool of 3 over 8 rounds never deals the last exercise again; a pool of 9 deals no repeat.
+  for (const n of [3, 7, 9]) {
+    for (let start = 0; start < 50; start++) {
+      const [dealt, keys] = [new Map(), []];
+      for (let i = 0; i < 8; i++) {
+        const s = apartSeed(pool(n), (start * 7919 + i * 104729) >>> 0, dealt);
+        keys.push(pool(n)(s));
+        dealt.set(pool(n)(s), i + 1);
+      }
+      assert.ok(keys.every((k, i) => i === 0 || k !== keys[i - 1]), `pool ${n}: ${keys.join(' ')}`);
+      assert.equal(new Set(keys).size, Math.min(n, 8), `pool ${n}: ${keys.join(' ')}`);
+      // Once the pool has run out, each repeat is the exercise dealt longest ago.
+      for (let i = n; i < 8; i++) assert.equal(keys[i], keys[i - n], `pool ${n}, round ${i + 1}: ${keys.join(' ')}`);
+    }
+  }
 });

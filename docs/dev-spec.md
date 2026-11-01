@@ -176,7 +176,10 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
 - **R9 [auto]:** for seeds 1-2000 at every level, the demo's round (`demoSeedFor` in
   shell/planner.js, architecture 3.8) has another answer than the round and, where both have an
   exercise row, another row (its sides in either order); on a level with `demo: true` it is also
-  plain (`plainDemo`): no number of the answer is 0 or a number of the row.
+  plain (`plainDemo`): no number of the answer is 0 or a number of the row. Over 500 sessions at
+  each demo level, dealt as the shell deals them (`apartSeed`, `demoSeedFor` with the session's
+  exercises), the demo's exercise is none of rounds 2-4, none of the rounds on a level of 9
+  exercises or more, and no exercise comes twice in a row (architecture 3.3, 4.2).
 - **R9 [browser]:** first entry to a level with `demo: true` runs the demo, and no attempt is
   logged for the demo round. Tapping the hand icon logs help. With the hand held half-way, a reload,
   or home and then the next step, runs the demo again; `demoSeen` gets the level once the hand has
