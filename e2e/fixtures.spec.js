@@ -368,6 +368,7 @@ test('"תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key
   await expect(page.locator('button[data-index]').first()).toBeFocused();
   await look(page);
   await card(page, first.answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
   await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
@@ -596,6 +597,8 @@ test('story: "show me how" during the event: the demo builds its own row and wai
   await step(page);
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '');
   expect(await rowNow(page)).toMatchObject({ busy: null, unbuilt: 0 });
+  // "הַבָּא" comes after the closing: the child looks once it is there (a tap within the window is dropped).
+  await expect(page.locator('[data-next]')).toBeVisible();
   await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', '1');
