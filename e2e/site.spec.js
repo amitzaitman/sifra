@@ -187,6 +187,37 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
 
+// An entry demo writes the store as it starts only what is new (3.9, hunt 2 #15): play() wrote the session count, so a
+// game with its ladder is written once before the hand taps the answer, a game played for the first time once more
+// for its new ladder; then once when the demo is seen. Each write of the key is logged with whether the demo was solved.
+for (const [what, games, start] of /** @type {[string, Record<string, any>, number][]} */ ([
+  ['a game with its ladder', { parts: ladderAt('split-5', { demoSeen: [] }) }, 1],
+  ['a game played for the first time', {}, 2],
+])) {
+  test(`an entry demo writes the store ${start === 1 ? 'once' : 'twice'} before the hand taps the answer, then once as it is seen: ${what} (3.9, hunt 2 #15)`, async ({ page }) => {
+    await seedStore(page, storeWith({ games }));
+    await page.addInitScript(() => {
+      const set = Storage.prototype.setItem;
+      /** @type {string[]} */
+      const writes = [];
+      Object.assign(globalThis, { writes });
+      Storage.prototype.setItem = function (key, value) {
+        if (this === localStorage && key === 'sifra') writes.push(document.querySelector('main[data-solved]') ? 'seen' : 'start');
+        return set.call(this, key, value);
+      };
+    });
+    await open(page, `${FIXTURE}#/`);
+    await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+    await look(page);
+    await page.locator('a.game-card[href="#/play/parts"]').click();
+    await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
+    await expect.poll(() => page.evaluate(() => /** @type {any} */ (globalThis).writes)).toEqual([...Array(start).fill('start'), 'seen']);
+    const { child } = await stored(page);
+    expect(child.sessions).toBe(1);
+    expect(child.games.parts.demoSeen).toEqual(['split-5']);
+  });
+}
+
 /**
  * The middle of a demo: the hand held on its way to the answer, and let go (the page's clock does not move CSS
  * motion, dev-spec R10).
@@ -596,6 +627,60 @@ test('a locked card does not sink under the finger; held until the lock ends, it
   await expect.poll(moved).toBe('matrix(1, 0, 0, 1, 0, 3)');
   await page.mouse.up();
   await expect(other).toHaveClass(/is-retired/);
+});
+
+// Off-target taps (pedagogy 5.7, hunt 2 #6): a press counts once it ends as a tap. A scroll (the browser takes the
+// touch: pointercancel) and a pinch (a second finger before the first is lifted) are no taps. On a phone held sideways
+// every round needs a scroll to reach its cards.
+test('an off-target tap counts once it ends as a tap: a scroll and a pinch on the picture are not taps (pedagogy 5.7, hunt 2 #6)', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await open(page, `${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  const paper = page.locator('[data-area="picture"]');
+  await paper.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true, pointerType: 'touch' };
+    const fire = (/** @type {string} */ type, /** @type {number} */ id, /** @type {boolean} */ isPrimary) =>
+      el.dispatchEvent(new PointerEvent(type, { ...at, pointerId: id, isPrimary }));
+    // A scroll: the browser takes the touch and cancels the pointer.
+    fire('pointerdown', 11, true);
+    fire('pointercancel', 11, true);
+    // A pinch: a second finger comes down before the first is lifted.
+    fire('pointerdown', 12, true);
+    fire('pointerdown', 13, false);
+    fire('pointerup', 13, false);
+    fire('pointerup', 12, true);
+  });
+  // One real tap on the paper.
+  const box = await paper.boundingBox();
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await look(page);
+  await page.locator(`button[data-index="${(await roundOf(page)).answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  expect((await stored(page)).child.attempts.at(-1)).toMatchObject({ outcome: 'first', taps: { picture: 1, equation: 0, other: 0 } });
+});
+
+test('a real swipe up the picture scrolls the page and logs no off-target tap (pedagogy 5.7, hunt 2 #6)', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'the touch drag goes through Chromium\'s DevTools protocol');
+  await page.setViewportSize({ width: 568, height: 320 });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await open(page, `${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  const box = await page.locator('[data-area="picture"]').boundingBox();
+  const [x, y] = [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  await touch('touchStart', [{ x, y }]);
+  for (let dy = 10; dy <= 120; dy += 10) await touch('touchMove', [{ x, y: y - dy }]);
+  await touch('touchEnd', []);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  await look(page);
+  await page.locator(`button[data-index="${(await roundOf(page)).answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  expect((await stored(page)).child.attempts.at(-1)).toMatchObject({ outcome: 'first', taps: { picture: 0, equation: 0, other: 0 } });
 });
 
 test('a wide exercise never widens the page\'s column: the gutters stay and the row shrinks or wraps (design 5, 6.4, bug hunt #9)', async ({ page }) => {

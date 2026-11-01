@@ -214,6 +214,8 @@ test('a stuck return into another game: the rest of the session plays the target
   expect(child.games.scale.level).toBe('right');
   expect(child.games.parts).toMatchObject({ level: 'split-5', hold: 'split-5', demoDue: 'split-5' });
   expect(child.attempts.at(-1)).toMatchObject({ game: 'scale', levelId: 'right', levelBefore: 2, levelAfter: 2 });
+  // The address names the game the session now plays (3.7, hunt 2 #12).
+  expect(new URL(page.url()).hash).toBe('#/play/parts');
   await look(page);
   await page.locator('[data-next]').click();
   // The target's demo runs once more, then its rounds fill the session.
@@ -225,6 +227,61 @@ test('a stuck return into another game: the rest of the session plays the target
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-game', 'parts');
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-kind', 'new');
+});
+
+/**
+ * Opens a session at scale's 'right' that is stuck on its first new round (dev-spec A.2: the tenth round, the second
+ * session, no first tries, eq.sign.same-as mastered, so the return goes to num.parts.split in parts), plays its review
+ * rounds, and stops at the stuck round, looked at.
+ * @param {import('@playwright/test').Page} page
+ */
+async function stuckInScale(page) {
+  const at = { right: { n: 9, first: 0, sessions: 1, lastSession: 1 } };
+  const sameAs = skillState({ last: '2026-10-05', passedDay: '2026-10-01', box: 3, due: '2026-12-01', reviewDays: ['2026-10-02', '2026-10-05'] });
+  await seedStore(page, storeWith({ sessions: 1, games: { scale: ladderAt('right', { passed: ['same'], at }) }, skills: { 'eq.sign.same-as': sameAs } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}?seed=1#/play/scale`);
+  const main = page.locator('main[data-screen="round"], main[data-screen="demo"]');
+  await expect(main).toBeVisible();
+  while ((await main.getAttribute('data-kind')) === 'review') {
+    await look(page);
+    await card(page, (await roundOf(page)).answerAt).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+    await expect(page.locator('main[data-screen="round"]')).not.toHaveAttribute('data-solved');
+  }
+  await expect(main).toHaveAttribute('data-level', '2');
+  await look(page);
+}
+
+test('after a stuck return into another game a reload opens the target: the address names it (3.1, 3.7, hunt 2 #12)', async ({ page }) => {
+  await stuckInScale(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  await expect(page).toHaveURL(/\?seed=1#\/play\/parts$/);
+  await page.reload();
+  // The target's demo, once more, at its level; scale keeps its own.
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-game', 'parts');
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '1');
+  expect((await stored(page)).child.games.scale.level).toBe('right');
+});
+
+test('home tapped during a stuck round\'s closing stays home: the address is the target\'s only while it names the session\'s game (3.7, hunt 2 #12)', async ({ page }) => {
+  await stuckInScale(page);
+  // The answer, and home at once, before the closing has run: the solved round is applied as home opens.
+  await page.evaluate((i) => {
+    /** @type {HTMLElement} */ (document.querySelector(`button[data-index="${i}"]`)).click();
+    /** @type {HTMLElement} */ (document.querySelector('[data-home]')).click();
+  }, (await roundOf(page)).answerAt);
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('#/');
+  const { child } = await stored(page);
+  expect(child.events.at(-1)).toMatchObject({ type: 'stuck', game: 'scale', to: { game: 'parts', level: 1 } });
+  expect(child.games.parts).toMatchObject({ level: 'split-5', hold: 'split-5' });
+  await page.clock.runFor(1000);
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('#/');
 });
 
 test('two tabs: each reads the store again before it writes, so neither undoes the other\'s progress (3.9, bug hunt #8)', async ({ page, context }) => {

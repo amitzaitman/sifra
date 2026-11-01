@@ -211,6 +211,7 @@ function nextRound(session) {
   if (spec.index < 0) {
     // A new round takes the ladder's level now, in the session's game (it moves after a stuck return).
     const { game } = session;
+    const fresh = !child().games[game.meta.id];
     const ladder = (child().games[game.meta.id] ??= startLadder(game.levels));
     const index = indexOf(game.levels, ladder.level);
     const level = game.levels[index];
@@ -221,7 +222,8 @@ function nextRound(session) {
     }
     if (needsDemo(ladder, level)) {
       spec.demo = ['auto'];
-      persist();   // the session count
+      // A game's first ladder is written as its demo starts; play() wrote the session count (3.9).
+      if (fresh) persist();
       apart(session, spec);
       // Seen once the hand has tapped the answer (3.4): a reload or leaving mid-demo brings it back.
       const seen = () => {
@@ -277,6 +279,9 @@ function finish(session, spec, level, round, outcome) {
       c.games[tid] = moveTo(c.games[tid] ?? startLadder(to.game.levels), target.id, true);
       const at = { game: tid, level: to.index + 1, skill: target.skill };
       event({ t, day, type: 'stuck', game: id, level: spec.index + 1, skill: level.skill, to: at, missing: to.missing });
+      // The address names the game the session now plays, so a reload or a restored tab opens it (3.7); only while it
+      // names this session's game: home tapped during the closing has left it (route reads the hash after sync).
+      if (to.game !== session.game && location.hash === `#/play/${session.game.meta.id}`) history.replaceState(null, '', `#/play/${tid}`);
       session.game = to.game;
     }
     // After the stuck return, so levelAfter is where the game's ladder now stands.
@@ -351,12 +356,22 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   if (!shown) host.append(control('picture', T.picture, () => picture(true), { 'data-show-picture': true }));
   if (mode === 'demo') picture(false);   // a demo draws the help picture from the start (2.6)
   label();
-  // Off-target taps: not a button, a link or a [data-target]; counted by area until the solve (pedagogy 5.7).
+  // Off-target taps (pedagogy 5.7): a primary pointer down and up on no button, link or [data-target], with no
+  // pointercancel and no second finger between, so a scroll or a pinch is no tap; counted by area until the solve.
+  /** @type {{ id: number, area: 'picture' | 'equation' | 'other' } | null} */
+  let press = null;
   main.addEventListener('pointerdown', (e) => {
-    if (solved) return;
+    press = null;   // a second finger (a pinch) drops the first one's press
+    if (solved || !e.isPrimary) return;
     const t = e.target instanceof Element ? e.target : null;
-    const area = t?.closest('[data-area]')?.getAttribute('data-area');
-    if (t && !t.closest('button, a, [data-target]')) rec.taps[area === 'picture' || area === 'equation' ? area : 'other'] += 1;
+    if (!t || t.closest('button, a, [data-target]')) return;
+    const area = t.closest('[data-area]')?.getAttribute('data-area');
+    press = { id: e.pointerId, area: area === 'picture' || area === 'equation' ? area : 'other' };
+  }, { signal });
+  main.addEventListener('pointercancel', () => { press = null; }, { signal });
+  main.addEventListener('pointerup', (e) => {
+    if (press?.id === e.pointerId && !solved) rec.taps[press.area] += 1;
+    press = null;
   }, { signal });
   const elapsed = () => performance.now() - rec.t0;
   const tap = async (i) => {

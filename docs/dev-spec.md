@@ -186,7 +186,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   tapped the answer. The hand on `#/dev`, at a seed whose raw demo seed deals the round's own
   answer (a fixture, ten-frame, balance, stories), shows the round `demoSeedFor` picks: another
   answer, plain. On every frame of a demo no `[data-tour]` digit is under the hand's box (it rests
-  before the hint and the tour). At every level at 568×320 the hand is on screen at each tap and
+  before the hint and the tour), and at 320×568 and 375×548 no visible resting hand is on a card
+  while a hint or a tour is drawn (it is hidden at rest). At every level at 568×320 the hand is on screen at each tap and
   "הַבָּא" is all on screen at the end; turned mid-demo the hand stays below the bar, turned on its way
   it taps only once it has stopped on the answer card, and turned after it its tip is on "הַבָּא". In the balance the hint and the tour are drawn before the hand taps the
   answer (architecture 2.6, 4.6, 4.7).
