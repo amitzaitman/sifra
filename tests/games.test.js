@@ -35,6 +35,15 @@ const REQUIRED = { id: 'string', skill: 'string', demo: 'boolean', options: 'num
 
 const skillOf = (id) => SKILLS.find((s) => s.id === id);
 const show = (x) => JSON.stringify(x);
+/**
+ * The models that draw the classroom tool itself, a picture of real objects at a skill's first level (decisions.md
+ * 2026-10-31, "ציור של חפצים אמיתיים"): counters in a frame (`frame`) or in rows (`set`), straws and bundles
+ * (`bundles`), the balance's cubes (`balance`, and `cards`, the judging round's pans).
+ */
+const TOOLS = ['frame', 'set', 'bundles', 'balance', 'cards'];
+/** @type {(level: Level) => boolean} a level that draws real objects (decisions.md "תפקיד האתר") */
+const real = (level) => level.look === 'objects' || TOOLS.includes(level.model);
+
 /** R4's written exception (rules.md, owner decision 2026-10-14): the skills whose doubles make given.part the answer. */
 const DOUBLES = ['num.parts.split', 'num.parts.make-ten'];
 
@@ -400,6 +409,15 @@ export function checkGame(game) {
         if (!levels.slice(0, i).some((l) => l[key] === value)) fail(`${where}: mixed ${key} ${value} has no earlier level of its own (R3)`);
       }
     }
+  });
+  // The site's role (decisions.md "תפקיד האתר"): a skill's first level starts at real objects, look 'objects' or a
+  // drawing of the classroom tool itself (TOOLS; row "ציור של חפצים אמיתיים"), or is a mixed level whose structures
+  // (or asks) each began so at an earlier level of the game, and starts in their shared look (row "רמה מעורבת בנקודות").
+  levels.forEach((level, i) => {
+    if (levels.findIndex((l) => l.skill === level.skill) !== i || real(level)) return;
+    const key = ['structure', 'ask'].find((k) => Array.isArray(level[k]));
+    if (key && level[key].every((v) => levels.slice(0, i).some((l) => l[key] === v && real(l)))) return;
+    fail(`level ${i + 1} (${level.id}): the first level of ${level.skill} draws ${level.model} in ${level.look}: real objects first (look objects, or a classroom tool: ${TOOLS.join(', ')}), or a mixed level whose ${key ?? 'structure'}s each began so earlier`);
   });
   // R3: the model never goes back in the skill's order; within a model and range, nor does the look.
   for (const skill of new Set(levels.map((l) => l.skill))) {
@@ -808,6 +826,17 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }, parts.levels[1]] }).join(), /model frame comes back after tree/);
   assert.match(checkGame({ ...parts, levels: [parts.levels[1], { ...parts.levels[1], id: 'x', look: 'objects' }] }).join(), /look objects comes back/);
   assert.match(checkGame({ ...parts, meta: { ...parts.meta, grades: [1] } }).join(), /meta has no grade/);
+  // Real objects first (decisions.md "תפקיד האתר", 2026-11-01 "רמה מעורבת בנקודות"): a skill's first level in dots or
+  // symbols on a model that is no classroom tool fails, and a mixed level passes only after each structure began so.
+  const stories = /** @type {Game} */ (GAMES.find((g) => g.meta.id === 'stories'));
+  const mutated = (id, change) => checkGame({ ...stories, levels: stories.levels.map((l) => (l.id === id ? { ...l, ...change } : l)) }).join('\n');
+  assert.deepEqual(checkGame(stories), []);
+  assert.match(mutated('add-5', { look: 'dots' }), /level 1 \(add-5\): the first level of addsub\.meaning\.change-add draws scene in dots: real objects first/);
+  assert.match(mutated('whole-5', { look: 'symbols' }), /level 6 \(whole-5\): the first level of addsub\.meaning\.part-whole draws scene in symbols/);
+  assert.match(mutated('take-5', { look: 'dots' }), /level 8 \(mixed-10\): the first level of addsub\.meaning\.mixed draws scene in dots/);
+  assert.doesNotMatch(mutated('mixed-10', { structure: ['change-add', 'part-whole'] }), /real objects first/, 'the basket began in objects at level 6');
+  assert.doesNotMatch(mutated('add-5', { look: 'dots', model: 'frame' }), /real objects first/);
+  assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }] }).join(), /level 1 \(split-5\): the first level of num\.parts\.split draws tree in dots/);
   // down: false (3.4): make-ten builds on split, so 'ten' steps down to split-sym; a skill that does not needs the field.
   assert.doesNotMatch(checkGame(parts).join('\n'), /down: false/);
   const teen = { ...parts.levels[3], id: 'teen', skill: 'pv.teens.ten-and', model: 'bundles', min: 10, max: 20 };

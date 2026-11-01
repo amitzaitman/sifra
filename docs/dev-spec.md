@@ -87,7 +87,7 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   or the picture groups' counts when `equation` is `null`. Levels with no symbol yet (`muldiv.share.equal` levels 1–2, [§4.10](depth/muldiv.md))
   return `equation: null`: R2 checks the structure and unknown only, and R1 uses the no-equation
   branch.
-- **R3 [auto]:** each skill's allowed model order (the "מודל" line of each skill in its strand file under `depth/`; the line is defined in [§4.1](depth/README.md)) is encoded as data.
+- **R3 [auto]:** each skill's allowed model order (the "מודל" line of each skill in its strand file under `depth/`; the line is defined in [§4.1](depth/README.md)) is encoded as data. A skill's first level in a game is in `look: objects` or on a classroom tool's model, or is a mixed level whose structures each began so earlier ([§1.1](pedagogy.md); `decisions.md`, 2026-11-01, "רמה מעורבת בנקודות").
   Along a game's level list for one skill, the model index never decreases; within the same model
   and `max`, the look index (objects < dots < symbols) never decreases. `precision` (clock) counts
   as range, like `max`. A level with `helpEstimate: true` has skill `addsub.multi.two-digit` or

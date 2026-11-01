@@ -11,7 +11,8 @@ export const meta = { id: 'story', title: 'סִפּוּר', version: 1, css: new
 /** @type {Level[]} */
 export const levels = [
   // exclude (architecture 4.2): the known part is 1 or more and never the whole. whole = part + ? in a third of the rounds.
-  { id: 'event', skill: 'addsub.meaning.part-whole', structure: 'part-whole', unknown: 'part', model: 'scene', look: 'dots', terms: false,
+  // In objects: the first level of a skill on a model that is no classroom tool (decisions.md "תפקיד האתר").
+  { id: 'event', skill: 'addsub.meaning.part-whole', structure: 'part-whole', unknown: 'part', model: 'scene', look: 'objects', terms: false,
     demo: true, max: 5, options: 4, forms: [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }], exclude: [0, 5] },
 ];
 
