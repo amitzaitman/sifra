@@ -118,7 +118,11 @@ export function render(host, round, { signal, mode, solved }, label, displays) {
   const unknown = () => host.querySelector('.fx-unknown');
   let closed = false;
   return {
-    label,
+    // Solved, the label names the unknown's count, as a game's does (2.4; the contract, hunt 2 #13).
+    get label() {
+      const n = groups?.find((g) => g.role === 'unknown')?.count;
+      return (closed || (mode === 'thumb' && solved)) && n !== undefined ? `${label}: ${n}` : label;
+    },
     // After the solve (symbols look): the solved picture, without the cover.
     picture: () => drawGroups(host, groups, closed),
     async miss({ value, display, step }) {

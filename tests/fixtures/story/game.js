@@ -62,6 +62,7 @@ export function render(host, round, ctx) {
   })();
   return {
     ...view,
+    get label() { return view.label; },
     async miss(m) {
       finish(() => ctx.setEquation(round.equation));
       return view.miss(m);
