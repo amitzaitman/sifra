@@ -393,6 +393,23 @@ test('level 8 (10 + 4 = ?): the 10 is given.part\'s card, never a slip, and no w
   assert.ok(tens > 1000, `${tens} given.part cards`);
 });
 
+test('given.part is the catalogue\'s one formula on every round, bridging ten too (errors 4.2, R4)', () => {
+  // Read from the exercise alone: in take the change; else the known part on the unknown's side of =,
+  // or the first number of the exercise. A pair round has no given part.
+  const catalogue = (eq) => {
+    const all = [...eq.left, '=', ...eq.right];
+    if (all.filter((t) => t === '?').length > 1) return null;
+    if (all.includes('−')) return all[all.indexOf('−') + 1];
+    const side = eq.left.includes('?') ? eq.left : eq.right;
+    return side.find((t) => typeof t === 'number') ?? all.find((t) => typeof t === 'number');
+  };
+  for (const lvl of game.levels) {
+    for (const r of rounds(lvl.id)) {
+      assert.deepEqual(game.rules['given.part'](r), catalogue(r.equation), `${lvl.id} ${JSON.stringify(r.equation)}`);
+    }
+  }
+});
+
 test('bundles with the ones unknown: the tag sits over the bundle and the cover, above the digits; the cover holds every stick', () => {
   for (const ones of [1, 4, 9]) {
     const B = layoutBundles({ ones, tag: true });

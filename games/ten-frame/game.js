@@ -122,9 +122,9 @@ const reading = (r) => ({ whole: count(r, 'whole'), part: count(r, 'part'), answ
 
 export const rules = {
   'given.whole': (r) => (pair(r) ? onPair(r, 'given.whole') : r.unknown === 'part' ? count(r, 'whole') : null),
-  // The catalogue's formula: a missing part's known part, or the first part of a whole (level 8's
-  // bundle, 10). A pair round has no given part.
-  'given.part': (r) => (!pair(r) && (r.unknown === 'part' || r.unknown === 'whole') ? count(r, 'part') : null),
+  // The catalogue's formula on every round: a missing part's known part, else the first part of the
+  // exercise (level 8's bundle, 10; bridging's a, though its skill lists no given.part). A pair round has none.
+  'given.part': (r) => (pair(r) ? null : count(r, 'part')),
   'op.other': (r) => {
     if (pair(r)) return onPair(r, 'op.other');
     if (r.unknown === 'part') return ON_PART['op.other'](reading(r));
