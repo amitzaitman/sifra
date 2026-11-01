@@ -1392,7 +1392,10 @@ boundary" above. The bug hunt's owner questions were decided the same day the sa
 cards (#1, with #16), the balance on a phone held sideways (#4) and pictures of real objects at level 1 (#15), each a
 row above. The card dots at ten-frame level 8 (S3) stay by the owner's decision of 2026-10-19, and decisions.md records
 the observation as a note for the owner, not a change; level 10's counters by keyboard (S6) wait for a later
-accessibility pass (decisions.md).
+accessibility pass (decisions.md). The second bug hunt's owner choices were decided on 2026-11-01 by the same
+delegation, each a row above: the slip in `? = a + b` (#4), the stories' level 6 of 7 exercises (#11), the stories'
+doubles (#8, "Doubles in stories") and stories level 8 in dots (#16, "A mixed level in dots"); the stories' solved
+labels (#13) join the owner's nikud review, which already gates the stories.
 
 Before it, the last question, the part's second shade outside the balance, was answered on 2026-10-15 ("רק במעבר
 העשר", the row "The part's second shade on the ten-frame" above; pedagogy §8.1 has it in Hebrew).
