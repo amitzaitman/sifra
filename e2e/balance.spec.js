@@ -1465,6 +1465,41 @@ test('the jumps on a missing part: 1 on the known part\'s last cube, then over t
 // Chromium (Pixel 7), the digits' box is now 12.0px wide and 0px off centre in those rings (16.0px in the 22px ring of
 // 360px, 19.0px in the 25.1px ring of 390px, where the digits already fitted). The test asks for the hole, which leaves
 // 1.7px or more, and 1px of centring, which leaves 1px.
+test('the jumps\' marks on small cubes: at least 15px, their digits inside the ring, the arcs over them (design 7.1; hunt 2 #14)', async ({ page, browserName }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // ? + 19 = 20 (level 6, seed 1): the rest rows hold the dome's, 6 rows, so a cube is 12.7px at 320x568; the marks
+  // keep 15px, a cube and most of the gap, so the 14px digits stay off their ring.
+  for (const [width, height] of [[320, 568], [568, 320], [844, 390]]) {
+    await page.setViewportSize({ width, height });
+    const { round } = await devAt(page, 'missing-symbols-20', 1);
+    const where = `${width}x${height} ${round.equation.left.join(' ')} = ${round.equation.right.join(' ')}`;
+    const i = round.choices.findIndex((c) => c.rule === 'count.start-included');
+    expect(i, where).toBeGreaterThanOrEqual(0);
+    await card(page, i).click();
+    await unlocked(page);
+    await inView(page);
+    const marks = await page.locator('[data-display="jumps"] .bl-mark').evaluateAll((els) => els.map((m) => {
+      const b = m.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(m);
+      const ink = range.getBoundingClientRect();
+      const cube = document.querySelector('.bl-scene > .bl-pan > .bl-stack > .bl-cube').getBoundingClientRect().width;
+      return { text: m.textContent, width: b.width, height: b.height, ink: ink.width, centre: Math.abs(ink.left + ink.right - b.left - b.right) / 2, cube };
+    }));
+    expect(marks.length, where).toBe(round.choices[i].value);
+    expect(marks[0].cube, `${where}: a small cube`).toBeLessThan(14);
+    for (const m of marks) {
+      expect(m.width, `${where} mark ${m.text}`).toBeGreaterThanOrEqual(14.9);
+      expect(Math.abs(m.height - m.width), `${where} mark ${m.text} round`).toBeLessThan(0.1);
+      expect(m.ink, `${where} mark ${m.text}: its digits inside its 2px ring`).toBeLessThanOrEqual(m.width - 4);
+      expect(m.centre, `${where} mark ${m.text}: centred`).toBeLessThan(0.75);
+    }
+    expect(await page.evaluate(arcProblems), where).toEqual([]);
+    expect(await page.evaluate(ringOverMarks), where).toEqual([]);
+    expect(await page.evaluate(ringOverlaps, ringInset(browserName)), where).toEqual([]);
+  }
+});
+
 test('the jumps: the digits of a two-digit mark are condensed inside its ring and centred; a one-digit mark is left as it is (design 4, 7.1)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const [width, height] of [[320, 568], [360, 568], [390, 844]]) {

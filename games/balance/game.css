@@ -5,6 +5,12 @@
    3px when the beam tilts. */
 @property --rows { syntax: '<number>'; inherits: true; initial-value: 2; }
 @property --len { syntax: '<number>'; inherits: true; initial-value: 10; }
+/* The cube and the cell are lengths, computed once on the scene from the stage's size and --rows, and inherited:
+   unregistered, every element under it solved their min() of container units again. The rows and the length go
+   to a display's size at once, with no transition: moved frame by frame, the whole scene was laid out again on
+   each frame, 9-16 frames over 34ms per display at 4x CPU, and slow phones stuttered (hunt 2 #10). */
+@property --cube { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --cell { syntax: '<length>'; inherits: true; initial-value: 0px; }
 
 [data-game="balance"] .bl-stage { position: absolute; inset: 0; padding: clamp(8px, 3vw, 16px); container-type: size; }
 /* A phone on its side: the shell's 200px panel left 11px cubes at 4 rows and 5px at 8, under the tour's 14px
@@ -23,7 +29,7 @@
   --u: calc(var(--cube) + 3px); --scene-w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 34px);
   --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 17px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 11px);
   --scene-h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 11px + 3px * var(--rows));
-  position: absolute; left: calc(50% - var(--scene-w) / 2); top: calc(50% - var(--scene-h) / 2); width: var(--scene-w); height: var(--scene-h); transition: --rows var(--t-move) var(--ease);
+  position: absolute; left: calc(50% - var(--scene-w) / 2); top: calc(50% - var(--scene-h) / 2); width: var(--scene-w); height: var(--scene-h);
 }
 /* A reset goes at once: this wins over every element's own transition (a cube's colour fade too). */
 [data-game="balance"] .bl-scene.is-instant, [data-game="balance"] .bl-scene.is-instant * { transition: none !important; }
@@ -124,10 +130,17 @@
 [data-game="balance"] .bl-stack > .bl-zero { width: calc(var(--cube) + 5px); height: calc(var(--cube) + 5px); padding-top: .08em; background: var(--surface); }
 [data-game="balance"] .bl-zero.is-tour { border-color: var(--role-unknown); color: var(--role-unknown); box-shadow: 0 0 0 3px var(--halo); }
 [data-game="balance"] .bl-mark { background: var(--surface); box-shadow: inset 0 0 0 2px var(--role-added-edge); animation: balance-digit 150ms var(--ease) backwards; }
+/* A mark on a small cube (6 rows or more at 320px: the rest rows keep the dome's, though the jumps lift it) is at
+   least 15px, its cube and most of the 3px gap round it, centred on its place, so its 14px digits stay inside its
+   2px ring; above the rings next to it (design 7.1; hunt 2 #14). */
+[data-game="balance"] .bl-stack > .bl-mark {
+  --m: max(var(--cube), min(var(--u), 15px)); z-index: 1; width: var(--m); height: var(--m);
+  margin: 0 0 calc((var(--cube) - var(--m)) / 2) calc((var(--cube) - var(--m)) / 2);
+}
 /* A jump (design 7.1): from the top of one mark to the top of the next, drawn over every mark, and
    low enough to stay under the digits of a row above; a 1px --halo where it crosses a mark there. */
 [data-game="balance"] .bl-arc {
-  z-index: 1; left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube)); width: var(--u); height: calc(var(--cube) * .35);
+  z-index: 2; left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube)); width: var(--u); height: calc(var(--cube) * .35);
   border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
   filter: drop-shadow(1px 0 0 var(--halo)) drop-shadow(-1px 0 0 var(--halo)) drop-shadow(0 1px 0 var(--halo)) drop-shadow(0 -1px 0 var(--halo));
   animation: balance-appear var(--t-move) var(--ease) backwards;
@@ -171,9 +184,8 @@
   --len: 10; --rows: 1; --cell: min(48px, calc((100cqw - 8px) / var(--len)), calc((100cqh - 8px) / (var(--rows) + 1.6)));
   --dot: calc(var(--cell) * .76); --cube: var(--dot); --inset: calc((var(--cell) - var(--dot)) / 2);
   position: absolute; left: calc(50% - var(--cell) * var(--len) / 2); top: calc(50% - var(--cell) * (var(--rows) + 1.6) / 2);
-  width: calc(var(--cell) * var(--len)); height: calc(var(--cell) * (var(--rows) + 1.6)); transition: --rows var(--t-move) var(--ease), --len var(--t-move) var(--ease);
+  width: calc(var(--cell) * var(--len)); height: calc(var(--cell) * (var(--rows) + 1.6));
 }
-[data-game="balance"] .bl-set.is-instant { transition: none; }
 [data-game="balance"] .bl-set .bl-dot, [data-game="balance"] .bl-set .bl-lid, [data-game="balance"] .bl-set .bl-ring { position: absolute; left: calc(var(--cell) * var(--x) + var(--inset)); top: calc(var(--cell) * var(--y) + var(--inset)); bottom: auto; }
 [data-game="balance"] .bl-set .bl-dot { width: var(--dot); height: var(--dot); border-radius: 50%; }
 [data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }

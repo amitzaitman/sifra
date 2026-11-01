@@ -124,6 +124,18 @@ test('the last tour number grows 1.3 in the CSS: font-size 1.3 times on a cube, 
   assert.match(css, /\.bl-digit\.is-over > \.bl-fit \{ transform: scale\(var\(--sx, 1\), 1\.3\); \}/);
 });
 
+test('a display\'s rows come at once and cost one style pass: --cube and --cell are registered lengths, and nothing transitions --rows or --len (hunt 2 #10)', () => {
+  // Moved frame by frame, every element under the scene solved the cube's min() of container units again on each
+  // frame: 9-16 frames over 34ms per display at 4x CPU on a Pixel 7 (levels 7, 8, 9 and 11, seed 3).
+  const css = readFileSync(new URL('../games/balance/game.css', import.meta.url), 'utf8');
+  for (const name of ['cube', 'cell']) {
+    assert.match(css, new RegExp(`@property --${name} \\{ syntax: '<length>'; inherits: true; initial-value: 0px; \\}`), `--${name} registered`);
+  }
+  for (const rule of css.match(/[^{}]+\{[^}]*\}/g) ?? []) {
+    assert.doesNotMatch(rule, /transition[^;]*--(rows|len)\b/, `a transition of the rows: ${rule.trim().slice(0, 80)}`);
+  }
+});
+
 test('ghosts fill the unknown\'s places, then go on after the pan\'s last place', () => {
   // ? + 4 on a pan: the four cubes from the bottom, then the unknown's 3 places.
   const layout = layoutPan([{ role: 'unknown', count: 3, cover: true }, { role: 'part', count: 4 }]);
