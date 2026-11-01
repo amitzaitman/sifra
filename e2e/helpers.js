@@ -214,7 +214,8 @@ export async function expectCalm(page) {
 
 /**
  * Watches the demo's hand (R9, architecture 2.6) from now until a demo screen is solved: on every frame, each tour
- * digit ([data-tour]) under the hand's box; at each tap, the hand's box, the screen's height, whether a hint and
+ * digit ([data-tour]) under the hand's box, and each card under the hand while it is at rest (no aim), visible, and a
+ * hint or a tour is drawn (`onCards`); at each tap, the hand's box, the screen's height, whether a hint and
  * a tour were drawn by then, whether the hand was still on its way (a transition running on it), and the index of
  * the answer card under its tip (null for none). handSeen reads it. Call it once the page is open, before the demo
  * starts; for a demo that runs on load (a demo level), with `fromStart` before the page opens: it is then watched
@@ -228,17 +229,23 @@ export async function watchHand(page, { fromStart = false } = {}) {
 
 /** watchHand's watch, run in the page (see watchHand). */
 function handWatch() {
-  /** @type {{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
-  const seen = { covered: [], taps: [] };
+  /** @type {{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
+  const seen = { covered: [], onCards: [], taps: [] };
   Object.assign(globalThis, { handSeen: seen });
   const demo = () => document.querySelector('main[data-screen="demo"]');
   /** @type {(a: DOMRect, b: DOMRect) => boolean} */
   const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
   const frame = () => {
-    const hand = demo()?.querySelector('[data-hand]')?.getBoundingClientRect();
+    const el = demo()?.querySelector('[data-hand]');
+    const hand = el?.getBoundingClientRect();
     for (const digit of hand ? document.querySelectorAll('[data-tour]') : []) {
       const box = digit.getBoundingClientRect();
       if (box.width && box.height && over(hand, box)) seen.covered.push(digit.getAttribute('data-tour') ?? '');
+    }
+    // At rest (no aim) the hand is hidden or off the cards while the hint or the tour is drawn (hunt 2 #1).
+    const resting = el instanceof HTMLElement && !el.style.transform && Number(getComputedStyle(el).opacity) >= 0.05;
+    for (const card of resting && document.querySelector('[data-hint], [data-tour]') ? document.querySelectorAll('[data-choices] [data-index]') : []) {
+      if (over(hand, card.getBoundingClientRect())) seen.onCards.push(card.getAttribute('data-index') ?? '');
     }
     if (!demo()?.hasAttribute('data-solved')) requestAnimationFrame(frame);
   };
@@ -263,7 +270,7 @@ function handWatch() {
 /**
  * What watchHand saw.
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<{ covered: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }>}
+ * @returns {Promise<{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }>}
  */
 export const handSeen = (page) => page.evaluate(() => /** @type {any} */ (globalThis).handSeen);
 

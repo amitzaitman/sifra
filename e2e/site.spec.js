@@ -274,6 +274,34 @@ for (const game of Object.values(registry)) {
   }
 }
 
+// The hand at rest on a short phone (2.6, hunt 2 #1): its place at the foot of the round lies on the cards at 320×568
+// and 375×548, so at rest it is hidden: while the hint or the tour is drawn, no visible hand rests on a card. A
+// judging round (balance 10) never moves the hand before its tap. The real first screen too: the entry demo.
+for (const size of [{ width: 320, height: 568 }, { width: 375, height: 548 }]) {
+  for (const route of ['ten-frame/1/2', 'ten-frame/4/1', 'balance/2/1', 'balance/10/1', 'stories/1/1']) {
+    test(`R9 at ${size.width}×${size.height}: the hand at rest is on no card while the hint or the tour is drawn: ${route}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await open(page, `${INDEX}#/dev/${route}`);
+      await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+      await look(page);
+      await watchHand(page);
+      await page.locator('[data-how]').click();
+      await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 20000 });
+      expect((await handSeen(page)).onCards, 'cards under the resting hand').toEqual([]);
+    });
+  }
+}
+
+test('R9 at 320×568: the first screen\'s entry demo rests the hand on no card while the tour counts (2.6, hunt 2 #1)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await watchHand(page, { fromStart: true });
+  await open(page, `${INDEX}#/next`);
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 20000 });
+  const { onCards, taps } = await handSeen(page);
+  expect(taps.some((t) => t.tour), 'the tour was drawn before a tap').toBe(true);
+  expect(onCards, 'cards under the resting hand').toEqual([]);
+});
+
 /** Turns the phone: a new viewport size, once the page has had its resize event. */
 async function turn(page, size) {
   const resized = page.evaluate(() => new Promise((done) => addEventListener('resize', () => done(null), { once: true })));

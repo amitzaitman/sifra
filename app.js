@@ -416,7 +416,7 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
   const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
-  /** @type {Element | null} what the hand points at; null at its place at the foot of the round (app.css .hand) */
+  /** @type {Element | null} what the hand points at; null at rest: hidden, at its place at the foot of the round (app.css .hand) */
   let target = null;
   /** How many times aim() has moved the hand: a tap knows a turn aimed it again on its way. */
   let aimed = 0;
@@ -443,13 +443,14 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
     if (bottom > innerHeight) scrollBy(0, Math.ceil(Math.min(bottom - innerHeight, top)));
     else if (top < 0) scrollBy(0, Math.floor(top));
   };
-  /** @type {Hand} the hand taps an element, or steps back off the picture (slower motion is allowed inside [data-demo]) */
+  /** @type {Hand} the hand taps an element, or fades out and steps back to its place, off the picture (slower motion is allowed inside [data-demo]) */
   const api = {
     async tap(el) {
       // The element and the hand under its middle are on screen.
       const box = el.getBoundingClientRect();
       reveal(box.top, box.top + box.height / 2 + hand.offsetHeight);
       target = el;
+      hand.classList.add('is-seen');
       aim();
       // A turn on the way aims it again, which cancels the move, and settle resolves on a cancel: wait for the new one.
       let n;
@@ -463,7 +464,8 @@ function demo(game, spec, then, done = 0, seen = () => {}) {
     },
     async rest() {
       target = null;
-      if (!hand.style.transform) return;
+      if (!hand.classList.contains('is-seen')) return;
+      hand.classList.remove('is-seen');
       hand.style.transform = '';
       await settle(hand, r.signal);
     },

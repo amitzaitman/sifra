@@ -183,7 +183,13 @@ main {
 
 /* The demo (R9): a hand over the round; slower motion is allowed only here. */
 .demo { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.hand { position: absolute; bottom: 24px; left: calc(50% - 32px); width: 64px; height: 64px; color: var(--ink); transition: transform 700ms var(--ease); }
+/* At rest the hand is hidden, and it goes back to its place once faded: on a short phone (320×568, 375×548) that place
+   lies on the cards (2.6, hunt 2 #1). Shown, it fades in on its way to what it taps. */
+.hand {
+  position: absolute; bottom: 24px; left: calc(50% - 32px); width: 64px; height: 64px; color: var(--ink); opacity: 0;
+  transition: opacity var(--t-move) var(--ease), transform 0s var(--t-move);
+}
+.hand.is-seen { opacity: 1; transition: opacity var(--t-move) var(--ease), transform 700ms var(--ease); }
 .hand svg[data-icon] { width: 64px; height: 64px; filter: drop-shadow(0 0 2px var(--surface)); }
 .hand.is-tapping { animation: hand-tap 300ms var(--ease); }
 @keyframes hand-tap { 50% { scale: 0.8; } }

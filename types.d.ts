@@ -68,9 +68,12 @@ interface Round {
 
 /** The demo's hand (architecture 2.6): it taps an element, or steps back to its place off the picture. */
 interface Hand {
-  /** moves onto el (the page scrolls so it and the hand are on screen) and taps */
+  /** shows the hand and moves it onto el (the page scrolls so it and the hand are on screen), then taps */
   tap(el: Element): Promise<void>;
-  /** back to its place at the foot of the round, off the picture, before a hint or a tour it would cover */
+  /**
+   * hides the hand, then puts it back at its place at the foot of the round, before a hint or a tour it would cover;
+   * hidden, because on a short phone that place lies on the cards (architecture 2.6). The hand starts hidden.
+   */
   rest(): Promise<void>;
 }
 
