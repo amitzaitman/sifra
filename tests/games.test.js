@@ -416,7 +416,12 @@ export function checkGame(game) {
   levels.forEach((level, i) => {
     if (levels.findIndex((l) => l.skill === level.skill) !== i || real(level)) return;
     const key = ['structure', 'ask'].find((k) => Array.isArray(level[k]));
-    if (key && level[key].every((v) => levels.slice(0, i).some((l) => l[key] === v && real(l)))) return;
+    if (key && level[key].every((v) => levels.slice(0, i).some((l) => l[key] === v && real(l)))) {
+      // ...and starts in their shared look: one each of them was drawn in at an earlier level, so mixing is all it adds.
+      const unseen = level[key].filter((v) => !levels.slice(0, i).some((l) => l[key] === v && l.look === level.look));
+      if (unseen.length) fail(`level ${i + 1} (${level.id}): the mixed level of ${level.skill} starts in ${level.look}, which ${key} ${unseen.join(', ')} had no earlier level in: a mixed level starts in its ${key}s' shared look`);
+      return;
+    }
     fail(`level ${i + 1} (${level.id}): the first level of ${level.skill} draws ${level.model} in ${level.look}: real objects first (look objects, or a classroom tool: ${TOOLS.join(', ')}), or a mixed level whose ${key ?? 'structure'}s each began so earlier`);
   });
   // R3: the model never goes back in the skill's order; within a model and range, nor does the look.
@@ -834,7 +839,10 @@ test('the checks catch broken rounds and levels', () => {
   assert.match(mutated('add-5', { look: 'dots' }), /level 1 \(add-5\): the first level of addsub\.meaning\.change-add draws scene in dots: real objects first/);
   assert.match(mutated('whole-5', { look: 'symbols' }), /level 6 \(whole-5\): the first level of addsub\.meaning\.part-whole draws scene in symbols/);
   assert.match(mutated('take-5', { look: 'dots' }), /level 8 \(mixed-10\): the first level of addsub\.meaning\.mixed draws scene in dots/);
-  assert.doesNotMatch(mutated('mixed-10', { structure: ['change-add', 'part-whole'] }), /real objects first/, 'the basket began in objects at level 6');
+  assert.doesNotMatch(mutated('mixed-10', { structure: ['change-add', 'part-whole'] }), /real objects first|shared look/, 'the basket began in objects at level 6');
+  // ...and in their shared look: symbols, which neither add nor take had, fails; so does dots, once take never had it.
+  assert.match(mutated('mixed-10', { look: 'symbols' }), /level 8 \(mixed-10\): the mixed level of addsub\.meaning\.mixed starts in symbols, which structure change-add, change-take had no earlier level in/);
+  assert.match(mutated('take-10', { look: 'objects' }), /structure change-take had no earlier level in: a mixed level starts in its structures' shared look/);
   assert.doesNotMatch(mutated('add-5', { look: 'dots', model: 'frame' }), /real objects first/);
   assert.match(checkGame({ ...parts, levels: [{ ...parts.levels[0], model: 'tree' }] }).join(), /level 1 \(split-5\): the first level of num\.parts\.split draws tree in dots/);
   // down: false (3.4): make-ten builds on split, so 'ten' steps down to split-sym; a skill that does not needs the field.
