@@ -336,6 +336,29 @@ for (const [what, then] of [['the closing ends', null], ['the page goes (pagehid
   });
 }
 
+test('a ladder at a level id the game no longer has stays through a solved round, and the next step moves it (3.9, hunt 2 S-b)', async ({ page }) => {
+  // An old tab whose code lacks the level a newer tab moved the ladder to: the session plays level 1, the attempt is
+  // written, and the ladder stays as stored, so the newer tab's progress is not undone.
+  const gone = ladderAt('split-new', { demoSeen: ['split-5', 'split-new'], streak: 2, passed: ['split-5'], hold: null });
+  await seedStore(page, storeWith({ games: { parts: gone } }));
+  await page.clock.install({ time: NOW });
+  await page.goto(`${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
+  await look(page);
+  await card(page, (await roundOf(page)).answerAt).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const after = await stored(page);
+  expect(after.child.games.parts).toEqual(gone);
+  expect(after.child.attempts.map((a) => [a.levelId, a.outcome, a.levelBefore, a.levelAfter])).toEqual([['split-5', 'first', 1, 1]]);
+  // The next step moves it to a level this code has (moveTo), and the game steps from there.
+  await page.goto(`${FIXTURE}?seed=1&again#/next`);
+  await expect(page).toHaveURL(/#\/play\/parts$/);
+  await expect(page.locator('main[data-screen="round"], main[data-screen="demo"]')).toHaveAttribute('data-level', '2');
+  const { child } = await stored(page);
+  expect(child.games.parts).toMatchObject({ level: 'split-10', streak: 0, passed: ['split-5'] });
+  expect(child.events.at(-1)).toMatchObject({ type: 'jump', game: 'parts', to: 2 });
+});
+
 test('"תַּרְאוּ לִי אֶת הַתְּמוּנָה" pressed with a key hands its focus on, to the first live card, or to "הַבָּא" after the solve (design 6.5)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const first = await playAt(page, 'parts', 'split-sym');

@@ -14,7 +14,7 @@ import { KINDS, displayOf, draws, layer, move } from './help.js';
 export const meta = {
   id: 'ten-frame',
   title: 'מִסְגֶּרֶת עֶשֶׂר',
-  version: 5,
+  version: 6,
   css: new URL('game.css', import.meta.url).href,
 };
 
@@ -122,8 +122,9 @@ const reading = (r) => ({ whole: count(r, 'whole'), part: count(r, 'part'), answ
 
 export const rules = {
   'given.whole': (r) => (pair(r) ? onPair(r, 'given.whole') : r.unknown === 'part' ? count(r, 'whole') : null),
-  // A pair round has no given part.
-  'given.part': (r) => (!pair(r) && r.unknown === 'part' ? count(r, 'part') : null),
+  // The catalogue's formula: a missing part's known part, or the first part of a whole (level 8's
+  // bundle, 10). A pair round has no given part.
+  'given.part': (r) => (!pair(r) && (r.unknown === 'part' || r.unknown === 'whole') ? count(r, 'part') : null),
   'op.other': (r) => {
     if (pair(r)) return onPair(r, 'op.other');
     if (r.unknown === 'part') return ON_PART['op.other'](reading(r));

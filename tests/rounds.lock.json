@@ -29,7 +29,7 @@
     }
   },
   "ten-frame": {
-    "version": 5,
+    "version": 6,
     "levels": {
       "split-5": "d1a1875e5fa9306c6f11a06ba2f0a26dfa71a0cf942221880613d5a540a36e1e",
       "split-10": "ad5be65f43e2383a3c0b08440ce7cbb1cf426bfa05051ca9bb89331974fd3259",
@@ -38,7 +38,7 @@
       "ten-empty": "18cf9f842b68d72a2de4e09145e300f1a12aed7a3576974e6e427318a3142f96",
       "ten-cover": "2e07fbc71a488c82912a1b4d0cb8cf81758c662474947fd7fa2d0dac82a57ff1",
       "ten-symbols": "ae59a71edd3bc899d84ec1568ba860fc9db5d44153d93e4d9d2449a51cadcc8a",
-      "teen-bundle": "4dd27c0442bb046f2283f91fc14ac7090b0301e6ebc8f2489bdf209e4b332d93",
+      "teen-bundle": "045f00211ebeb4bbe3c77fe357a5659926fb4c2503c07e42065ff8a2bdf6af29",
       "teen-symbols": "fbc8aab26dede5b495935bae997df2bb6919fdbb6987e0c1bb20c6c4cefa24a3",
       "bridge-move": "238ff4f5a15d68d4ec8c5d54cbaa3c7ff5fd21eaed0c4e1a0b72f92e883bcacf",
       "bridge-frames": "cab765399588e75811faf04541f8e5585c7bc58eb8551a33b94b9fbb840c4637",

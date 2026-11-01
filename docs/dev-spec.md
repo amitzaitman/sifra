@@ -134,7 +134,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   2026-11-01), unless the level says why in `samePlace` (R4, the answer's place; architecture 2.2);
   no `given.*` rule of the skill that the game has gives `answer` (judging rounds aside), except in R4's doubles
   exception (`num.parts.split`, `num.parts.make-ten`; `DOUBLES` in `tests/games.test.js`; `decisions.md`, 2026-11-01,
-  "כפולים בסיפורים");
+  "כפולים בסיפורים") and in a round with a known 0, where `a + 0 = a` is its content (`knownZero`; the ten-frame's
+  `10 + 0 = ?`; "החלק הנתון בעשר ועוד");
   `keyword.*` present in text levels with inconsistent wording, absent in levels without text.
 - **R4 [auto], build and estimate rounds:** for every rule in the skill's list that has a formula,
   `classify(round, rules[r](round)) === r`; `classify(round, answer) === 'correct'`. Clock wind

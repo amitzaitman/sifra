@@ -556,6 +556,11 @@ const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
 export const BUNDLES = {
   /** @type {Record<string, Display>} */
   displays: {
+    /** given.part, the bundle's 10 (10 + 4 = ?): the bundle blinks and stays ringed with its band. */
+    flash(pic, root) {
+      ring(root, banded(pic.t.L.bundle), '', 'is-around');
+      return blink(pic, [pic.t.bundle]);
+    },
     'label-ten'(pic, root) {
       const L = pic.t.L;
       ring(root, banded(L.bundle), '', 'is-around');

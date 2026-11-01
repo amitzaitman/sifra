@@ -218,6 +218,7 @@ const DISPLAYS = [
   ['ten-cover', 'op.other'], ['split-bond', 'given.whole'], ['split-bond', 'given.part'], ['split-bond', 'op.other'],
   ['split-pairs', 'given.whole'], ['split-pairs', 'op.other'], ['split-pairs', 'zero.counted-as-one'], ['split-pairs', 'slip.near'],
   ['teen-bundle', 'pv.teen-reversed'], ['teen-bundle', 'pv.digits-added'], ['teen-bundle', 'pv.ones-only'], ['teen-bundle', 'slip.near'],
+  ['teen-bundle', 'given.part'],
   ['bridge-frames', 'bridge.whole-second'], ['bridge-frames', 'bridge.leftover-only'], ['bridge-frames', 'bridge.stopped-at-ten'],
   ['bridge-frames', 'count.start-included'],
   ['teen-symbols', 'given.whole'], ['teen-symbols', 'given.part'], ['teen-symbols', 'slip.near'], ['split-5', 'op.other'],
@@ -1300,6 +1301,8 @@ test('a ring keeps what it marks whole: ghosts, places, a bundle and its band, s
     ['bridge-frames', () => true, ['count.start-included']],
     ['bridge-move', () => true, ['count.start-included']],
     ['teen-bundle', () => true, ['pv.ones-only']],
+    // The 10 is given.part's (decisions.md 2026-11-01): the bundle ringed with its band, as on level 9.
+    ['teen-bundle', () => true, ['given.part']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer - 1, ['slip.near']],
     ['teen-bundle', (r) => value(r, 'slip.near') === r.answer + 1, ['slip.near']],
     ['teen-bundle', (r) => value(r, 'pv.teen-reversed') > 20, ['pv.teen-reversed']],

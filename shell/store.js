@@ -118,8 +118,9 @@ export const load = (storage, newId, when) => {
 /**
  * Reads storage again before a write (architecture 3.9): another tab of the site may have written since this one
  * read or wrote, and a save writes the whole store, so it would undo that tab's progress. A stored text other than
- * the last one this tab read or wrote replaces memory (migrated), when this code can read it or it is newer (then
- * not writable). A failed read, nothing stored, or a broken value keeps memory, and the next save writes it.
+ * the last one this tab read or wrote replaces memory (migrated), when this code can read it. A newer schema keeps
+ * memory, and the tab writes no more, so the newer data stays (decisions.md 2026-11-01). A failed read, nothing
+ * stored, or a broken value keeps memory, and the next save writes it.
  * @param {Store} store
  * @param {() => string} newId
  * @param {{ t: string, day: string }} when
@@ -129,7 +130,12 @@ export function refresh(store, newId, when) {
   const raw = readRaw(store.storage);
   if (raw === null || raw === store.raw) return false;
   const data = parse(raw);
-  if (!newer(data) && !valid(data)) return false;
+  if (newer(data)) {
+    // Not a new child in memory: the open tab keeps its child, levels and demos seen.
+    Object.assign(store, { raw, writable: false });
+    return false;
+  }
+  if (!valid(data)) return false;
   Object.assign(store, { raw, ...migrate(raw, newId, when) });
   return true;
 }

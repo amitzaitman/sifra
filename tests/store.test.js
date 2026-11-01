@@ -274,11 +274,20 @@ test('refresh: another tab\'s write replaces memory before this tab writes; the 
   storage.setItem(KEY, '{oops');
   assert.equal(refresh(a, newId, WHEN), false);
   assert.equal(childOf(a).attempts.length, 3);
-  // A newer schema from another tab: taken, and not writable, so this tab never writes over it.
-  storage.setItem(KEY, JSON.stringify({ schema: SCHEMA + 1, current: 'x', children: {} }));
-  assert.equal(refresh(a, newId, WHEN), true);
+  // A newer schema from another tab (hunt 2 S-c): memory stays as it was, not an empty child, and the tab writes
+  // no more, so the newer data stays.
+  const before = a.data;
+  const newerText = JSON.stringify({ schema: SCHEMA + 1, current: 'x', children: {} });
+  storage.setItem(KEY, newerText);
+  assert.equal(refresh(a, newId, WHEN), false);
+  assert.equal(a.data, before, 'the same data');
+  assert.deepEqual(childOf(a).attempts.map((x) => x.tab), ['a', 'b', 'a']);
+  assert.ok(childOf(a).games.balance, 'the ladder kept');
   assert.equal(a.writable, false);
   assert.equal(save(a), false);
+  assert.equal(storage.getItem(KEY), newerText, 'the newer text stays');
+  assert.equal(refresh(a, newId, WHEN), false, 'read once');
+  assert.equal(a.writable, false);
 });
 
 test('export: the stored value as is, with key, schema, time and persisted', () => {

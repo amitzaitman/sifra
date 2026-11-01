@@ -373,8 +373,24 @@ test('level 9: the same cards in each form, the answer, 10, 14 and a slip, and e
     }
     assert.deepEqual(skill.map((id) => game.rules[id](r)), [null, null, null, 10 + k, 10, { oneOf: [k - 1, k + 1] }]);
   }
-  // Level 8 keeps the whole unknown, and its cards: nothing is given there.
-  for (const r of rounds('teen-bundle')) assert.ok(r.choices.every((c) => !c.rule?.startsWith('given.')));
+});
+
+test('level 8 (10 + 4 = ?): the 10 is given.part\'s card, never a slip, and no whole is given (errors 4.2, decisions.md 2026-11-01)', () => {
+  // given.part has the catalogue's one formula: the first part of a whole, the bundle's 10. Before, the
+  // ten-frame gave it only for a missing part, and 10 came as slip.near (answer 11) in 227 of 5000 rounds.
+  let tens = 0;
+  for (const r of rounds('teen-bundle', 5000)) {
+    const where = JSON.stringify(r.equation);
+    assert.equal(game.rules['given.part'](r), 10, where);
+    assert.equal(game.rules['given.whole'](r), null, where);
+    for (const c of r.choices) {
+      assert.ok(c.rule !== 'given.part' || c.value === 10, `${where}: given.part's card is the 10`);
+      assert.ok(!(c.rule === 'slip.near' && c.value === 10), `${where}: 10 is given.part's, not a slip`);
+    }
+    tens += r.choices.filter((c) => c.rule === 'given.part').length;
+  }
+  // 10 + 0 = ? (answer 10) has no card for it: a + 0 = a, the round's content.
+  assert.ok(tens > 1000, `${tens} given.part cards`);
 });
 
 test('bundles with the ones unknown: the tag sits over the bundle and the cover, above the digits; the cover holds every stick', () => {

@@ -46,6 +46,9 @@ const real = (level) => level.look === 'objects' || TOOLS.includes(level.model);
 
 /** R4's written exception (rules.md, owner decision 2026-10-14): the skills whose doubles make given.part the answer. */
 const DOUBLES = ['num.parts.split', 'num.parts.make-ten'];
+/** @type {(round: any) => boolean} a 0 among the exercise's known numbers, or a known group of none (a + 0 = ?) */
+const knownZero = (round) => [...(round.equation?.left ?? []), ...(round.equation?.right ?? [])].includes(0)
+  || (round.picture ?? []).some((g) => (g.role === 'part' || g.role === 'whole') && g.count === 0);
 
 const predicts = (predicted, value) =>
   predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf)
@@ -598,8 +601,10 @@ export function checkRound(game, level, index, round) {
   const real = wrong.filter((c) => !c.rule.startsWith('slip.')).length;
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
   // R4: a given number is not the answer (a child who copies it would be logged first and never see its display),
-  // except in R4's written exception, the doubles of num.parts.split and num.parts.make-ten (decisions.md 2026-11-01).
-  if (!judging && !DOUBLES.includes(level.skill)) {
+  // except in R4's written exception, the doubles of num.parts.split and num.parts.make-ten (decisions.md 2026-11-01),
+  // and in a round with a known 0, where a + 0 = a is the round's content, not a double (ten-frame level 8's
+  // 10 + 0 = ?; decisions.md 2026-11-01, "החלק הנתון בעשר ועוד").
+  if (!judging && !DOUBLES.includes(level.skill) && !knownZero(round)) {
     for (const id of listed.filter((r) => r.startsWith('given.') && game.rules[r])) {
       if (predicts(game.rules[id](round), round.answer)) fail(`R4: ${id} gives the answer ${show(round.answer)}: a double outside R4's exception`);
     }
@@ -824,6 +829,11 @@ test('the checks catch broken rounds and levels', () => {
   const copying = { ...scale, rules: { ...scale.rules, 'equal.copy': (r) => r.equation.left[0] } };
   assert.match(checkRound(copying, scale.levels[missing], missing, flipped).join('\n'), /given\.whole, but equal\.copy comes first in a reversed form/);
   assert.doesNotMatch(checkRound(copying, scale.levels[missing], missing, plain).join('\n'), /comes first/);
+  // R4: a given rule that gives the answer is a double outside R4's exception, but not beside a known 0 (a + 0 = a).
+  const doubled = { ...scale, rules: { ...scale.rules, 'given.part': (r) => r.answer } };
+  assert.match(checkRound(doubled, scale.levels[missing], missing, plain).join('\n'), /given\.part gives the answer \d+: a double outside R4's exception/);
+  const zero = { ...structuredClone(plain), equation: { left: [0, '+', '?'], right: plain.equation.right } };
+  assert.doesNotMatch(checkRound(doubled, scale.levels[missing], missing, zero).join('\n'), /a double outside/);
   const bad = { ...parts, levels: [parts.levels[1], { ...parts.levels[0], id: 'split-10', model: 'tree', look: 'objects', colour: 'red' }] };
   const problems = checkGame(bad).join('\n');
   assert.match(problems, /used twice/);
