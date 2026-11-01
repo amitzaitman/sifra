@@ -35,6 +35,9 @@ const REQUIRED = { id: 'string', skill: 'string', demo: 'boolean', options: 'num
 
 const skillOf = (id) => SKILLS.find((s) => s.id === id);
 const show = (x) => JSON.stringify(x);
+/** R4's written exception (rules.md, owner decision 2026-10-14): the skills whose doubles make given.part the answer. */
+const DOUBLES = ['num.parts.split', 'num.parts.make-ten'];
+
 const predicts = (predicted, value) =>
   predicted !== null && typeof predicted === 'object' && Array.isArray(predicted.oneOf)
     ? predicted.oneOf.some((p) => isDeepStrictEqual(p, value))
@@ -571,6 +574,13 @@ export function checkRound(game, level, index, round) {
   }
   const real = wrong.filter((c) => !c.rule.startsWith('slip.')).length;
   if (listed.filter((r) => !r.startsWith('slip.')).length >= 2 && real < Math.min(2, wrong.length)) fail(`R4: ${real} real error(s); two are needed`);
+  // R4: a given number is not the answer (a child who copies it would be logged first and never see its display),
+  // except in R4's written exception, the doubles of num.parts.split and num.parts.make-ten (decisions.md 2026-11-01).
+  if (!judging && !DOUBLES.includes(level.skill)) {
+    for (const id of listed.filter((r) => r.startsWith('given.') && game.rules[r])) {
+      if (predicts(game.rules[id](round), round.answer)) fail(`R4: ${id} gives the answer ${show(round.answer)}: a double outside R4's exception`);
+    }
+  }
   problems.push(...checkLeftOut(game, round, order));
   const values = choices.map((c) => c.value);
   if (values.every((v) => typeof v === 'number') && values.some((v, i) => i > 0 && v <= values[i - 1])) fail(`R4: numbers not ascending: ${show(values)}`);

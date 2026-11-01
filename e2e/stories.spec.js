@@ -424,7 +424,7 @@ for (const vp of /** @type {[number, number][]} */ ([[1024, 1366], [390, 844]]))
   });
 }
 
-test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11 (u 22.3px) and the tour\'s 10; 6 + ? = 10\'s jumps, chips and covers; 6 − 3\'s jumps back', async ({ page }) => {
+test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11 (u 22.3px) and the tour\'s 10; 6 + ? = 10\'s jumps, chips and covers; 6 − 2\'s jumps back', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 568, height: 320 });
   const problems = [];
@@ -437,15 +437,15 @@ test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11
   const change = await devAt(page, 'add-change', storySeed('add-change', 6, 4, undefined, ['count.start-included', 'given.whole', 'given.part']));
   const six = await glyphsThrough(page, change.round, ['count.start-included', 'given.whole', 'given.part']);
   problems.push(...six.out);
-  // Take: counting back from the last leaver (6, 5, 4), landing on the first outline.
-  const take = await devAt(page, 'take-10', storySeed('take-10', 6, 3, undefined, ['count.start-included', 'op.other', 'given.whole']));
+  // Take: counting back from the last leaver (6, 5), landing on the first outline.
+  const take = await devAt(page, 'take-10', storySeed('take-10', 6, 2, undefined, ['count.start-included', 'op.other', 'given.whole']));
   const back = await glyphsThrough(page, take.round, ['count.start-included', 'op.other', 'given.whole']);
   problems.push(...back.out);
   expect(problems).toEqual([]);
   // The ink was read where it is tight: 10 and 11 in the count-up, the tour's grown last digit.
   expect(nine.inked, '9 + 1').toEqual([['10', '11'], ['10']]);
   expect(six.inked, '6 + ? = 10').toEqual([[], ['4']]);
-  expect(back.inked, '6 − 3').toEqual([[], ['3']]);
+  expect(back.inked, '6 − 2').toEqual([[], ['4']]);
 });
 
 // ---------- The event: the story first, then its '?'; the exercise built with it (design 6.10, architecture 2.4) ----------

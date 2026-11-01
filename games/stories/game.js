@@ -8,7 +8,7 @@ import { pickWeighted } from '../../lib/weights.js';
 import { lidAt, planScene, rowsFor } from './scene.js';
 import { DISPLAYS, renderScene } from './view.js';
 
-export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 4, css: new URL('game.css', import.meta.url).href };
+export const meta = { id: 'stories', title: 'סִפּוּרִים', version: 5, css: new URL('game.css', import.meta.url).href };
 
 /** A third of the rounds reversed (R8): the last level of each one-structure skill. @type {LevelForm[]} */
 const third = [{ eqform: 'reversed', w: 1 }, { eqform: 'standard', w: 2 }];
@@ -182,7 +182,9 @@ function colsOf(round) {
  * left). No 1 + 1 (given.part and count.start-included both give 1, op.other 0), and no 2 − 1 (its
  * cards are 3 and 2 only: given.whole and count.start-included both give 2, and a slip to 0 has nothing
  * to draw; four cards since 2026-10-31, decisions.md "מקום התשובה"). Level 3 has no
- * story whose fixed dome would need a row under the whole's rows (9 + ? = 10).
+ * story whose fixed dome would need a row under the whole's rows (9 + ? = 10). No double where the
+ * answer is given.part's value too (R4: its exception is for num.parts only): no 3 + ? = 6 on level 3,
+ * no 4 − 2 in take (decisions.md 2026-11-01).
  * @param {Level} level
  * @returns {Story[]}
  */
@@ -193,9 +195,9 @@ export function poolOf(level) {
   for (let top = lo; top <= hi; top++) {
     for (let x = 1; x < top; x++) {
       if (level.structure === 'change-take') {
-        if (top > 2) out.push({ s: top, k: x, r: top - x, verb: '' });
+        if (top > 2 && top !== 2 * x) out.push({ s: top, k: x, r: top - x, verb: '' });
       }
-      else if (level.structure === 'part-whole' ? top - x !== 2 * x && top !== 2 * x : level.unknown === 'change' ? lidAt(x) < 5 * Math.ceil(top / 5) : top > 2) out.push({ s: x, k: top - x, r: top, verb: '' });
+      else if (level.structure === 'part-whole' ? top - x !== 2 * x && top !== 2 * x : level.unknown === 'change' ? lidAt(x) < 5 * Math.ceil(top / 5) && top !== 2 * x : top > 2) out.push({ s: x, k: top - x, r: top, verb: '' });
     }
   }
   return out;

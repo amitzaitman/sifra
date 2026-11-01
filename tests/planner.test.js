@@ -349,7 +349,7 @@ test('5.12 walk over games/registry.js: an always-right child opens each game\'s
 test('exerciseOf: what the child sees, so a reversed row or another verb is the same exercise (architecture 3.3, 3.8)', async () => {
   const { levels, makeRound } = await import('../games/stories/game.js');
   const take = levels.find((l) => l.id === 'take-10');
-  const rounds = Array.from({ length: 400 }, (_, i) => makeRound(take, rng(i + 1)));
+  const rounds = Array.from({ length: 1000 }, (_, i) => makeRound(take, rng(i + 1)));
   const of = (s, k, f) => rounds.find((r) => r.story.s === s && r.story.k === k && f(r));
   const [a, b] = [of(9, 3, (r) => r.eqform === 'standard'), of(9, 3, (r) => r.eqform === 'reversed')];
   assert.ok(a && b);

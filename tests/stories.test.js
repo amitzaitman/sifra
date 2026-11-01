@@ -126,12 +126,18 @@ test('the generator: every story of each pool, a third reversed where the level 
       if (passed.structure === 'change-take') assert.deepEqual([...verbs].sort(), ['fly', 'pop']);
     }
   }
-  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [9, 35, 34, 9, 35, 7, 30]);
+  assert.deepEqual(['add-5', 'add-10', 'add-change', 'take-5', 'take-10', 'whole-5', 'whole-10'].map((id) => stories.poolOf(level(id)).length), [9, 35, 31, 8, 32, 7, 30]);
   // No 1 + 1 (its cards would be 1 twice and a 0), no 2 − 1 (two wrong cards only, 3 and 2: level 4 has
   // four cards since 2026-10-31), and no equal parts in the basket (decisions.md 2026-10-31).
   assert.ok(!stories.poolOf(level('add-5')).some((p) => p.s === 1 && p.k === 1));
   assert.ok(!stories.poolOf(level('take-5')).some((p) => p.s === 2));
   for (const id of ['whole-5', 'whole-10']) assert.ok(!stories.poolOf(level(id)).some((p) => p.s === p.k), id);
+  // No double where given.part gives the answer (R4's exception is num.parts' only; decisions.md 2026-11-01):
+  // no 3 + ? = 6 on level 3, no 4 − 2 in take.
+  assert.ok(!stories.poolOf(level('add-change')).some((p) => p.s === p.k));
+  for (const passed of [level('take-5'), level('take-10'), { ...level('mixed-10'), structure: 'change-take' }]) {
+    assert.ok(!stories.poolOf(passed).some((p) => p.k === p.r), passed.id);
+  }
   // Level 3 deals no 9 + ? = 10 (design 6.10: no room for the dome after four dots in the second row).
   assert.ok(!stories.poolOf(level('add-change')).some((p) => p.s === 9));
 });
@@ -189,7 +195,7 @@ test('the cards of pedagogy 6.4: real errors first, the budget\'s cap, slips onl
       assert.equal(slips, want, `${base.id} ${passed.structure}`);
     }
   }
-  // op.other leaves level 3 in 7 of its 34 stories (2s + r over 20); elsewhere only where it is 0 (s = k: nothing to draw).
+  // op.other leaves level 3 in 7 of its 31 stories (2s + r over 20); elsewhere only where it is 0 (s = k: nothing to draw).
   const capped = stories.poolOf(level('add-change')).filter(({ s, k }) => setsOf('add-change', s, k).every((set) => !set.some(([, rule]) => rule === 'op.other')));
   assert.deepEqual(capped.map(({ s, r }) => 2 * s + r > 20), Array(7).fill(true));
 });

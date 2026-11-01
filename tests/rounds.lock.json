@@ -16,16 +16,16 @@
     }
   },
   "stories": {
-    "version": 4,
+    "version": 5,
     "levels": {
       "add-5": "710b6e9828f5a168d221e37656d40045daab6263d8313716dd2301b5d81ad07f",
       "add-10": "5bb33021b9d1f9bc44e9da3474aa1ba562bdb8d5bc9135c8b881e6b1b7957931",
-      "add-change": "1c3196310f3c328f40b40f9d496404c3205a0d4d6c15d51109e05891153f502b",
-      "take-5": "74461ce98bdec3941e045fa60fefba62cc1a8e91fc043a8e118ac2bf413f57fe",
-      "take-10": "6e82fbbb652b8042b0a56e0fc38ff6b9c8b64b686b091ba9a8b42a4a9c3ed98c",
+      "add-change": "c2f6b61114dbf513a6b2d131a7d739cf0f894c331c3c6c5396bf973f2492b9f7",
+      "take-5": "37b66650a02ddd4063acb097076ffaeac38c9f132adc3954b5603f9697e5f1bf",
+      "take-10": "a9365108f7dc9774734d750c0286451a514d342e526cba59cf02dbbfe2198a84",
       "whole-5": "bd660073df9aabf3ae547d6f7a8545d92a8131417fe4528484d92bf002a84987",
       "whole-10": "f14ff94bff8dac710dadb5c6ac080a451750e57d5c17807934fb62972fd918d7",
-      "mixed-10": "0a22a020c44f95d7b669a0f253ee41dfb3d0997f9f9df20a8e31ffc02cf78c0f"
+      "mixed-10": "e7c5429ee1e65b8dc7cbecba19def0c981004d5ce8d85c889dfc73fd5ec31cf9"
     }
   },
   "ten-frame": {

@@ -520,11 +520,13 @@ drawn with `mode: 'thumb'` once their host is in the page.
   logged `first`, in rounds 2-4 of 15-50% of a demo level's sessions (stories level 6 about 49%, ten-frame 1 and
   stories 1 about 37%, balance 1 about 15%; hunt 2 #2).
 - When every try is an exercise the session dealt, the try dealt longest ago comes back (the session maps each
-  exercise to when it was dealt; 2026-11-01), never the last one while another can. Levels 1 and 4 of the stories
-  (`add-5`, `take-5`) and the ten-frame's level 1 (`split-5`) have 9 exercises, so a demo and 8 rounds are apart,
+  exercise to when it was dealt; 2026-11-01), never the last one while another can. Level 1 of the stories
+  (`add-5`) and the ten-frame's level 1 (`split-5`) have 9 exercises, so a demo and 8 rounds are apart,
   except when the 50 tries all miss the one exercise left: then the oldest, round 1's, comes back as round 8 (about
-  0.3% of the sessions that stay at `add-5` or `take-5`, 1.6% at `split-5`, whose exercises are not equally likely;
-  4000 sessions each, 2026-11-01). Level 6 (`whole-5`, the basket to 5 without 0 and equal parts) has 7, so a session
+  0.3% of the sessions that stay at `add-5`, 1.6% at `split-5`, whose exercises are not equally likely;
+  4000 sessions each, 2026-11-01). Level 4 (`take-5`) has 8 since `4 − 2` left (section 6, "Doubles in stories"), so
+  a session that stays there deals round 1's exercise again as round 8 (3991 of 4000 sessions); the demo's does not
+  come back. Level 6 (`whole-5`, the basket to 5 without 0 and equal parts) has 7, so a session
   there deals two again, the oldest first: round 1's as round 7, the demo's as round 8. Before, the 51st try was
   kept, a random one of the 7: the previous round's exercise in 14% of sessions (hunt 2 #11). A level of fewer than
   8 exercises is named in tests/games.test.js (`SMALL`, 4.2).
@@ -790,7 +792,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   and on no card, has every card on its side of the answer (`sideOf`: numbers, and pairs by their first then second
   number) from a rule before it, except a slip that crossed the answer for another such real error on the other side,
   when this one comes after every real error on a card (the place moved down, `checkLeftOut`); with cards that have no
-  order (judging), no slip while one fits; numbers ascending; no `keyword.*` in v1. A value two rules give is tagged with the one first in the skill's list (R4), except where a
+  order (judging), no slip while one fits; numbers ascending; no `keyword.*` in v1; no `given.*` rule of the skill
+  gives the answer, except in R4's exception, the doubles of `num.parts.split` and `num.parts.make-ten` (`DOUBLES`;
+  2026-11-01, section 6). A value two rules give is tagged with the one first in the skill's list (R4), except where a
   depth section sets the order for one form (R4): in a reversed form of `eq.sign.missing` (the lone number or the
   result left of `=`) the `equal.*` rules come first (depth §4.9; section 6). Every formula stays the catalogue's,
   whatever the form.
@@ -1182,7 +1186,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
     places, both domes, the wrap, the chips, ghosts, the tour's digits and the answer's chip among them. A balloon's
     node is its disc (game.css), and a node that grows (the tour's last digit) is compared by its middle.
   - Glyphs, at 568×320 (the digits' floor: 9 + 1's count-up of 11 in the basket at u 22.3px; 6 + ? = 10's jumps,
-    chips, fixed dome and stretched cover; 6 − 3's jumps back), after the rest, each miss and the solve: each digit's
+    chips, fixed dome and stretched cover; 6 − 2's jumps back), after the rest, each miss and the solve: each digit's
     and chip's text (its Range rect) inside its own box by 0.5px; each digit, chip, dome and cover `?` topmost at its
     middle (a stretched cover's `?` on its first place), by `elementFromPoint` with every painted node taking hits;
     and the ink of each two-digit number and of the tour's grown last digit, read from the page's pixels (the digit
@@ -1356,6 +1360,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | A slip in `? = a + b` (balance, R4) | `slip.near` is last in `eq.sign.missing`'s rules (skills.md), and the balance offers it in `? = a + b` alone (`SLIP_FORMS` in games/balance/game.js): there every real error is under the answer (`equal.copy` a, `op.other` the difference, `count.start-included` a + b − 1; `equal.add-all` is the answer and drops), so lib/place.js can now move the answer one place down, with the answer plus 1 over it in place of `count.start-included`, drawn as `count-up` (ghosts on the empty pan, one past the unknown's places, the beam tipped). The answer is the third card or the fourth there, about 48/52, and the best simple rule finds it in 54-64%; every other form is unchanged, level 6's 99 first-card rounds too. The deal check (4.2) also checks each form of a mixed level alone. Balance version 8, the lock with it (levels 4-6 changed). Option A (★★★★★) of hunt 2 #4, decided 2026-11-01 by the owner's delegation; see decisions.md, "טעות מקרית ב-`? = a + b`" (an engineering decision the owner may reverse). Tests: tests/games.test.js (the per-form check and its self-test, red on balance levels 4-6 before), tests/balance.test.js (the card sets of `? = a + b`, the answer on card 3 or 4, no slip on a missing part) | `? = a + b` was the only form in the three games with the answer on one card in 80% of its rounds or more: 2503/2503 at level 4, 1009/1009 at levels 5 and 6, and a child who taps the largest card when `?` stands alone on the left won about 75% of level 4. Option B kept the cue under a `samePlace` per form; option C (`slip.near` in every form of the skill) would put a slip in place of a real error in 36-48% of the skill's rounds, levels 2-3 included, and move level 6's decided rounds |
 | The balance's rows at once (hunt 2 #10) | `--cube` and `--cell` registered as `<length>` (`@property` in games/balance/game.css), and no transition on `--rows` or `--len`: a display that needs more rows makes the picture smaller at once, and its end brings it back at once, as a reset (`is-instant`) did; the beam, pans, ghosts and rings move as before (2.8). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "שורות המאזניים בבת אחת"). Test: tests/balance.test.js scans game.css (red before) | The report's step 3: registering the lengths alone left up to 9 frames over 34ms per display at 4x CPU (8/3), more than its bar of 4; with the step, 0-2 on 7/3, 8/3, 9/3 and 11/3 at 320 and 390 |
 | The jumps' marks on small cubes (balance, hunt 2 #14) | A mark is at least 15px (`--m: max(var(--cube), min(var(--u), 15px))` on `.bl-stack > .bl-mark`): on a smaller cube it grows into the 3px gap round its place, centred, above the rings beside it, and the arcs (`z-index: 2`) over it; the display's rows stay the rest rows, dome included (design 7.1, 7.3). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "סימנים על קוביות קטנות"). Test: e2e/balance.spec.js, `? + 19 = 20` (level 6, seed 1) at 320x568, 568x320 and 844x390: each mark 15px, its digits inside its ring and centred, arcs, rings (red before at 12.69px) | `displayRows` counts the dome's rows though the jumps lift it, so `? + 19 = 20` drew 12.7px marks with 14px digits at 320. Counting the places' rows instead would change design 7.3's "within the rest rows" and grow the picture mid-display; `budget` would drop three exercises and bump the version |
+| Doubles in stories (hunt 2 #8) | No story whose `given.part` is the answer: no `3 + ? = 6`, `4 + ? = 8`, `5 + ? = 10` on level 3, no `4 − 2`, `6 − 3`, `8 − 4`, `10 − 5` in take (`poolOf`). Pools: level 3 34 to 31, level 4 9 to 8, level 5 and the mixed take 35 to 32; level 4 now deals round 1's exercise again as round 8 (3.3). The generic test fails a round where a `given.*` rule of the skill gives the answer outside R4's exception (`num.parts.split`, `num.parts.make-ten`; 4.2). Stories version 5, lock with it. Option A of hunt 2; decided 2026-11-01, an engineering decision the owner may reverse (decisions.md "כפולים בסיפורים") | `choose()` dropped `given.part`'s card silently, its value being the answer, so a child who counted the ones that flew in `4 − 2` tapped 2, was logged `first` and never saw that error's display: 9-11% of levels 3, 4, 5 and the mixed take. R4's doubles exception is the two parts skills' only (`num.parts.split`, `num.parts.make-ten`); option B needed a new owner-written exception |
 
 ### Open questions for the owner
 
