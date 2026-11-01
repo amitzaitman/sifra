@@ -8,7 +8,7 @@ import * as parts from '../tests/fixtures/parts/game.js';
 import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
-import { demoSeedFor, pickMix, plainDemo } from '../shell/planner.js';
+import { demoSeedFor, exerciseOf, pickMix, plainDemo } from '../shell/planner.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
@@ -186,6 +186,48 @@ test('R9: the first entry to a demo level runs the demo and writes no attempt; t
   await solve(page);
   expect((await stored(page)).child.attempts[1]).toMatchObject({ help: ['how'], demo: ['how'] });
 });
+
+// "Show me how" in a session (3.3, 3.8; hunt 2 #2): its exercise is none the session dealt, and counts as dealt. At
+// split-5 (8 exercises, its demo seen) with "show me how" on round 2: rounds 1-7 and the demo are the 8 exercises, and
+// round 8 deals the oldest again, round 1's. Not counted, the 8 rounds deal all 8 and so the demo's. Every round is
+// helped, so the ladder stays at level 1.
+for (const seed of [1, 2]) {
+  test(`"show me how" on round 2 solves an exercise the session has not dealt, and the rounds after it come apart from it (seed ${seed})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await seedStore(page, storeWith({ games: { parts: ladderAt('split-5') } }));
+    await open(page, `${FIXTURE}?seed=${seed}#/play/parts`);
+    const [rounds, unlocked] = [[], () => expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked')];
+    let how = null;
+    for (let n = 1; n <= 8; n++) {
+      await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', '1');
+      await look(page);
+      if (n === 2) {
+        await page.locator('[data-how]').click();
+        await expect(page.locator('main[data-screen="demo"] [data-next]')).toBeVisible();
+        how = exerciseOf('parts', (await roundOf(page)).round);
+        await look(page);
+        await page.locator('[data-next]').click();
+        await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+        await look(page);
+      }
+      const { round, answerAt } = await roundOf(page);
+      rounds.push(exerciseOf('parts', round));
+      // One wrong card, then the answer: every round helped.
+      await page.locator(`button[data-index="${answerAt === 0 ? 1 : 0}"]`).click();
+      await unlocked();
+      await page.locator(`button[data-index="${answerAt}"]`).click();
+      await expect(page.locator('[data-next]')).toBeVisible();
+      await look(page);
+      await page.locator('[data-next]').click();
+    }
+    const all = `demo ${how}; rounds ${rounds.join(', ')}`;
+    expect(rounds, all).not.toContain(how);
+    expect(new Set([...rounds.slice(0, 7), how]).size, all).toBe(8);
+    expect(rounds[7], all).toBe(rounds[0]);
+    expect((await stored(page)).child.attempts.map((a) => [a.levelId, a.demo])).toEqual(
+      Array.from({ length: 8 }, (_, i) => ['split-5', i === 1 ? ['how'] : []]));
+  });
+}
 
 // An entry demo writes the store as it starts only what is new (3.9, hunt 2 #15): play() wrote the session count, so a
 // game with its ladder is written once before the hand taps the answer, a game played for the first time once more
