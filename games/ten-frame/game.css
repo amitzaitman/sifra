@@ -136,13 +136,23 @@
 [data-game="ten-frame"] .tf-bracket.is-gone { opacity: 0; animation: ten-frame-out var(--t-move) var(--ease); }
 
 /* Displays (7.1): ghosts, rings and digits in --role-added-edge; what is chosen, never the answer. */
-[data-game="ten-frame"] .tf-ghost { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost); }
+/* A round ghost's or place's dashed edge is a solid one masked to 8 dashes round its centre, its fill whole, the same in
+   every engine: WebKit's dashed border (a dash three times the line, a gap as long, each path starting in a gap) left
+   the 12-33px circles of a phone held sideways a few dashes, like pie slices (hunt 2 #5; the stories' ghosts). A
+   bundle's or a stick's, a rounded box, stays a dashed border. */
+[data-game="ten-frame"] .tf-ghost, [data-game="ten-frame"] .tf-place {
+  --dashes: 8; --dash-round: repeating-conic-gradient(#000 0 calc(180deg / var(--dashes)), #0000 0 calc(360deg / var(--dashes)));
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, var(--dash-round); mask: linear-gradient(#000 0 0) padding-box, var(--dash-round);
+}
+[data-game="ten-frame"] .tf-ghost { border: 3px solid var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost); }
 [data-game="ten-frame"] .tf-ghost.is-dot { border-width: 2px; }
-[data-game="ten-frame"] .tf-ghost.is-bundle, [data-game="ten-frame"] .tf-ghost.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
+[data-game="ten-frame"] .tf-ghost.is-bundle, [data-game="ten-frame"] .tf-ghost.is-stick {
+  border-width: 2px; border-style: dashed; border-radius: calc(var(--u) * 0.2); -webkit-mask: none; mask: none;
+}
 [data-game="ten-frame"] .tf-ghost.is-bundle { background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - min(2px, 3%)), var(--role-added-edge) calc(10% - min(2px, 3%)) 10%); }
-[data-game="ten-frame"] .tf-place { border: 3px dashed var(--role-added-edge); border-radius: 50%; background: var(--surface); }
+[data-game="ten-frame"] .tf-place { border: 3px solid var(--role-added-edge); border-radius: 50%; background: var(--surface); }
 [data-game="ten-frame"] .tf-place.is-target { border-color: var(--role-part-edge); background: none; }
-[data-game="ten-frame"] .tf-place.is-stick { border-width: 2px; border-radius: calc(var(--u) * 0.2); }
+[data-game="ten-frame"] .tf-place.is-stick { border-width: 2px; border-style: dashed; border-radius: calc(var(--u) * 0.2); -webkit-mask: none; mask: none; }
 /* Like the veil: a 0.5px rim covers the counter's antialiased edge, and the mark is not held on a layer of its own
    (its entry fills backwards only), which drew it about 1px off the counter: no gold fringe round it (design 7.1;
    bug hunt #19). */

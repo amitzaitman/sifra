@@ -5,8 +5,8 @@ import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectThumbsDrawn, handSeen, ladderAt, look, readsLeftToRight, roundOf, seedStore, storeWith, stored,
-  watchHand,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectThumbsDrawn, handSeen, ladderAt, look, readsLeftToRight, roundOf, seedStore,
+  storeWith, stored, watchHand,
 } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
@@ -1382,6 +1382,32 @@ test('the jumps: each arc hops from one mark\'s top to the next, drawn over the 
       expect(await page.evaluate(arcProblems), `${width}px ${level} ${seed}`).toEqual([]);
     }
   }
+});
+
+test.describe('dashes at 3 device pixels to the CSS pixel, as an iPhone draws them', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test('each jump\'s arc has ink where it takes off and where it lands, and a ghost dot keeps its dashes round its edge (design 7.1; hunt 2 #5)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const problems = [];
+    const read = [];
+    for (const [width, height] of [[390, 844], [320, 568]]) {
+      await page.setViewportSize({ width, height });
+      // 19 = 15 + ?'s 5 (the WebKit arcs began about 8px above the mark's top at 390×844) and ? = 6 + 4's 9; the turned
+      // row's ghost dots under 4 + 1 = 1 + ?'s first wrong card.
+      for (const [level, seed, rule, which] of [['missing-symbols-20', 45, 'count.start-included', '[data-display="jumps"] .bl-arc'],
+        ['missing-reversed', 148, 'count.start-included', '[data-display="jumps"] .bl-arc'], ['turn', 1, null, '[data-display] .bl-dot.bl-ghost']]) {
+        const { round } = await devAt(page, level, seed);
+        await card(page, round.choices.findIndex((c) => (rule ? c.rule === rule : c.rule))).click();
+        await unlocked(page);
+        await expect(page.locator(which).first()).toBeVisible();
+        const dashes = await dashProblems(page, which);
+        problems.push(...dashes.out.map((p) => `${width}×${height} ${level} ${seed}: ${p}`));
+        read.push(`${width}×${height} ${level} ${seed}: ${dashes.read}`);
+      }
+    }
+    expect(problems).toEqual([]);
+    expect(read.filter((r) => r.endsWith(': 0'))).toEqual([]);
+  });
 });
 
 /**

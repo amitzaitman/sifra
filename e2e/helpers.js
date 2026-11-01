@@ -317,3 +317,75 @@ export async function expectRoleColours(page) {
   });
   expect(problems).toEqual([]);
 }
+
+/**
+ * The dashes of round marks and the ends of arcs, read from the picture's pixels with only `which` shown (design 7.1;
+ * hunt 2 #5): a round mark's edge, sampled at 48 angles on the middle of its line, holds 6 runs of its edge colour or
+ * more (WebKit's dashed border left a 14-27px circle 1-3, like pie slices); an arc has ink of its colour within 2px of
+ * where it takes off and where it lands (a half arc's other end is the top corner by which it leaves or comes into its
+ * row). The edge is the mark's border, or its ::before's (the balance's arcs). Also how many marks it read.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} which a selector of the marks in [data-area="picture"]
+ * @returns {Promise<{ out: string[], read: number }>}
+ */
+export async function dashProblems(page, which) {
+  const panel = page.locator('[data-area="picture"]');
+  await panel.scrollIntoViewIfNeeded();
+  const style = await page.addStyleTag({ content: `[data-dashes] [data-area="picture"] * { visibility: hidden !important; } [data-dashes] [data-area="picture"] :is(${which}) { visibility: visible !important; }` });
+  const marks = await panel.evaluate((p, sel) => {
+    document.querySelector('main')?.setAttribute('data-dashes', '');
+    const P = p.getBoundingClientRect();
+    return [...p.querySelectorAll(sel)].map((n) => {
+      const b = n.getBoundingClientRect();
+      const [own, before] = [getComputedStyle(n), getComputedStyle(n, '::before')];
+      const s = parseFloat(before.borderTopWidth) > 0 ? before : own;
+      return {
+        name: n.className, x: b.left - P.left, y: b.top - P.top, w: b.width, h: b.height, line: parseFloat(s.borderTopWidth),
+        rgb: (s.borderTopColor.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number), arc: n.matches('.st-arc, .bl-arc'), half: n.getAttribute('data-half'),
+      };
+    });
+  }, which);
+  const png = await panel.screenshot();
+  await page.evaluate(() => document.querySelector('main')?.removeAttribute('data-dashes'));
+  await style.evaluate((s) => s.remove());
+  const width = (await panel.boundingBox())?.width ?? 1;
+  const out = await page.evaluate(async ({ b64, marks, width }) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
+    const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    g.drawImage(img, 0, 0);
+    const { data } = g.getImageData(0, 0, c.width, c.height);
+    const k = img.width / width;
+    const found = [];
+    for (const m of marks) {
+      // A pixel of the edge's colour: the ghosts' fill is about 320 away and white about 480 (the balance's ghost test).
+      const ink = (x, y) => {
+        const [X, Y] = [Math.floor(x * k), Math.floor(y * k)];
+        if (X < 0 || Y < 0 || X >= c.width || Y >= c.height) return false;
+        const i = 4 * (Y * c.width + X);
+        return Math.abs(data[i] - m.rgb[0]) + Math.abs(data[i + 1] - m.rgb[1]) + Math.abs(data[i + 2] - m.rgb[2]) < 150;
+      };
+      const near = (x, y) => {
+        for (let dy = -2; dy <= 2; dy += 1 / k) for (let dx = -2; dx <= 2; dx += 1 / k) if (dx * dx + dy * dy <= 4 && ink(x + dx, y + dy)) return true;
+        return false;
+      };
+      const at = `${m.name} ${m.w.toFixed(1)}×${m.h.toFixed(1)} at ${Math.round(m.x)},${Math.round(m.y)}`;
+      if (m.arc) {
+        const [L, bottom] = [m.line, m.y + m.h - 1];
+        const ends = m.half === 'out' ? [['take-off', m.x + L / 2, bottom], ['end at the top', m.x + m.w - 1, m.y + L / 2]]
+          : m.half === 'in' ? [['start at the top', m.x + 1, m.y + L / 2], ['landing', m.x + m.w - L / 2, bottom]]
+            : [['take-off', m.x + L / 2, bottom], ['landing', m.x + m.w - L / 2, bottom]];
+        for (const [what, x, y] of ends) if (!near(x, y)) found.push(`${at}: no ink within 2px of its ${what}`);
+      } else {
+        const r = m.w / 2 - m.line / 2;
+        const edge = Array.from({ length: 48 }, (_, i) => ink(m.x + m.w / 2 + r * Math.sin(i * Math.PI / 24), m.y + m.h / 2 - r * Math.cos(i * Math.PI / 24)));
+        const runs = edge.filter((v, i) => v && !edge[(i + 47) % 48]).length;
+        if (runs < 6) found.push(`${at}: ${runs} dash(es) round its edge, 6 or more wanted`);
+      }
+    }
+    return found;
+  }, { b64: png.toString('base64'), marks, width });
+  return { out, read: marks.length };
+}

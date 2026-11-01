@@ -9,8 +9,8 @@ import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor
 import { exerciseOf } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore, storeWith, stored,
-  watchHand,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
+  storeWith, stored, watchHand,
 } from './helpers.js';
 
 const MAGENTA = 'rgb(214, 51, 108)';
@@ -446,6 +446,37 @@ test('568×320, the floor of the digits: 9 + 1 in the basket, the count-up of 11
   expect(nine.inked, '9 + 1').toEqual([['10', '11'], ['10']]);
   expect(six.inked, '6 + ? = 10').toEqual([[], ['4']]);
   expect(back.inked, '6 − 2').toEqual([[], ['4']]);
+});
+
+test.describe('dashes at 3 device pixels to the CSS pixel, as an iPhone draws them', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test('568×320 and 390×844: ghosts, a new place and dashed rings keep their dashes round the edge, and every arc has ink where it takes off and lands (design 7.1; hunt 2 #5)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const problems = [];
+    const read = [];
+    for (const [w, h] of /** @type {[number, number][]} */ ([[568, 320], [390, 844]])) {
+      await page.setViewportSize({ width: w, height: h });
+      // 10 − 7's 17: ghosts of 16.4px in the fourth row at 568×320 (two fragments each in WebKit); 2 + 8's 11: the new
+      // place after the basket's ten ('11)' in WebKit); 5 + 5's 9: counting on from the 5 across the row break, the
+      // half arc out of the first row taking off on the 5 (it started in a gap in WebKit, also at 390×844).
+      for (const [id, s, k, rule, which] of /** @type {[string, number, number, string, string][]} */ ([
+        ['take-10', 10, 7, 'op.other', '.st-ghost:not([data-inset]), .st-ring[data-dash]'],
+        ['whole-10', 2, 8, 'slip.near', '.st-place'],
+        ['add-10', 5, 5, 'count.start-included', '.st-arc'],
+      ])) {
+        const { round } = await devAt(page, id, storySeed(id, s, k, undefined, [rule]));
+        await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+        await unlocked(page);
+        await expect(draw(page)).toHaveAttribute('data-display', RULES[rule].display);
+        const dashes = await dashProblems(page, which);
+        problems.push(...dashes.out.map((p) => `${w}×${h} ${id} ${s}, ${k} (${rule}): ${p}`));
+        read.push(`${w}×${h} ${id}: ${dashes.read}`);
+      }
+    }
+    expect(problems).toEqual([]);
+    // Each case read its marks: ghosts, a place, arcs (a half arc among them).
+    expect(read.filter((r) => r.endsWith(': 0'))).toEqual([]);
+  });
 });
 
 // ---------- The event: the story first, then its '?'; the exercise built with it (design 6.10, architecture 2.4) ----------

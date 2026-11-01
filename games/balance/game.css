@@ -60,19 +60,20 @@
 [data-game="balance"] .bl-cube[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-cube[data-role="whole"] { background-color: var(--role-whole); }
 [data-game="balance"] .bl-cube[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
-[data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px dashed var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
+[data-game="balance"] .bl-ghost { background-color: var(--role-added-ghost); border: 2px solid var(--role-added-edge); animation: balance-in var(--t-move) var(--ease) backwards; }
 /* A ghost cube's dashed edge (design 7.1) is a solid 2px border masked to the same dashes on every
    side, as fractions of the side: round each corner 28%, in the middle 16%, with gaps of 14%. A
    dashed border fits about one dash a side on a small cube and left some ghosts an open cup
    beside closed twins. */
 [data-game="balance"] .bl-cube.bl-ghost { border: 0; }
+[data-game="balance"] .bl-cube.bl-ghost, [data-game="balance"] .bl-dash {
+  --dash: linear-gradient(#000 0 0);
+  --dash-sides: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
+    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+}
 [data-game="balance"] .bl-cube.bl-ghost::after {
   content: ''; position: absolute; inset: 0; border: 2px solid var(--role-added-edge); border-radius: inherit;
-  --dash: linear-gradient(#000 0 0);
-  -webkit-mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
-    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
-  mask: var(--dash) 0 0 / 28% 28% no-repeat, var(--dash) 100% 0 / 28% 28% no-repeat, var(--dash) 0 100% / 28% 28% no-repeat,
-    var(--dash) 100% 100% / 28% 28% no-repeat, var(--dash) 50% 0 / 16% 100% no-repeat, var(--dash) 0 50% / 100% 16% no-repeat;
+  -webkit-mask: var(--dash-sides); mask: var(--dash-sides);
 }
 [data-game="balance"] .is-entering { animation: balance-in var(--t-move) var(--ease) backwards; }
 [data-game="balance"] .bl-cube.is-flash { animation: balance-blink var(--t-blink) var(--ease); }
@@ -141,11 +142,23 @@
    low enough to stay under the digits of a row above; a 1px --halo where it crosses a mark there. */
 [data-game="balance"] .bl-arc {
   z-index: 2; left: calc(var(--u) * (var(--c) + .5)); bottom: calc(var(--u) * var(--r) + var(--cube)); width: var(--u); height: calc(var(--cube) * .35);
-  border: 2px dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
   filter: drop-shadow(1px 0 0 var(--halo)) drop-shadow(-1px 0 0 var(--halo)) drop-shadow(0 1px 0 var(--halo)) drop-shadow(0 -1px 0 var(--halo));
   animation: balance-appear var(--t-move) var(--ease) backwards;
 }
-[data-game="balance"] .bl-dash { width: var(--cube); height: var(--cube); border: 2px dashed var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78); animation: balance-ring var(--t-blink) var(--ease) backwards; }
+/* Its dashes, as the stories' arcs (hunt 2 #5): a solid edge masked to 9 stripes across, so ink stands at the
+   take-off and the landing in every engine (WebKit started the dashed edge with a gap, about 8px from the mark's
+   top). The mask is on the edge alone: the arc's halo, a filter, is drawn round what it leaves. */
+[data-game="balance"] .bl-arc::before {
+  --k: 9; content: ''; position: absolute; inset: 0; border: 2px solid var(--role-added-edge); border-bottom: 0; border-radius: inherit;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--k)), #0000 0 calc(200% / var(--k)));
+  mask: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--k)), #0000 0 calc(200% / var(--k)));
+}
+/* The hint's dashed places under a cover: the ghost cube's dashes (above), round each corner and in each side's middle. */
+[data-game="balance"] .bl-dash {
+  width: var(--cube); height: var(--cube); border: 2px solid var(--on-unknown); border-radius: calc(var(--cube) * .25); transform: scale(.78);
+  -webkit-mask: var(--dash-sides); mask: var(--dash-sides); animation: balance-ring var(--t-blink) var(--ease) backwards;
+}
 /* At a piece's ends the dome's top corners are rounded (app.css .cover: half the cube across, 80%
    down): there a dash takes the same corner, scaled with it, so it stays inside the dome. */
 [data-game="balance"] .bl-dash.is-start { border-top-left-radius: 50% 80%; }
@@ -191,6 +204,12 @@
 [data-game="balance"] .bl-set .bl-dot[data-role="part"] { background-color: var(--role-part); box-shadow: inset 0 0 0 3px var(--role-part-edge); }
 [data-game="balance"] .bl-set .bl-dot[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="balance"] .bl-set .bl-dot[data-role="unknown"] { box-shadow: 0 0 0 3px var(--halo); }
+/* A ghost dot's dashed edge: its solid edge masked to 8 dashes round the centre, its fill whole, as the stories'
+   ghosts (hunt 2 #5: WebKit's dashed border left a small circle a few dashes, like pie slices). */
+[data-game="balance"] .bl-set .bl-dot.bl-ghost {
+  --dashes: 8; --dash-round: repeating-conic-gradient(#000 0 calc(180deg / var(--dashes)), #0000 0 calc(360deg / var(--dashes)));
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, var(--dash-round); mask: linear-gradient(#000 0 0) padding-box, var(--dash-round);
+}
 [data-game="balance"] .bl-set .bl-ghost { border-width: 3px; }
 [data-game="balance"] .bl-set .bl-lid { width: calc(var(--cell) * (var(--w) - 1) + var(--dot)); height: var(--dot); }
 [data-game="balance"] .bl-set .bl-ring { left: calc(var(--cell) * var(--x) + var(--inset) - 6px); top: calc(var(--cell) * var(--y) + var(--inset) - 6px); width: calc(var(--cell) * (var(--w) - 1) + var(--dot) + 12px); height: calc(var(--dot) + 12px); border-radius: calc(var(--dot) / 2 + 6px); }

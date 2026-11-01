@@ -5,8 +5,8 @@ import * as game from '../games/ten-frame/game.js';
 import { layoutBridge } from '../games/ten-frame/draw.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore, storeWith, stored,
-  watchHand,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
+  storeWith, stored, watchHand,
 } from './helpers.js';
 
 const ID = 'ten-frame';
@@ -1780,6 +1780,29 @@ function defineInkOf() {
       top: base - ky * m.actualBoundingBoxAscent, bottom: base + ky * m.actualBoundingBoxDescent };
   };
 }
+
+test.describe('dashes at 3 device pixels to the CSS pixel, as an iPhone draws them', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test('568×320: round ghosts, ghost dots and dashed places keep their dashes round the edge (design 7.1; hunt 2 #5)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 568, height: 320 });
+    const problems = [];
+    const read = [];
+    // 8 + ? = 10's 18: ghosts in hypothetical frames (12-15px on a phone held sideways); a bond's count-up of 0 or 2:
+    // dashed places of 15px; the pairs' op.other: ghost dots.
+    for (const [level, rule] of [['ten-empty', 'op.other'], ['split-bond', 'slip.near'], ['split-pairs', 'op.other']]) {
+      const { round } = await devAt(page, level, holds(rule));
+      if (round.look === 'symbols') await page.locator('[data-show-picture]').click();
+      await card(page, round.choices.findIndex((c) => c.rule === rule)).click();
+      await unlocked(page);
+      const dashes = await dashProblems(page, '.tf-ghost:not(.is-bundle, .is-stick), .tf-place:not(.is-stick)');
+      problems.push(...dashes.out.map((p) => `${level} (${rule}): ${p}`));
+      read.push(`${level}: ${dashes.read}`);
+    }
+    expect(problems).toEqual([]);
+    expect(read.filter((r) => r.endsWith(': 0'))).toEqual([]);
+  });
+});
 
 test('the bond\'s count-up at 320px: every digit outlined in white, 14px or more, none touching, and its dot still a dashed circle round it (design 4)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

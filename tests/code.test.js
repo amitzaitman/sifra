@@ -221,6 +221,27 @@ test('games/registry.js: one export line per game, sorted by id, each game in it
   for (const id of ids) assert.ok(existsSync(new URL(`../games/${id}/game.js`, import.meta.url)), id);
 });
 
+/**
+ * The rules of a stylesheet that draw a dashed border with a round corner (50% or 100%): a circle or an arc.
+ * @param {string} css
+ * @returns {string[]} their selectors
+ */
+function roundDashed(css) {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)]
+    .filter(([, , body]) => /(^|[;\s])border(-[a-z]+)*\s*:[^;]*\bdashed\b/.test(body) && /border(-[a-z]+)*-radius\s*:[^;]*\b(50|100)%/.test(body))
+    .map(([, selector]) => selector.trim());
+}
+
+// A dashed edge round a circle or along an arc is a solid one masked to its dashes, the same in every engine (design 7.1;
+// hunt 2 #5): WebKit makes a dash three times the line with a gap as long and starts each path in a gap, so a small
+// circle kept 1-3 dashes, like pie slices, and an arc took off from a gap. An outline (the ten-frame's tray) is a rectangle.
+test('no dashed border on a round mark or an arc in a game\'s CSS: a solid edge masked to its dashes (hunt 2 #5)', () => {
+  const sample = '.a { border: 2px dashed red; border-radius: 50%; } .b { border: 3px dashed; border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }'
+    + ' .c { outline: 3px dashed red; border-radius: 50%; } .d { border-style: dashed; border-radius: calc(var(--u) * 0.2); } .e { border: 2px solid; border-radius: 50%; }';
+  assert.deepEqual(roundDashed(sample), ['.a', '.b']);
+  none(gameFiles.filter((f) => f.endsWith('.css')).flatMap((file) => roundDashed(read(file)).map((s) => `${file}: ${s} draws a dashed border round (mask a solid one)`)));
+});
+
 // The stories' geometry is scene.js's alone (architecture 2.8, 4.4, 4.9): in their game.css no
 // geometry property, and no custom property, holds a literal length but a 1px that multiplies a
 // variable (100cqw and 100cqh, the stage, aside), so a number that fails the Node geometry test

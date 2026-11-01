@@ -62,23 +62,37 @@
 }
 
 /* What a wrong choice says (design 7.1): ghosts with a dashed edge, a dashed new place, rings of the
-   line 2px off a disc, dashed round an object counted, solid round what the value does not reach. */
+   line 2px off a disc, dashed round an object counted, solid round what the value does not reach.
+   A dashed edge is a solid one masked to a fixed number of dashes, the same in every engine: WebKit
+   makes a dash three times the line with a gap as long and starts each path in a gap, so a 14-27px
+   circle kept 1-3 dashes, like pie slices, and an arc took off from a gap (hunt 2 #5). Round, --dashes
+   round the centre, the padding box (the fill) whole; an arc, --k stripes across it, odd, so ink stands
+   at its take-off and its landing. */
+[data-game="stories"] .st-ghost, [data-game="stories"] .st-place, [data-game="stories"] .st-ring[data-dash], [data-game="stories"] .st-dash {
+  --dashes: 8;
+  --dash-round: repeating-conic-gradient(#000 0 calc(180deg / var(--dashes)), #0000 0 calc(360deg / var(--dashes)));
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, var(--dash-round);
+  mask: linear-gradient(#000 0 0) padding-box, var(--dash-round);
+}
+[data-game="stories"] .st-ring[data-dash] { --dashes: 10; -webkit-mask: var(--dash-round); mask: var(--dash-round); }
 [data-game="stories"] .st-ghost {
-  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost);
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-added-edge); border-radius: 50%; background: var(--role-added-ghost);
 }
 /* A ghost inside the outline of one that left fills the outline's inside: the outline is its edge, and
    it has no ring, so it never reads as a bullseye in a four-row display on a landscape phone. */
 [data-game="stories"] .st-ghost[data-inset] { border-width: 0; }
 [data-game="stories"] .st-place {
-  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-radius: 50%; background: var(--surface);
+  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-added-edge); border-radius: 50%; background: var(--surface);
 }
 [data-game="stories"] .st-ring { border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-added-edge); border-radius: 50%; }
-[data-game="stories"] .st-ring[data-dash] { border-style: dashed; }
 /* A jump: from the top of one place to the top of the next, 8px high; across a row break half of
    it leaves the row on the right and half comes in on the next row's left. */
 [data-game="stories"] .st-arc {
-  border: calc(var(--lu) * var(--u) + var(--lp) * 1px) dashed var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  --k: 9; border: calc(var(--lu) * var(--u) + var(--lp) * 1px) solid var(--role-added-edge); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--k)), #0000 0 calc(200% / var(--k)));
+  mask: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--k)), #0000 0 calc(200% / var(--k)));
 }
+[data-game="stories"] .st-arc[data-half] { --k: 5; }
 [data-game="stories"] .st-arc[data-half="out"] { border-right: 0; border-radius: 100% 0 0 0 / 100% 0 0 0; }
 [data-game="stories"] .st-arc[data-half="in"] { border-left: 0; border-radius: 0 100% 0 0 / 0 100% 0 0; }
 
@@ -103,7 +117,7 @@
 [data-game="stories"] .st-piece > .cover { --cover-fs: calc(0.6 * var(--u)); }
 [data-game="stories"] .st-piece > .cover::after { translate: calc((var(--u) - var(--wu) * var(--u) - var(--wp) * 1px) / 2) 0; }
 [data-game="stories"] .st-piece.is-bridge > .cover { border-radius: 0; }
-[data-game="stories"] .st-dash { border: calc(var(--tu) * var(--u) + var(--tp) * 1px) dashed var(--on-unknown); border-radius: 50%; }
+[data-game="stories"] .st-dash { border: calc(var(--tu) * var(--u) + var(--tp) * 1px) solid var(--on-unknown); border-radius: 50%; }
 
 /* Chips (design 6.10, 7.1): white, a thin edge; the start's digit in ink, the whole's navy with a
    navy edge, the answer's magenta. Flashed, a ring of the line takes the edge's place inside it. */
