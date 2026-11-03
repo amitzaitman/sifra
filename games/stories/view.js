@@ -2,7 +2,8 @@
 // holds and where; drawScene puts its marks in the page, one span per mark in its layer, its box in
 // CSS variables (game.css has the one positioning rule). The view moves the picture from state to
 // state, a mark keeping its node while its id stays: the event, a display, the hint, the tour, the
-// closing. Waits go through settle(); delays only between items entering in order (R10).
+// closing. Waits go through settle(); delays only between items entering in order (R10), and in the
+// event between what comes or goes, a beat apart (decisions.md 2026-11-03).
 import { cover } from '../../lib/cover.js';
 import { reduced, settle } from '../../lib/settle.js';
 import { PX, ROUND, THUMB, builtAt, layoutScene, phasesOf, planScene, storyOf } from './scene.js';
@@ -48,6 +49,11 @@ function balloonString() {
 
 /** @type {(j: number, n: number, step?: number) => number} the j-th of n entering in order, ms: at most 40 apart, the last by 0.3 s (the ten-frame's stagger) */
 const stagger = (j, n, step = 40) => Math.round(j * Math.min(step, 300 / Math.max(1, n - 1)));
+/**
+ * The story's beat (design 6.10, decisions.md 2026-11-03): in the event what comes or goes moves one by
+ * one, each this many ms after the one before it, so a child sees each balloon come or go.
+ */
+export const BEAT = 330;
 /** @type {(n: number) => string} a number for a CSS variable, without float noise */
 const num = (n) => String(Math.round(n * 1e4) / 1e4);
 /** @type {(l: Len, k: number) => Len} */
@@ -296,6 +302,12 @@ export function renderScene(host, round, ctx) {
         delete el.dataset.anim;
         el.style.animationDelay = '';
       }
+      // The 'before' still (a hold on the objects' layer) ends with its state too.
+      for (const el of /** @type {NodeListOf<HTMLElement>} */ (draw.querySelectorAll('.st-layer[data-anim]'))) {
+        for (const a of el.getAnimations()) a.finish();
+        delete el.dataset.anim;
+        el.style.animationDelay = '';
+      }
       draw.classList.toggle('is-instant', instant);
     }
     const drawn = drawScene(host, { layout: layoutScene(plan, set), set, cover });
@@ -339,7 +351,8 @@ export function renderScene(host, round, ctx) {
       if (el.dataset.leaving || (el.dataset.group && draw.querySelector(`.st-line[data-id][data-group="${el.dataset.group}"]`))) el.remove();
       else {
         if (lid) lid.classList.add('is-lifted');
-        else play(el, 'out');
+        // In the event at the story's pace: a balloon fades over the dot it becomes (the morph).
+        else play(el, how === 'event' ? 'fade' : 'out');
         exiting.push(el);
       }
     }
@@ -351,11 +364,14 @@ export function renderScene(host, round, ctx) {
     if (how === 'enter') {
       // The still 'before' (design 6.10): the start's objects enter in place order, as the ten-frame's
       // items do, and their chip with the last one; the rest of the first picture is there at once.
-      // So the event's next phase waits for them: 'first there were s' is seen before anything comes.
+      // Then it holds still (decisions.md 2026-11-03): an animation of nothing on the objects' layer,
+      // which starts with the last of the start, so the event's next phase waits for both: 'first
+      // there were s' is seen a while before anything comes or goes.
       const objects = added.filter((p) => p.m.kind === 'object').sort(byPlace);
       objects.forEach((p, j) => play(p.el, 'in', stagger(j, objects.length)));
       const last = stagger(objects.length - 1, objects.length);
       for (const p of added.filter((q) => q.m.kind === 'chip')) play(p.el, 'in', last);
+      play(/** @type {HTMLElement} */ (draw.querySelector('.st-layer[data-layer="objects"]')), 'hold', last);
       return;
     }
     if (how === 'event') {
@@ -363,14 +379,14 @@ export function renderScene(host, round, ctx) {
       // slides down and grows to its place while the balloon fades over it, so nothing grows as it goes
       // (a pop does). A ball is a dot's size already: the two cross-fade, so its seam fades too.
       for (const p of added.filter((q) => q.m.morph && (q.m.morph.k !== 1 || q.m.morph.dy.some(Boolean)))) play(p.el, 'morph');
-      // Arrivals slide in, leavers fly up or pop, in place order; each leaver's outline fades in as it goes.
+      // Arrivals slide in, leavers fly up or pop, one by one in place order, a beat apart (decisions.md
+      // 2026-11-03); each leaver's outline traces in as it goes.
       const arrivals = added.filter((p) => p.m.kind === 'object' && p.m.from).sort(byPlace);
-      arrivals.forEach((p, j) => play(p.el, 'from', stagger(j, arrivals.length)));
+      arrivals.forEach((p, j) => play(p.el, 'from', j * BEAT));
       const leavers = kept.filter((p) => p.changed.has('leaving') && p.m.leaving).sort(byPlace);
       leavers.forEach((p, j) => {
-        const delay = stagger(j, leavers.length);
-        play(p.el, p.m.leaving === 'up' ? 'fly' : 'pop', delay);
-        play(node(`out-${p.m.place}`), 'in', delay);
+        play(p.el, p.m.leaving === 'up' ? 'fly' : 'pop', j * BEAT);
+        play(node(`out-${p.m.place}`), 'trace', j * BEAT);
       });
     } else if (how === 'display') {
       // Ghosts and the dashed rings fill in order; digits are written one by one; what the value

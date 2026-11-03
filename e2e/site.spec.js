@@ -1107,7 +1107,7 @@ test('R10: a minute in real time adds nothing to any game waiting on a covered r
       await page.goto(`${site.path}#/dev/${game.meta.id}/${n}/1`);
       await expect(page.locator('main[data-screen="round"] .cover').first()).toBeVisible();
       // A story's '?' comes at the end of its event (architecture 2.4): the round waits once the event is over.
-      await expect(page.locator('[data-event]')).toHaveCount(0);
+      await expect(page.locator('[data-event]')).toHaveCount(0, { timeout: 15000 });
       waiting.push({ page, before: await page.locator('main').innerHTML() });
     }
   }

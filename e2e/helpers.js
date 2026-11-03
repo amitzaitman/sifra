@@ -190,7 +190,8 @@ export async function expectMathLeftToRight(page) {
  * @param {import('@playwright/test').Page} page
  */
 export async function expectCalm(page) {
-  await expect(page.locator('[data-event]'), 'a story\'s event ends').toHaveCount(0);
+  // A story's event runs 2 to 5 s at its calm pace (decisions.md 2026-11-03).
+  await expect(page.locator('[data-event]'), 'a story\'s event ends').toHaveCount(0, { timeout: 15000 });
   await page.evaluate(() => Promise.all(document.getAnimations()
     .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity && /** @type {KeyframeEffect} */ (a.effect)?.target?.closest('[data-area="picture"], [data-hint], [data-display], [data-choices]'))
     .map((a) => a.finished.catch(() => null))));

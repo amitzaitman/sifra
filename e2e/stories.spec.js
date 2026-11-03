@@ -6,6 +6,7 @@
 import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
 import { BALLOON, ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
+import { BEAT } from '../games/stories/view.js';
 import { exerciseOf } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
@@ -558,10 +559,10 @@ for (const [id, seed, structure] of /** @type {[string, () => number, string?][]
   });
 }
 
-// The still 'before' is seen (playtest 2026-10-31): at normal speed the event's next phase starts a
-// quarter of a second or more after the round's picture, once the start's objects have entered.
+// The still 'before' is seen (playtest 2026-10-31): at normal speed the event's next phase starts once
+// the start's objects have entered (250 ms) and the picture has held still 0.8 s more (decisions.md 2026-11-03).
 for (const [id, s, k, structure] of /** @type {[string, number, number, string?][]} */ ([['add-5', 1, 4], ['add-change', 4, 3], ['take-5', 5, 4], ['mixed-10', 9, 3, 'change-take']])) {
-  test(`${id}${structure ? ` (${structure})` : ''}: the start enters first, and the story goes on 250 ms or more after the picture appears`, async ({ page }) => {
+  test(`${id}${structure ? ` (${structure})` : ''}: the start enters first, and the story goes on 1.05 s or more after the picture appears`, async ({ page }) => {
     await page.addInitScript(() => {
       /** @type {Record<string, number>} */
       const t = {};
@@ -573,14 +574,56 @@ for (const [id, s, k, structure] of /** @type {[string, number, number, string?]
     });
     await page.goto(`${INDEX}#/dev/stories/${number(id)}/${storySeed(id, s, k, structure)}${structure ? `/${structure}` : ''}`);
     await expect(page.locator('[data-choices]')).toBeVisible();
-    await expect(page.locator('[data-event]')).toHaveCount(0);
+    await expect(page.locator('[data-event]')).toHaveCount(0, { timeout: 15000 });
     const t = await page.evaluate(() => /** @type {any} */ (window).phases);
     const next = Object.keys(t).find((p) => p !== 'event:0');
     expect(Object.keys(t)[0]).toBe('event:0');
     // Half a millisecond for the timeline's float arithmetic: CI read 249.968 for a 250 ms entry.
-    expect(t[next] - t['event:0'], `${next} after the picture`).toBeGreaterThanOrEqual(249.5);
+    expect(t[next] - t['event:0'], `${next} after the picture`).toBeGreaterThanOrEqual(1049.5);
   });
 }
+
+// The story at its calm pace (decisions.md 2026-11-03): what comes or goes moves one by one, a beat
+// apart, each in half a second, and a leaver's outline traces in with it; the morph takes half a second.
+/** @type {(page: import('@playwright/test').Page, sel: string) => Promise<{ anim: string | null, delay: string, duration: string }[]>} each node's motion, in place order */
+const motions = (page, sel) => page.locator(sel).evaluateAll((els) => els
+  .map((el) => ({ el, place: Number(el.getAttribute('data-id')?.split('-')[1] ?? -1) }))
+  .sort((a, b) => a.place - b.place)
+  .map(({ el }) => ({ anim: el.getAttribute('data-anim'), delay: getComputedStyle(el).animationDelay, duration: getComputedStyle(el).animationDuration })));
+/** @type {(n: number, anim: string) => { anim: string, delay: string, duration: string }[]} n motions a beat apart, half a second each */
+const beats = (n, anim) => Array.from({ length: n }, (_, j) => ({ anim, delay: `${(j * BEAT) / 1000}s`, duration: '0.5s' }));
+/** @type {(page: import('@playwright/test').Page, phase: string) => Promise<void>} steps a held event to a phase */
+async function stepTo(page, phase) {
+  for (let i = 0; i < 4 && (await now(page)).phase !== phase; i++) {
+    const was = (await now(page)).phase;
+    await step(page);
+    await expect.poll(async () => (await now(page)).phase).not.toBe(was);
+  }
+  expect((await now(page)).phase).toBe(phase);
+}
+
+test('1 + 4: the start holds still 0.8 s once in, then the four arrive one by one, a beat apart, half a second each', async ({ page }) => {
+  await holdAt(page, `#/dev/stories/${number('add-5')}/${storySeed('add-5', 1, 4)}`);
+  expect(await page.locator('[data-layer="objects"]').evaluate((l) => [l.getAttribute('data-anim'), getComputedStyle(l).animationDuration])).toEqual(['hold', '1.05s']);
+  await stepTo(page, 'event:B');
+  expect(await page.locator('[data-layer="objects"]').getAttribute('data-anim')).toBeNull();
+  expect(await motions(page, '.st-obj[data-anim="from"]')).toEqual(beats(4, 'from'));
+});
+
+test('5 − 3, popped: the three go one by one, a beat apart, each outline tracing in with its balloon', async ({ page }) => {
+  await holdAt(page, `#/dev/stories/${number('take-5')}/${seedOf('take-5', (r) => r.story.s === 5 && r.story.k === 3 && r.story.verb === 'pop')}`);
+  await stepTo(page, 'event:B');
+  expect(await motions(page, '.st-obj[data-leaving]')).toEqual(beats(3, 'pop'));
+  expect(await motions(page, '.st-outline')).toEqual(beats(3, 'trace'));
+});
+
+test('4 + 5: the balloons turn into dots in half a second, each fading over the dot it becomes', async ({ page }) => {
+  await holdAt(page, `#/dev/stories/${number('add-10')}/${storySeed('add-10', 4, 5)}`);
+  await stepTo(page, 'event:M');
+  expect((await motions(page, '.st-obj[data-anim="morph"]')).map((m) => m.duration)).toEqual(Array(4).fill('0.5s'));
+  expect((await motions(page, '.st-obj[data-anim="fade"]')).map((m) => m.duration)).toEqual(Array(4).fill('0.5s'));
+  expect(await page.locator('[data-layer="objects"] > .st-obj').evaluateAll((els) => els.map((el) => el.getAttribute('data-anim')))).toEqual([...Array(4).fill('morph'), ...Array(4).fill('fade')]);
+});
 
 test('take: a leaver of the second row rises half a column right, drawn under what stays', async ({ page }) => {
   const { round } = await holdAt(page, `#/dev/stories/${number('take-10')}/${seedOf('take-10', (r) => r.story.s === 10 && r.story.k === 4 && r.story.verb === 'fly')}`);

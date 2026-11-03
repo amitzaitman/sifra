@@ -168,13 +168,22 @@
 [data-game="stories"] .st-digit.is-grow[data-on="balloon"]::before { scale: none; }
 
 /* Motion (design 6.10, 8): each runs once, 250ms a move, 600ms a blink or a pulse, 150ms a digit;
-   delays between items entering in order only, 0.3 s at most (view.js). Thumbs never move (app.css). */
+   delays between items entering in order only, 0.3 s at most (view.js). The story's event at its own
+   calm pace (decisions.md 2026-11-03): what comes, goes or turns into a dot moves in --t-story, one by
+   one a beat apart (view.js BEAT), and the 'before' holds still: --t-hold, from the last of the start,
+   is its 250ms entry and 0.8 s more, an animation that changes nothing, which the next phase waits for.
+   Thumbs never move (app.css). */
+@property --st-hold { syntax: '<number>'; inherits: false; initial-value: 0; }
+[data-game="stories"] .st-draw { --t-story: 500ms; --t-hold: 1050ms; }
 [data-game="stories"] [data-anim="in"] { animation: stories-in var(--t-move) var(--ease) backwards; }
 [data-game="stories"] [data-anim="out"] { animation: stories-out var(--t-move) var(--ease) forwards; }
-[data-game="stories"] [data-anim="from"] { animation: stories-from var(--t-move) var(--ease) backwards; }
-[data-game="stories"] [data-anim="morph"] { animation: stories-morph var(--t-move) var(--ease) backwards; }
-[data-game="stories"] [data-anim="fly"] { animation: stories-fly var(--t-move) ease-in forwards; }
-[data-game="stories"] [data-anim="pop"] { animation: stories-pop var(--t-move) var(--ease) forwards; }
+[data-game="stories"] [data-anim="hold"] { animation: stories-hold var(--t-hold) linear backwards; }
+[data-game="stories"] [data-anim="from"] { animation: stories-from var(--t-story) var(--ease) backwards; }
+[data-game="stories"] [data-anim="morph"] { animation: stories-morph var(--t-story) var(--ease) backwards; }
+[data-game="stories"] [data-anim="fade"] { animation: stories-out var(--t-story) var(--ease) forwards; }
+[data-game="stories"] [data-anim="trace"] { animation: stories-in var(--t-story) var(--ease) backwards; }
+[data-game="stories"] [data-anim="fly"] { animation: stories-fly var(--t-story) ease-in forwards; }
+[data-game="stories"] [data-anim="pop"] { animation: stories-pop var(--t-story) var(--ease) forwards; }
 [data-game="stories"] [data-anim="drop"] { animation: stories-drop var(--t-move) var(--ease) backwards; }
 [data-game="stories"] [data-anim="ring"] { animation: stories-ring var(--t-blink) var(--ease) backwards; }
 [data-game="stories"] [data-anim="blink"], [data-game="stories"] [data-anim="pulse"] { animation: stories-blink var(--t-blink) var(--ease) backwards; }
@@ -183,6 +192,7 @@
 [data-game="stories"] [data-anim="q"] > .cover::after { animation: stories-in 150ms var(--ease) backwards; }
 
 @keyframes stories-in { from { opacity: 0; } }
+@keyframes stories-hold { to { --st-hold: 1; } }
 @keyframes stories-out { to { opacity: 0; } }
 /* An arrival from past the stage's right edge, a flown leaver past its top (scene.js Offset). */
 @keyframes stories-from {
