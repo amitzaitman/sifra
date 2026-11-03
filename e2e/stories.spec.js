@@ -5,7 +5,7 @@
 // every demo, a session to the end screen, and a turned phone.
 import { RULES } from '../data/errors.js';
 import * as stories from '../games/stories/game.js';
-import { ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
+import { BALLOON, ROUND, builtAt, layoutScene, len, phasesOf, planScene, storyOf, unitFor } from '../games/stories/scene.js';
 import { exerciseOf } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
@@ -99,7 +99,7 @@ const drawn = (page) => draw(page).evaluate((d) => {
     const b = el.getBoundingClientRect();
     const s = getComputedStyle(el);
     const moved = s.transform !== 'none' || s.scale !== 'none';
-    return { id: el.getAttribute('data-id'), x: b.left - o.left, y: b.top - o.top, w: b.width, h: b.height, moved, balloon: el.getAttribute('data-shape') === 'balloon' };
+    return { id: el.getAttribute('data-id'), x: b.left - o.left, y: b.top - o.top, w: b.width, h: b.height, moved, balloon: el.matches('.st-obj[data-shape="balloon"]') };
   });
   return { u, nodes };
 });
@@ -126,8 +126,8 @@ async function calibrate(page, round, state, vp, want) {
     if (!m) { out.push(`${n.id}: drawn, not in the layout`); continue; }
     marks.delete(n.id);
     const [x, y, w] = [len(m.box.x, u), len(m.box.y, u), len(m.box.w, u)];
-    // A balloon's node is its disc (game.css): as tall as wide; its string hangs below it.
-    const h = n.balloon ? w : len(m.box.h, u);
+    // A balloon's node is its egg (game.css), BALLOON.h tall; its knot and string hang below it.
+    const h = n.balloon ? BALLOON.h * u : len(m.box.h, u);
     const off = n.moved
       ? [Math.abs(n.x + n.w / 2 - x - w / 2), Math.abs(n.y + n.h / 2 - y - h / 2)]
       : [n.x - x, n.y - y, n.w - w, n.h - h].map(Math.abs);
@@ -671,11 +671,17 @@ test('R6: the start yellow, add and take alike; arrivals in --role-added with a 
   await expectRoleColours(page);
   // 5 − 2 = ?: three stay yellow (the colour never tells the operation), two outlines, hollow.
   await devAt(page, 'take-5', storySeed('take-5', 5, 2));
-  // A balloon's knot narrows away from its disc, and its string is a whole 2px: no arrow up under it (playtest 2026-10-31).
+  // A balloon is an egg with a white shine (decisions.md 2026-11-03); its knot narrows away from it, and its
+  // string is a whole 2px S: no arrow up under it (playtest 2026-10-31). The outline of one that left is an egg too.
   expect(await page.locator('.st-obj[data-shape="balloon"]').evaluateAll((els) => els.map((el) => {
-    const [knot, string] = [getComputedStyle(el, '::before'), getComputedStyle(el, '::after')];
-    return { clip: knot.clipPath, string: string.width };
-  }))).toEqual(Array(3).fill({ clip: 'polygon(0px 0px, 100% 0px, 65% 100%, 35% 100%)', string: '2px' }));
+    const [body, shine, knot] = [getComputedStyle(el), getComputedStyle(el, '::before'), getComputedStyle(el, '::after')];
+    const path = el.querySelector(':scope > svg.st-string path');
+    return { egg: body.borderTopLeftRadius !== body.borderBottomLeftRadius, shine: shine.backgroundColor, clip: knot.clipPath, string: path && getComputedStyle(path).strokeWidth };
+  }))).toEqual(Array(3).fill({ egg: true, shine: 'rgb(255, 255, 255)', clip: 'polygon(0px 0px, 100% 0px, 65% 100%, 35% 100%)', string: '2px' }));
+  expect(await page.locator('.st-outline[data-shape="balloon"]').evaluateAll((els) => els.map((el) => {
+    const s = getComputedStyle(el);
+    return s.borderTopLeftRadius !== s.borderBottomLeftRadius;
+  }))).toEqual([true, true]);
   expect(await colours(page.locator('.st-obj[data-role="part"]'))).toEqual(Array(3).fill(expect.objectContaining({ fill: part })));
   expect(await colours(page.locator('.st-outline[data-role="removed"]'))).toEqual(Array(2).fill(expect.objectContaining({ fill: 'rgba(0, 0, 0, 0)', border: `solid ${removed}` })));
   await expectRoleColours(page);

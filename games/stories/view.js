@@ -27,6 +27,24 @@ const CLASS = {
 };
 /** The kinds drawn as lib/cover.js's cover: they come down as they enter and lift as they go (design 6.6). */
 const DOMES = ['lid', 'cover', 'dome'];
+/** The kinds drawn in their object's shape (a balloon's egg) at its place. */
+const SHAPED = ['object', 'outline', 'ghost', 'place', 'ring'];
+const SVG = 'http://www.w3.org/2000/svg';
+
+/**
+ * A balloon's string (design 6.10): a short S under its knot, in a box game.css sizes from the unit;
+ * the stroke keeps its width at any size (a whole 2px in a round), as the balance's strings do.
+ * @returns {SVGSVGElement}
+ */
+function balloonString() {
+  const svg = document.createElementNS(SVG, 'svg');
+  for (const [k, v] of [['class', 'st-string'], ['viewBox', '0 0 100 100'], ['preserveAspectRatio', 'none'], ['aria-hidden', 'true']]) svg.setAttribute(k, v);
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('d', 'M50 0C83 35 23 65 57 100');
+  path.setAttribute('vector-effect', 'non-scaling-stroke');
+  svg.append(path);
+  return svg;
+}
 
 /** @type {(j: number, n: number, step?: number) => number} the j-th of n entering in order, ms: at most 40 apart, the last by 0.3 s (the ten-frame's stagger) */
 const stagger = (j, n, step = 40) => Math.round(j * Math.min(step, 300 / Math.max(1, n - 1)));
@@ -111,6 +129,8 @@ export function drawScene(host, { layout, set, cover: make }) {
   const layers = Object.fromEntries([...draw.children].map((l) => [/** @type {HTMLElement} */ (l).dataset.layer, l]));
   const old = new Map([...draw.querySelectorAll('[data-id]')].map((el) => [/** @type {HTMLElement} */ (el).dataset.id, /** @type {HTMLElement} */ (el)]));
   const byId = new Map(layout.marks.map((m) => [m.id, m]));
+  /** The places a digit stands on: a balloon there hides its shine under the digit's white circle. */
+  const digits = new Set(layout.marks.filter((m) => m.kind === 'digit').map((m) => m.place));
   /** @type {Placed[]} */
   const added = [];
   /** @type {Placed[]} */
@@ -124,15 +144,18 @@ export function drawScene(host, { layout, set, cover: make }) {
       el.className = `st-mark ${CLASS[m.kind]}`;
       el.dataset.id = m.id;
       if (DOMES.includes(m.kind)) el.append(make(m.mark ?? '?'));
+      // A node keeps its shape: a dot that was a balloon is a node of its own (the morph).
+      if (m.kind === 'object' && m.shape === 'balloon') el.append(balloonString());
     }
     old.delete(m.id);
-    const changed = paint(el, m, byId);
+    const changed = paint(el, m, byId, digits);
     if (fresh) {
       layers[m.layer].append(el);
       added.push({ el, m, changed });
     } else kept.push({ el, m, changed });
-    // A leaver is drawn under what stays, so one that rises past another passes behind it.
-    if (m.leaving && layers[m.layer].firstChild !== el) layers[m.layer].prepend(el);
+    // A leaver is drawn under what stays, so one that rises past another passes behind it; a dot of
+    // the morph under the balloon it was, which fades over it, shine and string too.
+    if ((m.leaving || (fresh && m.morph)) && layers[m.layer].firstChild !== el) layers[m.layer].prepend(el);
   }
   const gone = [...old.values()];
   for (const el of gone) delete el.dataset.id;
@@ -152,9 +175,10 @@ export function drawScene(host, { layout, set, cover: make }) {
  * @param {HTMLElement} el
  * @param {Mark} m
  * @param {Map<string, Mark>} byId
+ * @param {Set<number>} digits the places a digit stands on
  * @returns {Set<string>} the attributes that changed on it
  */
-function paint(el, m, byId) {
+function paint(el, m, byId, digits) {
   const { x, y, w, h } = m.box;
   setLen(el, 'x', x);
   setLen(el, 'y', y);
@@ -176,9 +200,10 @@ function paint(el, m, byId) {
     setLen(el, 'my', m.morph.dy);
     el.style.setProperty('--mk', num(m.morph.k));
   }
+  if (SHAPED.includes(m.kind)) set('shape', m.shape ?? null);
   if (m.kind === 'object' || m.kind === 'outline') {
     set('role', m.role);
-    set('shape', m.kind === 'object' ? m.shape : null);
+    set('digit', m.kind === 'object' && digits.has(m.place));
     set('second', Boolean(m.second));
     set('faded', Boolean(m.faded));
     set('leaving', m.leaving ?? null);
@@ -334,9 +359,9 @@ export function renderScene(host, round, ctx) {
       return;
     }
     if (how === 'event') {
-      // The morph (levels 2, 5, 7; design 6.10): each dot starts on its balloon's disc and slides down
-      // and grows to its place while the balloon fades, so nothing grows as it goes (a pop does). A
-      // ball is a dot's size already: the two cross-fade, so its seam fades too.
+      // The morph (levels 2, 5, 7; design 6.10): each dot starts under its balloon, on its disc, and
+      // slides down and grows to its place while the balloon fades over it, so nothing grows as it goes
+      // (a pop does). A ball is a dot's size already: the two cross-fade, so its seam fades too.
       for (const p of added.filter((q) => q.m.morph && (q.m.morph.k !== 1 || q.m.morph.dy.some(Boolean)))) play(p.el, 'morph');
       // Arrivals slide in, leavers fly up or pop, in place order; each leaver's outline fades in as it goes.
       const arrivals = added.filter((p) => p.m.kind === 'object' && p.m.from).sort(byPlace);

@@ -32,6 +32,14 @@ export const PX = {
 };
 
 /**
+ * A balloon in its place (design 6.10, decisions.md 2026-11-03), in units: an egg w wide and h tall at
+ * the top of the place, narrower below, with a shine; its knot and a short S of string hang under it to
+ * extent, inside the place (game.css draws them). Its disc, which a digit on it and the morph's dot
+ * take, is the square of its width at the top.
+ */
+export const BALLOON = { w: 0.74, h: 0.8, extent: 0.98 };
+
+/**
  * Rubik 800 (design 4, 6.10; measured in Chromium): the tabular advance of a chip's digits (em), and
  * the ink of the proportional digits on objects at 14px (w, h): one digit at most (4 the widest, 0
  * and 8 the tallest), 10 and 11. pad: game.css's top padding (em) on chips and digits, which keeps
@@ -39,7 +47,7 @@ export const PX = {
  * 2026-10-31; 0.12em was 1.5 to 2.4px low from 20px up); the Node test takes the ink as centred,
  * and the browser check reads it. balloon: a balloon's disc to a dot's, which sizes its digits.
  */
-export const GLYPH = { advance: 0.68, ink: 0.72, pad: 0.02, balloon: 0.78, ink14: { digit: [9.2, 10.1], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
+export const GLYPH = { advance: 0.68, ink: 0.72, pad: 0.02, balloon: BALLOON.w, ink14: { digit: [9.2, 10.1], 10: [16.3, 10.1], 11: [13.7, 9.8] } };
 
 const px = (/** @type {number} */ b) => /** @type {Len} */ ([0, b]);
 const LINE = PX.track1 + PX.line;
@@ -373,10 +381,12 @@ export function layoutScene(plan, set) {
   const dw = add(mul(U, 5), mul(set.G, 4), mul(set.Ms, 2));
   const dh = add(rowY(rows - 1), U, rows > n ? set.Mbd : set.Mb);
   const cell = (/** @type {number} */ p) => box(colX(p % 5), rowY(Math.floor(p / 5)), U, U);
-  /** @type {(p: number, shape?: string) => Box} the object's disc */
-  const disc = (p, shape = object) => (shape === 'balloon' ? box(add(cell(p).x, [0.11, 0]), cell(p).y, [0.78, 0], [0.78, 0]) : cell(p));
-  /** @type {(p: number) => Box} what an object takes: a balloon's disc and string */
-  const extent = (p) => (object === 'balloon' ? { ...disc(p), h: /** @type {Len} */ ([0.98, 0]) } : cell(p));
+  /** @type {(p: number, shape?: string) => Box} the object's disc, what a digit stands on: a balloon's, the square of its egg's width at its top */
+  const disc = (p, shape = object) => (shape === 'balloon' ? box(add(cell(p).x, [(1 - BALLOON.w) / 2, 0]), cell(p).y, [BALLOON.w, 0], [BALLOON.w, 0]) : cell(p));
+  /** @type {(p: number, shape?: string) => Box} the object's body: a balloon's egg */
+  const body = (p, shape = object) => (shape === 'balloon' ? { ...disc(p, shape), h: /** @type {Len} */ ([BALLOON.h, 0]) } : disc(p, shape));
+  /** @type {(p: number, shape?: string) => Box} what an object takes: a balloon's egg, knot and string */
+  const extent = (p, shape = object) => (shape === 'balloon' ? { ...disc(p, shape), h: /** @type {Len} */ ([BALLOON.extent, 0]) } : disc(p, shape));
   const half = mul(set.line, 0.5);
   /** @type {Mark[]} */
   const marks = [];
@@ -447,7 +457,7 @@ export function layoutScene(plan, set) {
   for (const item of items) {
     const { id, place } = item;
     if (item.kind === 'object') {
-      const b = item.shape === 'balloon' ? { ...disc(place, 'balloon'), h: /** @type {Len} */ ([0.98, 0]) } : disc(place, item.shape);
+      const b = extent(place, item.shape);
       const m = mark(id, 'object', 'objects', b, { place, role: item.role, shape: item.shape, second: Boolean(item.second) });
       if (item.enter) m.from = enter(b);
       // A dot that was a balloon or a ball starts on that disc: the offset of its middle and its size
@@ -456,10 +466,11 @@ export function layoutScene(plan, set) {
         const was = disc(place, item.morph);
         m.morph = { dy: sub(add(was.y, mul(was.w, 0.5)), add(b.y, mul(b.h, 0.5))), k: was.w[0] / b.w[0] };
       }
-    } else if (item.kind === 'outline') mark(id, 'outline', 'places', disc(place), { place, role: 'removed', hollow: true, faded: item.faded });
-    else if (item.kind === 'ghost') mark(id, 'ghost', 'places', item.inset ? grow(disc(place), mul(set.line, -1)) : disc(place), { place, inset: Boolean(item.inset) });
-    else if (item.kind === 'place') mark(id, 'place', 'places', disc(place), { place });
-    else if (item.kind === 'ring') mark(id, 'ring', 'lines', grow(disc(place), add(set.ringGap, set.line)), { place, dash: item.dash, line: set.line });
+      // What stands at an object's place below takes the object's body and shape (a balloon's egg, game.css).
+    } else if (item.kind === 'outline') mark(id, 'outline', 'places', body(place), { place, role: 'removed', hollow: true, faded: item.faded, shape: object });
+    else if (item.kind === 'ghost') mark(id, 'ghost', 'places', item.inset ? grow(body(place), mul(set.line, -1)) : body(place), { place, inset: Boolean(item.inset), shape: object });
+    else if (item.kind === 'place') mark(id, 'place', 'places', body(place), { place, shape: object });
+    else if (item.kind === 'ring') mark(id, 'ring', 'lines', grow(body(place), add(set.ringGap, set.line)), { place, dash: item.dash, line: set.line, shape: object });
     else if (item.kind === 'digit') {
       // On a balloon the digit is sized from its disc, as on a dot from its own (decisions.md 2026-10-31).
       const font = object === 'balloon' ? { ...set.font, k: set.font.k * GLYPH.balloon } : set.font;
@@ -542,7 +553,7 @@ export function layoutScene(plan, set) {
     }
   }
   for (const item of plan.leaving) {
-    const b = item.shape === 'balloon' ? { ...disc(item.place, 'balloon'), h: /** @type {Len} */ ([0.98, 0]) } : disc(item.place, item.shape);
+    const b = extent(item.place, item.shape);
     mark(item.id, 'object', 'objects', b, { place: item.place, role: item.role, shape: item.shape, leaving: item.exit, to: item.exit === 'up' ? flyUp(b, Math.floor(item.place / 5)) : null });
   }
   return { dw, dh, n, rows, marks };

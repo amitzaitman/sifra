@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import * as stories from '../games/stories/game.js';
-import { GLYPH, PX, ROLE_TOKEN, ROUND, THUMB, builtAt, layoutScene, len, lidAt, phasesOf, planScene, rowsFor, unitFor } from '../games/stories/scene.js';
+import { BALLOON, GLYPH, PX, ROLE_TOKEN, ROUND, THUMB, builtAt, layoutScene, len, lidAt, phasesOf, planScene, rowsFor, unitFor } from '../games/stories/scene.js';
 import { RULES } from '../data/errors.js';
 import { rng } from '../shell/rng.js';
 import { variants } from '../scripts/lock-rounds.js';
@@ -717,6 +717,12 @@ test('tokens: the layout\'s pixels are app.css\'s and design.md\'s', () => {
   assert.match(game, new RegExp(`\\.st-digit\\.is-grow \\{ scale: ${GROW.dot}; \\}`));
   assert.match(game, new RegExp(`\\.st-digit\\.is-grow\\[data-on="balloon"\\] \\{ scale: ${GROW.balloon}; \\}`));
   assert.match(game, /\.st-digit\.is-grow\[data-on="balloon"\]::before \{ scale: none; \}/);
+  // A balloon's egg is BALLOON.h tall and BALLOON.w wide, which sizes its digits; its string, 0.03 under
+  // the egg, ends at BALLOON.extent, the bottom of what the lines keep clear of (decisions.md 2026-11-03).
+  assert.match(game, new RegExp(`\\.st-obj\\[data-shape="balloon"\\] \\{ height: calc\\(${BALLOON.h} \\* var\\(--u\\)\\); \\}`));
+  const string = game.match(/\.st-string \{[^}]*top: calc\(100% \+ ([\d.]+) \* var\(--u\)\);[^}]*height: calc\(([\d.]+) \* var\(--u\)\);/);
+  assert.ok(string && Math.abs(BALLOON.h + Number(string[1]) + Number(string[2]) - BALLOON.extent) < 1e-9, `the string ends at ${string && BALLOON.h + Number(string[1]) + Number(string[2])}`);
+  assert.equal(GLYPH.balloon, BALLOON.w);
   // The rectangle of 10's ink, with a pixel spare at each corner, needs a 21.94px disc (design 6.10).
   assert.equal(Math.hypot(ten[0] + 2, ten[1] + 2).toFixed(2), '21.94');
 });

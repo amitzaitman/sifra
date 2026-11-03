@@ -20,13 +20,13 @@
 [data-game="stories"] .st-draw.is-instant, [data-game="stories"] .st-draw.is-instant * { transition: none !important; }
 [data-game="stories"] .st-layer { position: absolute; inset: 0; pointer-events: none; }
 
-/* The one positioning rule. A balloon's node is its disc (its role colour fills it): the string
-   hangs below it, inside the place's box that scene.js keeps for it. */
+/* The one positioning rule. A balloon's node is its egg (its role colour fills it), BALLOON.h tall
+   (scene.js): the knot and the string hang below it, inside the place's box that scene.js keeps for them. */
 [data-game="stories"] .st-mark {
   position: absolute; left: calc(var(--xu) * var(--u) + var(--xp) * 1px); top: calc(var(--yu) * var(--u) + var(--yp) * 1px);
   width: calc(var(--wu) * var(--u) + var(--wp) * 1px); height: calc(var(--hu) * var(--u) + var(--hp) * 1px);
 }
-[data-game="stories"] .st-obj[data-shape="balloon"] { height: calc(var(--wu) * var(--u) + var(--wp) * 1px); }
+[data-game="stories"] .st-obj[data-shape="balloon"] { height: calc(0.8 * var(--u)); }
 
 /* Objects (design 6.10, R6): the start in the part's yellow (in take too), what came in --role-added
    with a solid edge, the basket's second part in the light shade; the unknown is app.css's. */
@@ -34,17 +34,32 @@
 [data-game="stories"] .st-obj[data-role="part"] { --edge: var(--role-part-edge); background-color: var(--role-part); }
 [data-game="stories"] .st-obj[data-role="part"][data-second] { background-color: var(--role-part-2); }
 [data-game="stories"] .st-obj[data-role="added"] { --edge: var(--role-added-edge); background-color: var(--role-added); }
-/* A balloon's knot and its string: no role (R6). The knot narrows away from the disc, so knot and
-   string never read as an arrow up; the string is a whole 2px, the same on every balloon. A ball's
-   one seam, in its edge colour. */
+/* A balloon (design 6.10, decisions.md 2026-11-03): an egg, narrower below, with a white shine at its
+   upper left, so it reads as a balloon and not a pin; the knot and the string have no role (R6). The
+   knot narrows away from the egg, so knot and string never read as an arrow up; the string is a short
+   S, a whole 2px on every balloon (view.js: an SVG with a non-scaling stroke). It ends at
+   BALLOON.extent, 0.8 + 0.03 + 0.15 of the unit. What stands at a balloon's place (the outline of one
+   that left, a ghost, an empty place, a ring) takes the egg too. A ball's one seam, in its edge colour. */
+@property --string { syntax: '<length>'; inherits: true; initial-value: 0px; }
+[data-game="stories"] .st-draw { --egg: 50% 50% 50% 50% / 44% 44% 56% 56%; }
+[data-game="stories"] .st-obj[data-shape="balloon"], [data-game="stories"] .st-outline[data-shape="balloon"], [data-game="stories"] .st-ghost[data-shape="balloon"],
+[data-game="stories"] .st-place[data-shape="balloon"], [data-game="stories"] .st-ring[data-shape="balloon"] { border-radius: var(--egg); }
 [data-game="stories"] .st-obj[data-shape="balloon"]::before {
+  content: ''; position: absolute; left: 22%; top: 13%; width: 17%; height: 27%; border-radius: 50%; rotate: 35deg;
+  background: var(--surface); opacity: 0.8;
+}
+/* Under a digit's white circle the shine would show as a bump on the circle. */
+[data-game="stories"] .st-obj[data-shape="balloon"][data-digit]::before { opacity: 0; }
+[data-game="stories"] .st-obj[data-shape="balloon"]::after {
   content: ''; position: absolute; left: 50%; top: calc(100% - 0.02 * var(--u)); width: calc(0.16 * var(--u)); height: calc(0.06 * var(--u));
   translate: -50% 0; background: var(--ink-soft); clip-path: polygon(0 0, 100% 0, 65% 100%, 35% 100%);
 }
-[data-game="stories"] .st-obj[data-shape="balloon"]::after {
-  content: ''; position: absolute; left: 50%; top: 100%; width: calc(var(--su) * var(--u) + var(--sp) * 1px); height: calc(0.2 * var(--u));
-  translate: -50% 0; background: var(--ink-soft);
+[data-game="stories"] .st-string {
+  --string: calc(var(--su) * var(--u) + var(--sp) * 1px);
+  position: absolute; left: 50%; top: calc(100% + 0.03 * var(--u)); width: calc(0.3 * var(--u)); height: calc(0.15 * var(--u));
+  translate: -50% 0; overflow: visible;
 }
+[data-game="stories"] .st-string path { fill: none; stroke: var(--ink-soft); stroke-width: var(--string); }
 [data-game="stories"] .st-obj[data-shape="ball"]::after {
   content: ''; position: absolute; inset: 14%; border-radius: 50%; rotate: 30deg;
   border: calc(var(--tu) * var(--u) + var(--tp) * 1px) solid transparent; border-left-color: var(--edge);
