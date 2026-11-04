@@ -2133,13 +2133,20 @@ test('level 9 with nine ones (19 = 10 + ?): the tag\'s digits stay clear of its 
   }
 });
 
-test('level 8\'s hint: the bundle\'s 10 and, beside it on the same line, a chip of the same size with the loose sticks\' count on their middle, 0 where the first two would stand; inside the tour\'s ring, the 0 clear of it (design 7.2, 7.3)', async ({ page }) => {
+/** @type {(a: { left: number, right: number, top: number, bottom: number }, b: { left: number, right: number, top: number, bottom: number }) => boolean} two boxes share some area */
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+test('level 8\'s hint: the bundle\'s 10 on its band, and a chip of the same size with the loose sticks\' count centred under them on the paper, 0 under the first two places; no stick and no ink dot under a chip; inside the tour\'s ring, the 0 clear of it (design 6.3, 7.2, 7.3)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const [width, height] of [[320, 568], [390, 568], [568, 320]]) {
     await page.setViewportSize({ width, height });
     for (const ones of [0, 1, 2, 3, 9]) {
       await page.goto('about:blank');
       const { round, answerAt } = await devAt(page, 'teen-bundle', (r) => r.equation.left[2] === ones);
+      const picture = page.locator('[data-area="picture"]');
+      // Every stick touched first, as a child counting them: each keeps its ink dot (design 6.3).
+      for (const stick of await picture.locator('.tf-stick').all()) await stick.click();
+      await expect(picture.locator('.tf-stick > .tf-mark')).toHaveCount(ones);
       const wrong = round.choices.flatMap((c, i) => (c.rule ? [i] : []));
       for (const i of wrong.slice(0, 2)) {
         await card(page, i).click();
@@ -2151,14 +2158,22 @@ test('level 8\'s hint: the bundle\'s 10 and, beside it on the same line, a chip 
       const chips = page.locator('[data-hint] .tf-chip');
       await expect(chips, `${here}: the parts, not the whole (R5)`).toHaveText(['10', String(ones)]);
       const [ten, loose] = await chips.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
-      const picture = page.locator('[data-area="picture"]');
-      const bundle = await picture.locator('.tf-bundle').boundingBox();
+      const bundle = await picture.locator('.tf-bundle').evaluate((e) => e.getBoundingClientRect().toJSON());
       const sticks = await picture.locator('.tf-stick').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+      const dots = await picture.locator('.tf-stick > .tf-mark').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
       expect(Math.abs(ten.x + ten.width / 2 - (bundle.x + bundle.width / 2)), `${here}: the 10 on the bundle`).toBeLessThan(1);
-      for (const [a, b] of [[loose.y, ten.y], [loose.width, ten.width], [loose.height, ten.height]]) expect(Math.abs(a - b), `${here}: one line, one size`).toBeLessThan(0.5);
+      for (const [a, b] of [[loose.width, ten.width], [loose.height, ten.height]]) expect(Math.abs(a - b), `${here}: one size`).toBeLessThan(0.5);
+      // Under the group, on the paper, as bridging ten's chips stand by theirs: 4px or more below the sticks.
       const middle = loose.x + loose.width / 2;
-      if (ones) expect(Math.abs(middle - (sticks[0].left + sticks.at(-1).right) / 2), `${here}: on the sticks' middle`).toBeLessThan(1);
+      if (ones) expect(Math.abs(middle - (sticks[0].left + sticks.at(-1).right) / 2), `${here}: centred under the sticks`).toBeLessThan(1);
       else expect(loose.left, `${here}: right of the bundle and its band`).toBeGreaterThan(bundle.x + bundle.width * 1.08);
+      expect(loose.top - Math.max(bundle.bottom, ...sticks.map((s) => s.bottom)), `${here}: under the sticks`).toBeGreaterThanOrEqual(4);
+      for (const [j, s] of sticks.entries()) {
+        for (const c of [ten, loose]) expect(overlap(s, c), `${here}: stick ${j + 1} under a chip`).toBe(false);
+      }
+      for (const [j, d] of dots.entries()) {
+        for (const c of [ten, loose]) expect(overlap(d, c), `${here}: the ink dot of stick ${j + 1} under a chip`).toBe(false);
+      }
       // The ones' digit in --ink, 2px or more from its chip's edges, as the 10's.
       const room = await inkRoom(page, '[data-hint] .tf-chip >> nth=1', [20, 33, 61]);
       for (const [side, px] of Object.entries(room)) expect(px, `${here}: the ones' digit, ${side}`).toBeGreaterThanOrEqual(2);
@@ -2177,8 +2192,61 @@ test('level 8\'s hint: the bundle\'s 10 and, beside it on the same line, a chip 
       }));
       const inside = (c) => Math.min(c.left - ring.left, ring.right - c.right, c.top - ring.top, ring.bottom - c.bottom);
       expect(inside(both[0]), `${here}: the 10 inside the ring`).toBeGreaterThan(3);
-      if (ones) expect(inside(both[1]), `${here}: the ones' chip inside the ring`).toBeGreaterThan(3);
+      if (ones) expect(inside(both[1]), `${here}: the ones' chip inside the ring, 2px or more off its line`).toBeGreaterThan(3 + 2);
       else expect(both[1].left - ring.right, `${here}: the 0 clear of the ring`).toBeGreaterThanOrEqual(3 + 3);
+    }
+  }
+});
+
+test('level 8\'s demo: the hand touches no chip, and the hint\'s chip under the sticks leaves each stick it touched, where its ink dot goes, in view (design 6.3, 7.3, 11.11)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  /** @type {(ones: number) => number} the first seed with that many loose sticks */
+  const seedOf = (ones) => {
+    let seed = 1;
+    while (game.makeRound(game.levels[number('teen-bundle') - 1], rng(seed)).equation.left[2] !== ones) seed += 1;
+    return seed;
+  };
+  for (const [width, height] of [[320, 568], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    await page.clock.install({ time: NOW });
+    await page.goto(`${INDEX}#/dev/${ID}/${number('teen-bundle')}/1`);
+    await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
+    for (const ones of [1, 2, 3, 9]) {
+      // The level's demo on the panel's host, its hand a probe: at each tap, what it taps and the hint's chips then;
+      // after the tour, each thing tapped and the chips now. The hand's tip is the middle of what it taps (app.js aim()).
+      const seen = await page.evaluate(async ({ level, seed }) => {
+        const game = await import('/games/ten-frame/game.js');
+        const { rng } = await import('/shell/rng.js');
+        const { drive } = await import('/e2e/drive.js');
+        const panel = /** @type {HTMLElement} */ (document.querySelector('main [data-area="picture"]'));
+        const host = /** @type {HTMLElement} */ (panel.cloneNode(false));
+        panel.replaceWith(host);
+        const box = (/** @type {Element} */ e) => e.getBoundingClientRect().toJSON();
+        const chips = () => [...host.querySelectorAll('[data-hint] .tf-chip')].map(box);
+        /** @type {{ el: Element, at: DOMRect, chips: DOMRect[] }[]} */
+        const taps = [];
+        const hand = { async tap(/** @type {Element} */ el) { taps.push({ el, at: box(el), chips: chips() }); }, async rest() {} };
+        const round = game.makeRound(game.levels[level - 1], rng(seed));
+        const view = game.render(host, round, { signal: new AbortController().signal, mode: 'demo', solved: false, setEquation() {}, build() {}, relabel() {}, onAttempt() {} });
+        await drive(view.demo(hand));
+        const out = { taps: taps.map((t) => ({ stick: t.el.classList.contains('tf-stick'), what: t.el.className, at: t.at, chips: t.chips, now: box(t.el) })), chips: chips() };
+        host.replaceWith(panel);
+        return out;
+      }, { level: number('teen-bundle'), seed: seedOf(ones) });
+      const here = `${width}×${height}, 10 + ${ones}`;
+      expect(seen.chips, `${here}: the hint's two chips`).toHaveLength(2);
+      expect(seen.taps.filter((t) => t.stick), `${here}: the hand touches a stick`).not.toEqual([]);
+      for (const t of seen.taps) {
+        const tip = { left: t.at.x + t.at.width / 2, top: t.at.y + t.at.height / 2 };
+        const point = { ...tip, right: tip.left + 0.01, bottom: tip.top + 0.01 };
+        for (const c of t.chips) expect(overlap(point, c), `${here}: the hand's tip on ${t.what} touches a chip`).toBe(false);
+      }
+      // The ink dot a touch leaves on a stick is 8px round its middle (game.css .tf-mark); no chip of the hint covers it.
+      for (const t of seen.taps.filter((s) => s.stick)) {
+        const [x, y] = [t.now.x + t.now.width / 2, t.now.y + t.now.height / 2];
+        const dot = { left: x - 4, right: x + 4, top: y - 4, bottom: y + 4 };
+        for (const c of seen.chips) expect(overlap(dot, c), `${here}: a chip over the stick the hand touched`).toBe(false);
+      }
     }
   }
 });
