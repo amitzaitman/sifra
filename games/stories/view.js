@@ -433,9 +433,9 @@ export function renderScene(host, round, ctx) {
   let ended = true;
   /** @type {Promise<void>} */
   let story = Promise.resolve();
-  /** In play, the counted things are targets once the story is told (design 6.3, 6.10). */
+  /** The counted things are targets once the story is told (design 6.3, 6.10): in play, and for the demo's hand (R9). */
   const targets = () => {
-    if (mode !== 'play') return;
+    if (thumb) return;
     for (const el of /** @type {NodeListOf<HTMLElement>} */ (draw.querySelectorAll('[data-id]:is(.st-obj, .st-outline):not([data-role="unknown"], [data-marked])'))) el.dataset.target = '';
   };
   const end = () => {
@@ -477,16 +477,23 @@ export function renderScene(host, round, ctx) {
     })();
   }
 
-  // A touch on a counted thing leaves one ink dot; it is no longer a target, so a second touch is logged.
+  /**
+   * A touch on a counted thing, in play and from the demo's hand: one ink dot; it is no longer a target, so a
+   * second touch does nothing and play logs it.
+   * @param {HTMLElement} target
+   */
+  const touch = (target) => {
+    if ('marked' in target.dataset) return;
+    target.dataset.marked = '';
+    delete target.dataset.target;
+    const dot = document.createElement('span');
+    dot.className = 'st-touch';
+    target.append(dot);
+  };
   if (mode === 'play') {
     host.addEventListener('click', (e) => {
       const target = e.target instanceof Element ? e.target.closest('[data-target]') : null;
-      if (!(target instanceof HTMLElement) || busy || solved) return;
-      target.dataset.marked = '';
-      delete target.dataset.target;
-      const dot = document.createElement('span');
-      dot.className = 'st-touch';
-      target.append(dot);
+      if (target instanceof HTMLElement && !busy && !solved) touch(target);
     }, { signal });
   }
 
@@ -559,13 +566,17 @@ export function renderScene(host, round, ctx) {
       sweep();
     },
     async demo(hand) {
-      // The demo shows the story as the child would see it, then: the known part, the whole's chip
-      // where there is one, the '?'; then the hint and the tour (R9, the ten-frame's pattern).
+      // The demo shows the story as the child would see it, then the hand touches the first object of
+      // each known number, in reading order (R7): the start, then what came or what left (its first
+      // outline), or the basket's two parts; on level 3 the start alone, as the whole's outline and
+      // the chips take no touch. Each tap is a touch, as in play (design 6.3). Then the hint and the
+      // tour (R9, the ten-frame's pattern).
       await story;
-      for (const id of kind === 'change' ? ['chip-start', 'chip-whole', 'lid'] : ['obj-0', 'dome']) {
-        // The mixed level's dome alone at rest is dome-top where the wrap's would stand elsewhere.
-        const el = signal.aborted ? null : node(id) ?? (id === 'dome' ? node('dome-top') : null);
-        if (el) await hand.tap(el);
+      for (const id of ['obj-0', kind === 'take' ? `out-${r}` : kind === 'change' ? null : `obj-${s}`]) {
+        const el = signal.aborted || !id ? null : node(id);
+        if (!el) continue;
+        await hand.tap(el);
+        if (!signal.aborted) touch(el);
       }
       // The hand steps off the picture: on the cover it would hide the tour's digits under it.
       if (!signal.aborted) await hand.rest();

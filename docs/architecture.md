@@ -214,7 +214,8 @@ dev-spec A.1 is the shape, with these precisions:
 //                                         solve() (the picture button stays, 2.5), it draws the solved picture, as
 //                                         a solved thumb does: no cover, no intro
 //   demo(hand) => Promise<void>           optional steps before the hand taps the answer; hand.tap(el) => Promise,
-//                                         hand.rest() => Promise (hidden, back off the picture, before a hint or a tour, 2.6)
+//                                         hand.rest() => Promise (hidden, back off the picture, before a hint or a tour, 2.6);
+//                                         it taps only play targets, and each tap is then a touch, as in play (2.6)
 //   label                                 optional aria-label of the picture, from a locked template; a getter where
 //                                         the picture changes: the shell reads it at the mount, at picture(), after
 //                                         solve(), in setEquation and on ctx.relabel(). Solved, it names no cover and
@@ -293,10 +294,20 @@ meaning (from the mount).
   phone moves everything): at what it points at, and after the solve, when the answer card is gone, at "הַבָּא" in its
   place. A tap waits until the hand has arrived, also when a turn aimed it again on its way (the new aim cancels the
   move, and `settle` resolves on a cancel). After the solve the page scrolls so that "הַבָּא" is all on screen.
-- What a demo shows is the game's: the ten-frame's and the stories' hands touch the picture's parts in order, then
-  the hint and the tour (step 2 and 3, as a third miss draws them); the balance's touches the pans left to right (R7;
-  an empty pan at its bowl, the turned rows at their cover), rests, then the hint and the tour; a judging round's pans
-  are empty, so it starts at the hint. Level 10 of the ten-frame moves the counters instead (pedagogy 6.2).
+- What a demo shows is the game's, but the hand touches only what answers a touch in play (owner decision
+  2026-11-04, decisions.md "במה היד נוגעת בהדגמה"): the first counted thing of each known number in reading order
+  (R7), a play target ([data-target]); never a cover, chip, tag, bracket, line or empty pan. Each tap is then a touch
+  through the game's own touch function, the one its play listener calls, so the thing gets the play ink dot (design
+  6.3), and a second touch of it does nothing. The hint and the tour come after every tap, once the hand rests (step
+  2 and 3, as a third miss draws them), then the answer. The ten-frame: the known part's first counter (a frame),
+  the whole's first dot and the known part's (the bond), the whole's first dot (pair cards), the bundle and the first
+  loose stick (level 8), the bundle (level 9), the first counter of each addend (fixed frames); level 10 moves the
+  counters instead, as its taps do in play (pedagogy 6.2), and has no hint. The balance: the first cube of each known
+  number, the left pan's then the right's; the turned rows, the first dot of each number it can see, the first row's
+  then the turned row's; a judging round's pans are empty, so it starts at the hint. The stories: the start's first
+  object, then the first of what came, of what left (its outline) or of the basket's second part; level 3 the
+  start's alone (the whole is an outline and a chip). In demo mode a game marks its counted things as targets as in
+  play, but adds no click listener: a child's tap during a demo changes nothing, as before.
 - It runs on entry to a level with `demo: true` as 3.4 says (never in a review round), and once at any level after a
   stuck return (3.7).
 - The hand button (always in the bar) aborts the round, runs a demo at its level, then mounts the same round again
@@ -342,7 +353,8 @@ meaning (from the mount).
   `--cover-h` square at both ends, so the cover covers every place between them; without it the equation's square
   cover is unchanged.
 - Everything mathematical has the attribute `dir="ltr"` and `data-math` (R7). Elements the child is meant to tap in
-  the picture have `data-target`, so they are not counted as off-target taps.
+  the picture have `data-target`, so they are not counted as off-target taps; in a demo too, as the demo's hand
+  taps only them (2.6).
 - game.css: every selector starts with `[data-game="<id>"]`; keyframe names start with the id; no CSS nesting.
 - A helper a second game needs moves to lib/ as it is, in a step of its own (CLAUDE.md "Shared code"), keeping the scans of
   4.4, as lib/weights.js did (2026-10-30). A game branch does not edit lib/ (section 7).
@@ -969,7 +981,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - A test does not race the machine: what must still be running when it looks is held, not timed (a loaded CI runner
   failed both of these, 2026-10-31). `watchHand(page, { fromStart: true })`, called before the page opens, watches a
   demo that runs on load from the page's first script; begun after the load, a slow page let the hand's first tap
-  pass unseen (2 taps of 3). The locked-card test (4.6) holds the display's animations (`animation-play-state:
+  pass unseen (2 taps of 3). At each tap it also takes what a finger at the hand's tip would hit
+  (`elementFromPoint`, the demo's layer takes no taps), and `expectHandOnTargets` reads it once the demo is solved
+  (R9, 4.6). The locked-card test (4.6) holds the display's animations (`animation-play-state:
   paused` in the picture, so the lock, which ends with them, stays) while the finger is down, then lets them go.
   Where the engines draw a pixel or so apart, the room is named and explained once: `ringInset` (balance),
   `offRoom` (ten-frame), `inkLow` (stories: WebKit draws the digits 0.3 to 1.8px lower than Chromium, so their ink's
@@ -1033,7 +1047,10 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `[data-role]` element has its role token in `fill` or `background-color`; a `[data-second]` part, `--role-part-2`).
   The demo's hand (2.6) at every level, through the hand button at 568×320: at each tap the hand is on screen, on
   every frame no `[data-tour]` digit is under its box, and "הַבָּא" is all on screen at the end (`watchHand` in
-  e2e/helpers.js). The hand held on its way and the phone turned (390×844 to 844×390, ten-frame level 10) stays on
+  e2e/helpers.js); and it touches only play targets (`expectHandOnTargets`, R9, owner decision 2026-11-04): each
+  tap but the last on a counted thing a finger there would hit (`[data-target]` in the picture), before the hint
+  and the tour and never the same thing twice, each left with one ink dot and nothing else marked (on ten-frame
+  level 10 the taps move counters and leave none), and the last on the answer card. The hand held on its way and the phone turned (390×844 to 844×390, ten-frame level 10) stays on
   the demo, below the bar; turned back after the demo, its tip is on "הַבָּא".
 
 ### 4.7 Each game spec (e2e/<id>.spec.js)
@@ -1044,9 +1061,12 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   changes nothing, and the stored attempt lists the rule after the round. Second miss: `[data-hint]`. Third: one
   card left, the last `[data-tour]` is the answer, outcome `shown`. A 3-option level: hint, then tour.
 - Reduced motion: a tap is taken right after a miss. Demo levels run the demo, and no tour digit is under the hand
-  (it rests before the hint and the tour, 2.6); in the balance the hand touches the left pan, then the right, and
-  the hint and the tour are drawn before it taps the answer (the demo levels, "show me how" on level 3, and on the
-  turned rows, a symbols level and the relational level); `symbols` levels log `picture`.
+  (it rests before the hint and the tour, 2.6); the hand touches only play targets, each left with its ink dot
+  (`expectHandOnTargets`), at every demo level of each game and in "show me how" (ten-frame level 3, the stories'
+  take to 10 and both stories of the mixed level); in the balance it touches the first cube of each known number,
+  the left side's then the right's, and the hint and the tour are drawn before it taps the answer (the demo levels,
+  "show me how" on level 3, and on the turned rows, a symbols level and the relational level); `symbols` levels log
+  `picture`.
 - The game's own R6 [browser] (first dot left of the second, design §7.3 drawings), and a session to the end screen.
 - Paint order: in ten-frame, `at()` puts text in reading order (R7), not last, so a digit can land under a node drawn
   before it; a ghost goes before the first text child of its layer, so no ghost covers a digit.
@@ -1341,8 +1361,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | "Show me how" | A demo, then the same round from the start; at best `help`; in `symbols` look the demo draws the help picture | R5 logs it as help; restarting avoids replaying half a ladder; R9: the hand works on the picture |
 | The demo's round | A plain round with other numbers: another answer and, where both have a row, another row (either order); plain: no 0 in the answer and no answer the row shows; from the demo seed up by 1, 50 tries, else the first with other numbers (3.8, `demoSeedFor` in shell/planner.js). Since 2026-11-01 also no exercise the session dealt, and the demo's exercise counts as dealt, so no later round of the session is the hand's while the level has an exercise the session has not dealt (3.3). Checked by the generic test for every game at every level (`checkDemo`, `checkSession`), and that the shell uses it by site.spec.js and stories.spec.js (4.6, 4.9). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "סיבוב ההדגמה", "אותו תרגיל פעמיים במפגש") | R9 shows the action on one round and gives the child a round "with other numbers". The demo was dealt like any round: the hand tapped the round's own answer in up to a third of a level's demos, and an edge round (`10 + ? = 10`, a pair with 0) or a double (`2 + ? = 4`, read as given.part) was the worked example. The demo's exercise was then not counted: it came back as a later round of the session, logged `first`, in rounds 2-4 of 15-50% of a demo level's sessions (hunt 2 #2) |
 | When an entry demo is seen | Once the hand has tapped the answer; at its start it writes only a game's first ladder (the session's start writes the session count; 2026-11-01) (3.4, 3.9). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "הדגמה שנקטעה") | R9's watching round is the first round of a new structure; 3.3 drops a round the child leaves, and a demo left half-way was dropped too but counted as seen. The hand button brings it back only at a cost: the round becomes `help`, which ends the fast climb |
-| The demo's hand | `hand.tap(el)` scrolls the page, never the picture's panel, so `el` and the hand under its middle are on screen; `hand.rest()` hides the hand and takes it back to its place off the picture (hidden at rest and from the start, 2026-11-01), and every game rests it before its hint and tour; it aims again on every resize, and after the solve at "הַבָּא", which is scrolled all on screen. A two-column layout for a phone held sideways is not built: landscape scrolls down (design §5). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "היד בהדגמה") | The hunt of 2026-10-31: the hand stayed on the cover through the hint and the tour and hid their digits (ten-frame levels 3, 4, 5 and 11, up to 66% of a digit; every stories demo). On a phone held sideways the round is taller than the screen and a demo opens at the top (3.2), so the hand's tap on the answer and "הַבָּא" were below it; R9 wants the child to see the hand touch the answer, and design §6.9 puts "הַבָּא" where the finger is. A turned phone left the hand over the bar until its next tap. The layout is design §5's, and portrait comes first (decisions.md). On 320×568 and 375×548 the hand's place at the foot of the round lies on the cards, and with only 51px under them at 375×548 no other place is free: shown at rest, the hand covered a card, usually a wrong one, through the hint and the tour, and through a whole judging round (hunt 2 #1) |
-| The balance's demo | The hand touches the left pan, then the right (R7; an empty pan at its bowl, the turned rows at their cover), rests, then the hint and the tour as a third miss draws them, then the answer; a judging round's pans are empty, so it starts at the hint (2.6). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "ההדגמה במאזניים") | The balance's demo tapped the cover and solved, with no hint and no count, at levels 1, 2, 7 and 10 and in every "show me how". R9's worked example is the only teaching a silent app gives, and the other games' demos show the hint and the tour |
+| The demo's hand | `hand.tap(el)` scrolls the page, never the picture's panel, so `el` and the hand under its middle are on screen; `hand.rest()` hides the hand and takes it back to its place off the picture (hidden at rest and from the start, 2026-11-01), and every game rests it before its hint and tour; it aims again on every resize, and after the solve at "הַבָּא", which is scrolled all on screen. A two-column layout for a phone held sideways is not built: landscape scrolls down (design §5). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "היד בהדגמה"). What it taps is the owner's decision of 2026-11-04 ("במה היד נוגעת בהדגמה"): only play targets, the first counted thing of each known number in order (R7), never a cover, chip, tag, bracket, line or empty pan; each tap is then the game's play touch, so it leaves the ink dot (design 6.3); the hint and the tour come after every tap (2.6) | The hunt of 2026-10-31: the hand stayed on the cover through the hint and the tour and hid their digits (ten-frame levels 3, 4, 5 and 11, up to 66% of a digit; every stories demo). On a phone held sideways the round is taller than the screen and a demo opens at the top (3.2), so the hand's tap on the answer and "הַבָּא" were below it; R9 wants the child to see the hand touch the answer, and design §6.9 puts "הַבָּא" where the finger is. A turned phone left the hand over the bar until its next tap. The layout is design §5's, and portrait comes first (decisions.md). On 320×568 and 375×548 the hand's place at the foot of the round lies on the cards, and with only 51px under them at 375×548 no other place is free: shown at rest, the hand covered a card, usually a wrong one, through the hint and the tour, and through a whole judging round (hunt 2 #1). The design review of 2026-11-04: in almost every demo the hand tapped the `?` cover (or a chip, a tag, an empty pan), which lifted at once as the tour began; in play the same touch does nothing, a child who cannot read copies the hand, so pedagogy §8.3's question whether children touch the dome to lift it could not be read cleanly, and the ink dot, the picture's only answer to a touch, never showed in a demo |
+| The balance's demo | The hand touches the first cube of each known number, the left pan's then the right's (R7), and in the turned rows the first dot of each number it can see, the first row's then the turned row's; never a cover or an empty pan, which answer no touch in play (owner decision 2026-11-04, "במה היד נוגעת בהדגמה": it replaced "the left pan, then the right; an empty pan at its bowl, the turned rows at their cover"); each cube or dot gets the ink dot; it rests, then the hint and the tour as a third miss draws them, then the answer; a judging round's pans are empty, so it starts at the hint (2.6). Decided 2026-10-31, an engineering decision the owner may reverse (decisions.md, "ההדגמה במאזניים") | The balance's demo tapped the cover and solved, with no hint and no count, at levels 1, 2, 7 and 10 and in every "show me how". R9's worked example is the only teaching a silent app gives, and the other games' demos show the hint and the tour |
 | Stuck target | Held (`hold`): the rest of the session, then the next step, until the child passes the target level | §5.4: "the child plays it" and sees the demo again, also when the stuck round was a session's last |
 | Next-step jump | May move a level back up after a down step | §5.12 opens "the game and level of that skill"; the ladder corrects it within rounds |
 | All passed | The first game at its current level | Home always has its one big button |

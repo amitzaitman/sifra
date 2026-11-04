@@ -482,7 +482,7 @@ function drawRound(host, round, solved) {
   return pic;
 }
 
-/** A touch mark (design 6.3): an ink dot on a counted thing, once; a second touch is logged as off-target. @param {HTMLElement} node */
+/** A touch mark (design 6.3), in play and from the demo's hand: an ink dot on a counted thing, once; a second touch is logged as off-target. @param {HTMLElement} node */
 function touch(node) {
   if (node.dataset.marked !== undefined) return;
   node.dataset.marked = '';
@@ -610,7 +610,12 @@ export function render(host, round, ctx) {
         await hand.rest();
         if (!signal.aborted) await step();
       };
-      await kind().demo(pic, hand, { hint: aside(hint), tour: aside(tour), signal });
+      // The hand touches only what a touch answers in play, and its tap is that touch: the ink dot (design 6.3).
+      const press = async (node) => {
+        await hand.tap(node);
+        if (!signal.aborted) touch(node);
+      };
+      await kind().demo(pic, hand, { hint: aside(hint), tour: aside(tour), press, signal });
     },
   };
 }

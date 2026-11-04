@@ -5,7 +5,7 @@ import * as game from '../games/ten-frame/game.js';
 import { layoutBridge } from '../games/ten-frame/draw.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
   storeWith, stored, watchHand,
 } from './helpers.js';
 
@@ -718,6 +718,8 @@ for (const level of game.levels.filter((l) => l.demo).map((l) => l.id)) {
     if (level === 'bridge-move') await expect(page.locator('[data-area="equation"] .eq')).toHaveText(/^10\+\d=\d+$/);
     else await expect(page.locator('[data-tour]').first()).toBeVisible();
     expect((await handSeen(page)).covered, 'tour digits under the hand').toEqual([]);
+    // Only play targets, each with its ink dot (owner decision 2026-11-04); level 10's taps move counters, as in play.
+    await expectHandOnTargets(page, { moves: level === 'bridge-move' });
     expect((await stored(page)).child.attempts).toEqual([]);
     await look(page);
     await page.locator('[data-next]').click();
@@ -808,9 +810,13 @@ test('R7: the picture, its hint and its tour read left to right, line by line', 
 
 test('"show me how": a demo, then the same round from the start, logged as how', async ({ page }) => {
   const { data } = await playAt(page, 'split-bond');
+  await watchHand(page);
   await page.locator('[data-how]').click();
   await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
   await expect(page.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+  // The whole's first dot, then the known part's: play targets, each with its ink dot (R9).
+  await expectHandOnTargets(page);
+  expect((await handSeen(page)).taps).toHaveLength(3);
   await look(page);
   await page.locator('[data-next]').click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', data.seed);

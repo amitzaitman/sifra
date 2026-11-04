@@ -26,7 +26,11 @@ import { LINE, at, drawBalance, drawRows, el, ghostRows, ghostSlots, layoutPan, 
  * @property {(hint: Layer) => Tour} tour step 3
  * @property {(hand: Hand, steps: DemoSteps) => Promise<void>} demo the hand's taps, then the hint and the tour (R9)
  */
-/** @typedef {{ hint: () => Promise<void>, tour: () => Promise<void> }} DemoSteps what a demo shows after the hand's taps, as a third miss does */
+/**
+ * What a demo does (R9): press, the hand's tap on a counted thing, which gets the ink dot a touch leaves in play
+ * (design 6.3); then what a third miss shows, the hint and the tour.
+ * @typedef {{ press: (node: HTMLElement) => Promise<void>, hint: () => Promise<void>, tour: () => Promise<void> }} DemoSteps
+ */
 
 /** @type {(round: Round) => any[]} */
 const groupsOf = (round) => (round.look === 'symbols' ? round.helpPicture : round.picture) ?? [];
@@ -485,19 +489,20 @@ function balanceScene(host, round, solved, signal) {
       return { steps, pace: 1, ring: () => (steps.length ? rings(layer, u, span.runs, 'is-tour') : []) };
     },
     /**
-     * The demo (R9): the hand touches the pans left to right (R7; an empty pan at its bowl), steps off the picture,
-     * then the hint and the tour as a third miss draws them. A judging round's pans are empty: it starts at the hint.
+     * The demo (R9): the hand touches the first cube of each known number, the left pan's then the right's (R7),
+     * never a cover or an empty pan, which no touch answers in play; it steps off the picture, then the hint and
+     * the tour as a third miss draws them. A judging round's pans are empty: it starts at the hint.
      * @param {Hand} hand
      * @param {DemoSteps} steps
      */
     async demo(hand, steps) {
-      /** @type {(side: Side) => Element} */
-      const touch = (side) => (pans[side].cubes.length || pans[side].lids.length ? pans[side].stack : pans[side].el.querySelector('.bl-bowl'));
-      if (!judging) {
-        await hand.tap(touch('left'));
-        if (!signal.aborted) await hand.tap(touch('right'));
-        if (!signal.aborted) await hand.rest();
+      for (const side of /** @type {Side[]} */ (['left', 'right'])) {
+        for (const [i, g] of data[side].entries()) {
+          const first = g.role === 'unknown' ? null : cubesOf(side, i)[0];
+          if (first && !signal.aborted) await steps.press(first);
+        }
       }
+      if (!signal.aborted) await hand.rest();
       if (!signal.aborted) await steps.hint();
       if (!signal.aborted) await steps.tour();
     },
@@ -593,12 +598,19 @@ function rowsScene(host, round, solved, signal) {
       return { steps: /** @type {Steps} */ (unknowns().map((dot, j) => [dot, j + 1])), pace: 1, ring: () => [put(hint.el, 'bl-ring is-tour', { ...place(0), w: answer })] };
     },
     /**
-     * The demo (R9): the hand touches the cover, steps off, then the hint and the tour.
+     * The demo (R9): the hand touches the first dot of each number it can see, the first row's then the turned
+     * row's (R7), never the cover; it steps off, then the hint and the tour.
      * @param {Hand} hand
      * @param {DemoSteps} steps
      */
     async demo(hand, steps) {
-      await hand.tap(d.lids[0]);
+      for (const side of /** @type {Side[]} */ (['left', 'right'])) {
+        const { layout, dots } = lines[side];
+        for (const [i, g] of data[side].entries()) {
+          const first = g.role === 'unknown' ? null : dots.find((_, j) => layout.dots[j].group === i);
+          if (first && !signal.aborted) await steps.press(first);
+        }
+      }
       if (!signal.aborted) await hand.rest();
       if (!signal.aborted) await steps.hint();
       if (!signal.aborted) await steps.tour();
@@ -625,19 +637,29 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
   let closed = false;
   /** Counted things (design 6.3): the known cubes on the real pans and the known dots of the rows. */
   const counted = ':scope > .bl-pan > .bl-stack > .bl-cube:not([data-role="unknown"]), :scope > .bl-dot:not([data-role="unknown"])';
-  /** In play, counted things are targets (architecture 2.8), so the shell does not log them as off-target. */
+  /**
+   * Counted things are targets (architecture 2.8): in play the shell does not log them as off-target, and the
+   * demo's hand touches only them (R9).
+   */
   const countable = () => {
-    if (mode !== 'play') return;
+    if (mode === 'thumb') return;
     s.scene.querySelectorAll(counted).forEach((n) => { if (!(n instanceof HTMLElement) || 'marked' in n.dataset) return; n.dataset.target = ''; });
   };
-  // A touch on a counted thing leaves one ink dot; it is no longer a target, so a second touch is logged.
+  /**
+   * A touch on a counted thing, in play and from the demo's hand: one ink dot; it is no longer a target, so a
+   * second touch does nothing and play logs it.
+   * @param {HTMLElement} node
+   */
+  const touch = (node) => {
+    if ('marked' in node.dataset) return;
+    node.dataset.marked = '';
+    delete node.dataset.target;
+    node.append(el('span', 'bl-touch'));
+  };
   if (mode === 'play') {
     host.addEventListener('click', (e) => {
       const node = e.target instanceof Element ? e.target.closest('[data-target]') : null;
-      if (!(node instanceof HTMLElement) || busy) return;
-      node.dataset.marked = '';
-      delete node.dataset.target;
-      node.append(el('span', 'bl-touch'));
+      if (node instanceof HTMLElement && !busy) touch(node);
     }, { signal });
   }
   /**
@@ -780,8 +802,12 @@ export function renderBalance(host, round, { signal, mode, solved, setEquation }
     async demo(hand) {
       if (!s) draw(false);
       busy = true;
-      // After the hand's taps, the hint and the tour, as a third miss shows them (R9).
+      // The hand's taps, each a touch as in play; then the hint and the tour, as a third miss shows them (R9).
       await s.demo(hand, {
+        press: async (node) => {
+          await hand.tap(node);
+          if (!signal.aborted) touch(node);
+        },
         hint: async () => {
           hint ??= s.hint();
           await settle(s.scene, signal);
