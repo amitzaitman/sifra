@@ -10,7 +10,7 @@ import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
 import { demoSeedFor, exerciseOf, pickMix, plainDemo } from '../shell/planner.js';
 import {
-  test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
+  test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
 } from './helpers.js';
 
@@ -330,10 +330,11 @@ for (const [site, route] of [[FIXTURE, 'parts/1/3'], [INDEX, 'ten-frame/1/3'], [
 
 // The demo's hand on a phone held sideways (2.6, the hunt of 2026-10-31), at every level of every game: the round
 // is taller than the screen, so the page scrolls to each tap, the hand and what it taps on screen; the hand steps off
-// the picture before the hint and the tour, so no tour digit is under it; "הַבָּא" is on screen at the end.
+// the picture before the hint and the tour, so no tour digit is under it; "הַבָּא" is on screen at the end. It touches
+// only play targets, each left with its ink dot, then the answer card (owner decision 2026-11-04).
 for (const game of Object.values(registry)) {
   for (const [i, level] of game.levels.entries()) {
-    test(`R9 at 568×320: the hand on screen at every tap, over no tour digit, "הַבָּא" on screen: ${game.meta.id} ${i + 1} (${level.id})`, async ({ page }) => {
+    test(`R9 at 568×320: the hand on screen at every tap, on play targets only, over no tour digit, "הַבָּא" on screen: ${game.meta.id} ${i + 1} (${level.id})`, async ({ page }) => {
       await page.setViewportSize({ width: 568, height: 320 });
       await open(page, `${INDEX}#/dev/${game.meta.id}/${i + 1}/1`);
       await expect(page.locator('main[data-screen="round"]')).toBeVisible();
@@ -349,6 +350,7 @@ for (const game of Object.values(registry)) {
         expect(tap.top >= 0 && tap.bottom <= tap.screen, `a tap at ${tap.top}-${tap.bottom} on a ${tap.screen}px screen`).toBe(true);
         expect(tap.moving, 'the hand had stopped when it tapped').toBe(false);
       }
+      await expectHandOnTargets(page, { moves: game.meta.id === 'ten-frame' && level.id === 'bridge-move' });
     });
   }
 }

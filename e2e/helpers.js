@@ -217,8 +217,10 @@ export async function expectCalm(page) {
  * Watches the demo's hand (R9, architecture 2.6) from now until a demo screen is solved: on every frame, each tour
  * digit ([data-tour]) under the hand's box, and each card under the hand while it is at rest (no aim), visible, and a
  * hint or a tour is drawn (`onCards`); at each tap, the hand's box, the screen's height, whether a hint and
- * a tour were drawn by then, whether the hand was still on its way (a transition running on it), and the index of
- * the answer card under its tip (null for none). handSeen reads it. Call it once the page is open, before the demo
+ * a tour were drawn by then, whether the hand was still on its way (a transition running on it), the index of
+ * the answer card under its tip (null for none), and what a finger at its tip would hit (`on`: 'card', 'target' for a
+ * counted thing of the picture, [data-target], or null, with `what`, its markup). handSeen reads it; the targets
+ * themselves stay in the page for expectHandOnTargets. Call it once the page is open, before the demo
  * starts; for a demo that runs on load (a demo level), with `fromStart` before the page opens: it is then watched
  * from the page's first script, so a slow machine cannot let the hand's first tap pass before the watch begins.
  * @param {import('@playwright/test').Page} page
@@ -230,9 +232,11 @@ export async function watchHand(page, { fromStart = false } = {}) {
 
 /** watchHand's watch, run in the page (see watchHand). */
 function handWatch() {
-  /** @type {{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }} */
+  /** @type {{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null, on: string | null, what: string }[] }} */
   const seen = { covered: [], onCards: [], taps: [] };
-  Object.assign(globalThis, { handSeen: seen });
+  /** @type {(Element | null)[]} each tap's target in the picture, by tap */
+  const targets = [];
+  Object.assign(globalThis, { handSeen: seen, handTargets: targets });
   const demo = () => document.querySelector('main[data-screen="demo"]');
   /** @type {(a: DOMRect, b: DOMRect) => boolean} */
   const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -261,9 +265,14 @@ function handWatch() {
         const b = el.getBoundingClientRect();
         return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
       });
+      // What a finger at the tip would hit: the demo's layer takes no taps (app.css .demo), so this is what lies under it.
+      const hit = document.elementFromPoint(x, y);
+      const counted = hit?.closest('[data-area="picture"] [data-target]') ?? null;
+      targets.push(counted);
       seen.taps.push({ left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom), screen: innerHeight,
         hint: Boolean(document.querySelector('[data-hint]')), tour: Boolean(document.querySelector('[data-tour]')),
-        moving: target.getAnimations().some((a) => 'transitionProperty' in a), card: card ? Number(card.getAttribute('data-index')) : null });
+        moving: target.getAnimations().some((a) => 'transitionProperty' in a), card: card ? Number(card.getAttribute('data-index')) : null,
+        on: hit?.closest('[data-choices] [data-index]') ? 'card' : counted ? 'target' : null, what: hit?.outerHTML.slice(0, 120) ?? 'nothing' });
     }
   }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
 }
@@ -271,9 +280,43 @@ function handWatch() {
 /**
  * What watchHand saw.
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null }[] }>}
+ * @returns {Promise<{ covered: string[], onCards: string[], taps: { left: number, top: number, bottom: number, screen: number, hint: boolean, tour: boolean, moving: boolean, card: number | null, on: string | null, what: string }[] }>}
  */
 export const handSeen = (page) => page.evaluate(() => /** @type {any} */ (globalThis).handSeen);
+
+/**
+ * R9 [browser] (owner decision 2026-11-04, "במה היד נוגעת בהדגמה"), on a demo watchHand watched to its solve: the
+ * hand touches only what answers a touch in play. Each tap but the last is on a counted thing of the picture, a
+ * [data-target] under its tip as a finger there would hit it (never a cover, chip, tag, bracket, line or empty pan),
+ * before the hint and the tour, and no thing twice; each leaves one ink dot (design 6.3) and nothing else is marked.
+ * The last tap is on the answer card. `moves`: ten-frame level 10, where a tap moves a counter, as in play, and
+ * leaves no dot.
+ * @param {import('@playwright/test').Page} page
+ * @param {{ moves?: boolean }} [options]
+ */
+export async function expectHandOnTargets(page, { moves = false } = {}) {
+  const { answerAt } = await roundOf(page);
+  const { taps } = await handSeen(page);
+  expect(taps.length, 'the hand taps').toBeGreaterThan(0);
+  const answer = /** @type {(typeof taps)[number]} */ (taps.at(-1));
+  expect([answer.on, answer.card], `the last tap, on ${answer.what}`).toEqual(['card', answerAt]);
+  for (const [i, tap] of taps.slice(0, -1).entries()) {
+    expect(tap.on, `tap ${i + 1} on a counted thing, not ${tap.what}`).toBe('target');
+    expect(tap.hint || tap.tour, `tap ${i + 1} before the hint and the tour`).toBe(false);
+  }
+  const marks = await page.evaluate(() => {
+    const els = /** @type {Element[]} */ (/** @type {any} */ (globalThis).handTargets.slice(0, -1));
+    return {
+      distinct: new Set(els).size,
+      dots: els.map((el) => (el.hasAttribute('data-marked') ? el.querySelectorAll(':scope > .tf-mark, :scope > .bl-touch, :scope > .st-touch').length : 0)),
+      marked: document.querySelectorAll('[data-area="picture"] [data-marked]').length,
+    };
+  });
+  const n = taps.length - 1;
+  expect(marks.distinct, 'no counted thing touched twice').toBe(n);
+  expect(marks.dots, 'an ink dot on each thing the hand touched').toEqual(Array(n).fill(moves ? 0 : 1));
+  expect(marks.marked, 'nothing else marked').toBe(moves ? 0 : n);
+}
 
 /**
  * Every thumb on screen is drawn: none left empty, or marked data-broken, by a render that threw

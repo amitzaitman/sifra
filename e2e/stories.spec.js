@@ -10,7 +10,7 @@ import { BEAT } from '../games/stories/view.js';
 import { exerciseOf } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
   storeWith, stored, watchHand,
 } from './helpers.js';
 
@@ -985,11 +985,28 @@ for (const id of stories.levels.filter((l) => l.demo).map((l) => l.id)) {
     await expect(page.locator('[data-tour]').last()).toHaveText(String((await roundOf(page)).round.answer));
     // The hand steps off the picture before the hint and the tour (R9, as in the other games).
     expect((await handSeen(page)).covered, 'tour digits under the hand').toEqual([]);
+    // Only play targets, each with its ink dot: the start's first object, then what came, what left or the second part;
+    // on level 3 the start alone (owner decision 2026-11-04).
+    await expectHandOnTargets(page);
+    expect((await handSeen(page)).taps, 'a tap per known number with objects, then the answer').toHaveLength(id === 'add-change' ? 2 : 3);
     await expect(page.locator('[data-area="picture"] .cover:not(.is-lifted)')).toHaveCount(0);
     expect((await stored(page)).child.attempts).toEqual([]);
     await look(page);
     await page.locator('[data-next]').click();
     await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-level', String(number(id)));
+  });
+}
+
+// "Show me how" on levels with no demo of their own (owner decision 2026-11-04): take to 10 and both stories of the mixed
+// level, whose dome stands alone at rest; the hand touches only play targets, each left with its ink dot, then the answer.
+for (const [id, structure] of [['take-10'], ['mixed-10', 'change-add'], ['mixed-10', 'change-take']]) {
+  test(`"show me how" at ${id}${structure ? ` (${structure})` : ''}: the hand touches only play targets, each with its ink dot (R9)`, async ({ page }) => {
+    await devAt(page, id, 1, structure);
+    await watchHand(page);
+    await page.locator('[data-how]').click();
+    await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-solved', '', { timeout: 15000 });
+    await expectHandOnTargets(page);
+    expect((await handSeen(page)).taps, 'the start, what came or left, then the answer').toHaveLength(3);
   });
 }
 

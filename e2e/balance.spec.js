@@ -3,9 +3,10 @@
 // after "show me how", reduced motion, demos, the symbols picture, 320px, R6 and R7, a session.
 import { RULES } from '../data/errors.js';
 import * as balance from '../games/balance/game.js';
+import { LINE } from '../games/balance/stage.js';
 import { rng } from '../shell/rng.js';
 import {
-  test, expect, INDEX, NOW, dashProblems, expectCalm, expectMathLeftToRight, expectThumbsDrawn, handSeen, ladderAt, look, readsLeftToRight, roundOf, seedStore,
+  test, expect, INDEX, NOW, dashProblems, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectThumbsDrawn, handSeen, ladderAt, look, readsLeftToRight, roundOf, seedStore,
   storeWith, stored, watchHand,
 } from './helpers.js';
 
@@ -586,9 +587,11 @@ test('reduced motion on the piles (same-as): the first miss shows its display\'s
 });
 
 /**
- * R9 (the hunt of 2026-10-31): the demo on screen shows how, as a third miss does: the hand touches the pans left to
- * right (the turned rows: the cover), steps off, and the hint and the tour are drawn before it taps the answer; a
- * judging round starts at the hint. The tour's last digit is the answer; no digit is under the hand.
+ * R9 (the hunt of 2026-10-31; owner decision 2026-11-04): the demo on screen shows how, as a third miss does: the hand
+ * touches the first cube of each known number, the left pan's then the right's (the turned rows: the first dot of
+ * each number it can see, the first row's then the turned row's), each a play target left with its ink dot, never a
+ * cover or an empty pan; it steps off, and the hint and the tour are drawn before it taps the answer; a judging round
+ * starts at the hint. The tour's last digit is the answer; no digit is under the hand.
  * @param {import('@playwright/test').Page} page
  */
 async function expectDemoShows(page) {
@@ -600,12 +603,18 @@ async function expectDemoShows(page) {
   expect(answer.hint && answer.tour, 'the hint and the tour before the hand taps the answer').toBe(true);
   await expect(page.locator('[data-hint]')).toHaveCount(1);
   expect(covered, 'tour digits under the hand').toEqual([]);
+  await expectHandOnTargets(page);
   if (round.model === 'cards') expect(taps).toHaveLength(1);
   else await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
-  if (round.model === 'balance') {
-    expect(taps).toHaveLength(3);
-    expect(taps[0].left, 'the left pan, then the right').toBeLessThan(taps[1].left);
-  }
+  if (round.model === 'cards') return;
+  // One tap per known number, in the exercise's order: the left side's, then the right's (R7).
+  const groups = (round.look === 'symbols' ? round.helpPicture : round.picture).filter((g) => g.role !== 'unknown' && g.count > 0);
+  const known = [...groups.filter((g) => g.side === 'left'), ...groups.filter((g) => g.side === 'right')];
+  expect(taps, 'a tap per known number, then the answer').toHaveLength(known.length + 1);
+  // A pan says its side; a dot of the turned rows stands in the first row (the left side) or at LINE, the turned one.
+  const sides = await page.evaluate((line) => /** @type {any} */ (globalThis).handTargets.slice(0, -1).map((/** @type {HTMLElement} */ el) =>
+    el.closest('[data-pan]')?.getAttribute('data-pan') ?? (Number(el.style.getPropertyValue('--y')) < line ? 'left' : 'right')), LINE);
+  expect(sides, 'the left side first, then the right').toEqual(known.map((g) => g.side));
 }
 
 for (const level of ['same', 'missing-right', 'both-sides', 'true-false']) {

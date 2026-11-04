@@ -195,7 +195,11 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
   while a hint or a tour is drawn (it is hidden at rest). At every level at 568×320 the hand is on screen at each tap and
   "הַבָּא" is all on screen at the end; turned mid-demo the hand stays below the bar, turned on its way
   it taps only once it has stopped on the answer card, and turned after it its tip is on "הַבָּא". In the balance the hint and the tour are drawn before the hand taps the
-  answer (architecture 2.6, 4.6, 4.7).
+  answer (architecture 2.6, 4.6, 4.7). The hand touches only play targets (owner decision 2026-11-04): at every
+  demo level and in "show me how" at every level, each tap but the last is on a counted thing of the picture that a
+  finger at the hand's tip would hit (`[data-target]`, read with `elementFromPoint`), before the hint and the tour
+  and never the same thing twice; each leaves one ink dot and nothing else is marked (ten-frame level 10: the taps
+  move counters, no dot); the last is on the answer card (`expectHandOnTargets` in e2e/helpers.js).
 - **R10 [browser]:** while a round waits, `document.getAnimations()` targets only elements with a
   quantity `data-role`. After `page.clock.runFor(60000)` no new element appears. No element
   outside `[data-demo]` has a computed `animation-delay` or `transition-delay` above about 0.3s.

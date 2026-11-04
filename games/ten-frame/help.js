@@ -342,9 +342,9 @@ export const FRAME = {
     return moved;
   },
 
-  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  /** The hand touches the known part's first counter (R9); the whole is the tray or its tag, which no touch counts. @param {Pic} pic @param {Hand} hand @param {Steps} steps */
   async demo(pic, hand, steps) {
-    await hand.tap(pic.covers[0] ?? pic.t.cells[pic.d.part]);
+    if (pic.t.parts[0]) await steps.press(pic.t.parts[0]);
     await steps.hint();
     await steps.tour();
   },
@@ -478,11 +478,9 @@ export const TREE = {
   tour: (pic, root, signal) => treeCount(pic, root, pic.t.right, signal),
   /** @param {Pic} pic */
   solve: (pic) => lift(pic, true),
-  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  /** The hand touches the whole's first dot, then the known part's (R7, R9). @param {Pic} pic @param {Hand} hand @param {Steps} steps */
   async demo(pic, hand, steps) {
-    await hand.tap(pic.t.top);
-    await hand.tap(pic.t.left.circle);
-    await hand.tap(pic.covers[0]);
+    for (const dot of [pic.t.wholeDots[0], pic.t.left.dots[0]]) if (dot) await steps.press(dot);
     await steps.hint();
     await steps.tour();
   },
@@ -535,10 +533,9 @@ export const PAIRS = {
   },
   /** @param {Pic} pic */
   solve: (pic) => lift(pic, true),
-  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  /** The hand touches the whole's first dot: both parts are unknown (R9). @param {Pic} pic @param {Hand} hand @param {Steps} steps */
   async demo(pic, hand, steps) {
-    await hand.tap(pic.t.top);
-    for (const node of pic.covers) await hand.tap(node);
+    if (pic.t.wholeDots[0]) await steps.press(pic.t.wholeDots[0]);
     await steps.hint();
     await steps.tour();
   },
@@ -614,11 +611,11 @@ export const BUNDLES = {
     if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', around(boxes))), signal);
   },
   solve: () => [],
-  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  /** The hand touches the bundle, then the first loose stick (R7, R9). @param {Pic} pic @param {Hand} hand @param {Steps} steps */
   async demo(pic, hand, steps) {
-    await hand.tap(pic.t.bundle);
+    await steps.press(pic.t.bundle);
+    if (pic.t.sticks.length) await steps.press(pic.t.sticks[0]);
     await steps.hint();
-    if (pic.t.sticks.length) await hand.tap(pic.t.sticks[0]);
     await steps.tour();
   },
 };
@@ -678,10 +675,9 @@ export const BUNDLES_PART = {
   },
   /** @param {Pic} pic */
   solve: (pic) => lift(pic, true),
-  /** @param {Pic} pic @param {Hand} hand @param {Steps} steps */
+  /** The hand touches the bundle, the known part; the whole is the tag (R9). @param {Pic} pic @param {Hand} hand @param {Steps} steps */
   async demo(pic, hand, steps) {
-    await hand.tap(pic.t.bundle);
-    if (pic.covers[0]) await hand.tap(pic.covers[0]);
+    await steps.press(pic.t.bundle);
     await steps.hint();
     await steps.tour();
   },
@@ -877,20 +873,22 @@ export const BRIDGE = {
   /** The closing: the whole's outline shows (game.css, .is-solved); the counters stay as they are. */
   solve: () => [],
   /**
-   * Level 10: the hand moves counters into the first frame until it is full. Fixed frames: the
-   * hand points at the second addend, then the hint and the tour.
+   * Level 10: the hand moves counters into the first frame until it is full, as its taps do in
+   * play. Fixed frames: the hand touches the first counter of each addend (R7), then the hint and the tour.
    * @param {Pic} pic @param {Hand} hand @param {Steps} steps
    */
   async demo(pic, hand, steps) {
     if (pic.d.move) return fill(pic, steps.signal, hand);
-    if (pic.bottom.length) await hand.tap(pic.bottom[0]);
+    for (const counter of [pic.top[0], pic.bottom[0]]) if (counter) await steps.press(counter);
     await steps.hint();
     await steps.tour();
   },
 };
 
 /**
- * @typedef {{ hint: () => Promise<void>, tour: () => Promise<void>, signal: AbortSignal }} Steps
+ * A demo's steps (R9): the hint and the tour, each after the hand rests, and press, the hand's tap
+ * on a counted thing, which then gets the ink dot a touch leaves in play (design 6.3).
+ * @typedef {{ hint: () => Promise<void>, tour: () => Promise<void>, press: (node: HTMLElement) => Promise<void>, signal: AbortSignal }} Steps
  */
 
 export const KINDS = { frame: FRAME, tree: TREE, pairs: PAIRS, bundles: BUNDLES, 'bundles-part': BUNDLES_PART, bridge: BRIDGE };
