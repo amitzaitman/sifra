@@ -242,7 +242,8 @@ meaning (from the mount).
 2. It builds the screen (3.2): the panel host `[data-area="picture"][data-game]`, the equation row (each `'?'` a cover
    over an `.eq-answer` with `aria-hidden`, so a screen reader hears the `?` and not the answer), the cards (`face`,
    else the number, plus dots in rows of five when `look` is not `symbols`, the level's `cardDots` is not `false` and every
-   value is an integer 0-20), then
+   value is an integer 0-20; `false` on the balance from level 3, on the stories from each skill's second level and on
+   ten-frame level 8), then
    `view = render(host, round, ctx)`. In `symbols` look the panel holds the 96×96 picture button, which calls
    `view.picture()` and logs `picture`; after the solve it stays, still calls `view.picture()`, and logs nothing.
    Then `picture()` draws the solved picture, without the cover (2.4), as the equation shows the answer.
@@ -1406,10 +1407,10 @@ the ladder's step down at a skill boundary in the ten-frame and the balance (202
 by the owner's delegation ("להחליט לבד ולתעד"): the rows "Jumps on a missing part" and "The step down at a skill
 boundary" above. The bug hunt's owner questions were decided the same day the same way: the answer's place among the
 cards (#1, with #16), the balance on a phone held sideways (#4) and pictures of real objects at level 1 (#15), each a
-row above. The card dots at ten-frame level 8 (S3) stay by the owner's decision of 2026-10-19, and decisions.md records
-the observation as a note for the owner, not a change; level 10's counters by keyboard (S6) wait for a later
-accessibility pass (decisions.md). The second bug hunt's owner choices were decided on 2026-11-01 by the same
-delegation, each a row above: the slip in `? = a + b` (#4), the stories' level 6 of 7 exercises (#11), the stories'
+row above. The card dots at ten-frame level 8 (S3) stayed by the owner's decision of 2026-10-19, and decisions.md recorded
+the observation as a note for the owner; on 2026-11-04 the owner took them off (`cardDots: false`, below); level 10's
+counters by keyboard (S6) wait for a later accessibility pass (decisions.md). The second bug hunt's owner choices
+were decided on 2026-11-01 by the same delegation, each a row above: the slip in `? = a + b` (#4), the stories' level 6 of 7 exercises (#11), the stories'
 doubles (#8, "Doubles in stories") and stories level 8 in dots (#16, "A mixed level in dots"); the stories' solved
 labels (#13) join the owner's nikud review, which already gates the stories (now listed in device-checks.md); the
 milestone's three games going live together and what must be done before a game goes live (#7, two rows); and the
@@ -1438,6 +1439,12 @@ something (`lidAt`: beside the top row's cubes while that row has three or fewer
 five, in the middle of an empty pan; with one or two cubes it had floated over nothing); a new level parameter,
 `cardDots` (skills.md), leaves the dots off the cards, and the balance keeps them only on level 2; and the cubes stay in
 rows of five, not a pyramid or a random scatter (design §12).
+
+On 2026-11-04 the owner set `cardDots: false` on ten-frame level 8 (`teen-bundle`) too, the written exception to the first
+level of a skill keeping its dots: on `10 + 1 = ?` card 2's two dots matched the bundle and the stick and invited "the
+bundle is one" (`pv.digits-added`; decisions.md, "נקודות על הכרטיסים ברמה 8 של מסגרת העשר"). The shell reads the flag
+in play, in the demo and on `#/dev` alike; rounds do not carry it, so the rounds lock and ten-frame's version stay.
+e2e/ten-frame.spec.js checks level 8's cards and its demo's show the digits alone, and levels 6 and 10 keep their dots.
 
 Before the balance goes live (an item of device-checks.md since 2026-11-01), R4's [סקירה] looks at the judging cards' new formulas (depth §4.9: `5 + 2 = 3` for
 `op.other`, `5 = 5 + 2` for `equal.copy`, `5 = 7` for the new `equal.becomes`): would a child think this way? It is a

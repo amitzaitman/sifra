@@ -53,7 +53,8 @@ export const levels = [
   { id: 'ten-cover', ...ten, exclude: [0, 10] },
   { id: 'ten-symbols', ...ten, look: 'symbols', forms: third, exclude: [0, 10] },
   // 10 + k, k 0 to 9. down: false: the level below is make-ten, which teen numbers do not build on (architecture 3.4).
-  { id: 'teen-bundle', ...teen, demo: true, down: false, exclude: [20] },
+  // cardDots: false: card 2's two dots matched the bundle and the stick, "the bundle is one" (owner decision 2026-11-04).
+  { id: 'teen-bundle', ...teen, demo: true, down: false, cardDots: false, exclude: [20] },
   // 14 = 10 + ? in 60% of the rounds (owner decision 2026-10-15); the rest split evenly between 10 + ? = 14 and 14 − 10 = ?.
   // The answer is the ones, 1 to 9.
   { id: 'teen-symbols', ...teenPart, forms: [{ eqform: 'reversed', w: 3 }, { eqform: 'standard', w: 2 }], exclude: [0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
