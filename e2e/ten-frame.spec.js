@@ -936,11 +936,17 @@ test('the cards\' dots: the digits alone at level 8, in play and in its demo; le
   const small = (r) => r.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
   const make = (id) => (s) => game.makeRound(game.levels[number(id) - 1], rng(s));
   const cards = page.locator('[data-choices] .card');
+  // The cards and their dots counted at one instant, without retrying: a retrying toHaveCount(0) also passes
+  // once the demo's cards give way to "הַבָּא".
+  const counted = () => page.locator('[data-choices]').evaluate((el) => ({
+    cards: el.querySelectorAll('.card').length, dots: el.querySelectorAll('.card-dots').length,
+  }));
   for (const [id, dots] of [['ten-cover', true], ['bridge-move', true], ['teen-bundle', false]]) {
     const { round } = await devAt(page, id, (r) => small(r) && (id !== 'teen-bundle'
       || (r.answer === 11 && r.choices.some((c) => c.rule === 'pv.digits-added' && c.value === 2))));
     await expect(cards.locator('.card-number'), id).toHaveText(round.choices.map((c) => String(c.value)));
-    await expect(cards.locator('.card-dots'), id).toHaveCount(dots ? round.choices.length : 0);
+    const n = round.choices.length;
+    expect(await counted(), id).toEqual({ cards: n, dots: dots ? n : 0 });
     if (dots) {
       for (const [i, c] of round.choices.entries()) await expect(card(page, i).locator('.card-dots i'), `${id} card ${c.value}`).toHaveCount(c.value);
     }
@@ -956,8 +962,9 @@ test('the cards\' dots: the digits alone at level 8, in play and in its demo; le
   await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '8');
   const { round } = await roundOf(page);
   expect(small(round), 'the demo round has cards that would carry dots').toBe(true);
-  await expect(cards.locator('.card-number')).toHaveText(round.choices.map((c) => String(c.value)));
-  await expect(cards.locator('.card-dots')).toHaveCount(0);
+  // The demo's cards are on screen, locked, until the hand taps the answer.
+  await expect(cards.locator('.card-number'), 'demo').toHaveText(round.choices.map((c) => String(c.value)));
+  expect(await counted(), 'demo').toEqual({ cards: round.choices.length, dots: 0 });
 });
 
 test('bundles at 320px: the digits above the sticks stay apart, above the outline, the last one grown (design 4, 7.2)', async ({ page }) => {
