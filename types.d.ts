@@ -158,6 +158,10 @@ interface Spec {
   ask?: string;
   /** the demos shown before the correct tap, in order: 'auto' on entry, 'how' for the hand */
   demo?: ('auto' | 'how')[];
+  /** the taps during those demos by kind (shell/taps.js TAP_KINDS), for the attempt's demoTaps (architecture 3.9) */
+  demoTaps?: Partial<Record<'auto' | 'how', Record<string, number>>>;
+  /** the presses on the locked cards during those demos, for the attempt's lockedTaps.demo */
+  demoLocked?: number;
   record?: any;
 }
 

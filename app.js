@@ -9,8 +9,8 @@ import {
 } from './shell/planner.js';
 import { rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
-import { CAPS, capped, childOf, exportFile, load, refresh, save } from './shell/store.js';
-import { byPointer, tapWindow } from './shell/taps.js';
+import { CAPS, LOCKED, capped, childOf, exportFile, load, refresh, save, zeros } from './shell/store.js';
+import { TAP_KINDS, byPointer, tapAt, tapWindow } from './shell/taps.js';
 import { RULES } from './data/errors.js';
 import { SKILLS } from './data/skills.js';
 import { TOPICS, VERIFIED } from './data/videos.js';
@@ -55,8 +55,19 @@ const sync = () => (S.pending ? persist() : reread());
 /** Records a change under the finger, on the clock events are stamped with (shell/taps.js). */
 const changed = () => S.taps.changed(new Event('change').timeStamp);
 const event = (e) => capped(child().events, { t: S.now().toISOString(), day: today(), ...e }, CAPS.events);
-/** A round's record until it is solved: what the attempt logs (3.9). */
-const blank = () => ({ wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 }, t0: performance.now(), firstMs: null, ms: null, tour: false });
+/** A round's record until it is solved: what the attempt logs (3.9). A demo's record keeps its taps for the next attempt. */
+const blank = () => ({ wrong: [], help: [], taps: { picture: 0, equation: 0, other: 0 }, tapsOn: zeros(TAP_KINDS), locked: zeros(LOCKED),
+  t0: performance.now(), firstMs: null, ms: null, tour: false });
+/**
+ * A demo's taps go to the next attempt (3.9): a demo round is not an attempt. By its entry in the spec's `demo`
+ * (`auto`, `how`), so a second "show me how" adds to the first; its presses on the locked cards to `lockedTaps.demo`.
+ * @type {(spec: Spec, kind: 'auto' | 'how', rec: any) => void}
+ */
+const keepDemoTaps = (spec, kind, rec) => {
+  const on = ((spec.demoTaps ??= {})[kind] ??= zeros(TAP_KINDS));
+  for (const k of TAP_KINDS) on[k] += rec.tapsOn[k];
+  spec.demoLocked = (spec.demoLocked ?? 0) + rec.locked.demo;
+};
 /** @type {(game: Game, spec: { index: number, structure?: string, ask?: string }) => Level} the level as passed to makeRound */
 const built = (game, { index, structure, ask }) => ({ ...game.levels[index], ...(structure && { structure }), ...(ask && { ask }) });
 /** @type {(game: Game, i: number) => Level} a level with the first of its mixed values, for thumbs */
@@ -232,7 +243,7 @@ function nextRound(session) {
         if (now) child().games[game.meta.id] = sawDemo(now, level.id);
         persist();
       };
-      return demo(game, spec, () => mount(session, spec), { done: session.done.length, seen, session });
+      return demo(game, spec, () => mount(session, spec), { done: session.done.length, seen, session, kind: 'auto' });
     }
   }
   apart(session, spec);
@@ -250,7 +261,8 @@ function mount(session, spec) {
       // "Show me how" (2.6): a demo, then the same round from the start; the record goes on.
       if (!solved && !spec.record.help.includes('how')) spec.record.help.push('how');
       if (!solved && !(spec.demo ??= []).includes('how')) spec.demo.push('how');
-      demo(game, spec, solved ? r.next : () => mount(session, spec), { done: session.done.length, session });
+      // After the solve the attempt is taken: that demo's taps go to none.
+      demo(game, spec, solved ? r.next : () => mount(session, spec), { done: session.done.length, session, kind: solved ? null : 'how' });
     } });
 }
 
@@ -260,10 +272,13 @@ function mount(session, spec) {
  * "correct" (design 6.5), and applied on storage read again then, a write by another tab during the closing stays.
  */
 function finish(session, spec, level, round, outcome) {
-  // Copies, at the solve: the saved attempt never changes after it.
+  // Copies, at the solve: the saved attempt never changes after it. Only the presses on the locked cards during the
+  // closing are read as it is applied, once the closing has run (3.9).
   const [now, rec] = [S.now(), spec.record];
+  const demos = [...(spec.demo ?? [])];
   const copy = { wrong: [...rec.wrong], firstMs: Math.round(rec.firstMs), ms: Math.round(rec.ms), help: [...rec.help],
-    demo: [...(spec.demo ?? [])], taps: { ...rec.taps } };
+    demo: demos, demoTaps: demos.map((k) => ({ ...(spec.demoTaps?.[k] ?? zeros(TAP_KINDS)) })), taps: { ...rec.taps }, tapsOn: { ...rec.tapsOn } };
+  const locked = { display: rec.locked.display, demo: spec.demoLocked ?? 0 };
   S.pending = () => {
     const [c, game, t, day] = [child(), S.byId.get(spec.game), now.toISOString(), dayOf(now)];
     const [id, before, last] = [game.meta.id, c.games[game.meta.id], c.skills[level.skill]?.last];
@@ -289,7 +304,7 @@ function finish(session, spec, level, round, outcome) {
     capped(c.attempts, {
       t, day, session: session.n, child: S.store.data.current, game: id, level: spec.index + 1, levelId: level.id, skill: level.skill,
       seed: spec.seed, version: game.meta.version, params: level, answer: round.answer, kind: spec.kind, outcome, ...copy,
-      options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]), sinceDays: last ? daysBetween(last, day) : null,
+      lockedTaps: { ...locked, closing: rec.locked.closing }, options: round.choices.length, levelBefore: number(before), levelAfter: number(c.games[id]), sinceDays: last ? daysBetween(last, day) : null,
     }, CAPS.attempts);
   };
 }
@@ -356,25 +371,46 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   if (!shown) host.append(control('picture', T.picture, () => picture(true), { 'data-show-picture': true }));
   if (mode === 'demo') picture(false);   // a demo draws the help picture from the start (2.6)
   label();
-  // Off-target taps (pedagogy 5.7): a primary pointer down and up on no button, link or [data-target], with no
-  // pointercancel and no second finger between, so a scroll or a pinch is no tap; counted by area until the solve.
-  /** @type {{ id: number, area: 'picture' | 'equation' | 'other' } | null} */
+  // Off-target taps (pedagogy 5.7, 5.11): a primary pointer down and up on no button, link or [data-target], with no
+  // pointercancel and no second finger between, so a scroll or a pinch is no tap; counted until the solve, by area and
+  // by the kind of what it hit (3.2). In a demo nothing answers a touch, so a counted thing is no target there: every
+  // tap on no button or link counts, for the next attempt (3.9).
+  /** @type {{ id: number, area: 'picture' | 'equation' | 'other', x: number, y: number } | null} */
   let press = null;
+  const taken = mode === 'demo' ? 'button, a' : 'button, a, [data-target]';
   main.addEventListener('pointerdown', (e) => {
     press = null;   // a second finger (a pinch) drops the first one's press
     if (solved || !e.isPrimary) return;
     const t = e.target instanceof Element ? e.target : null;
-    if (!t || t.closest('button, a, [data-target]')) return;
+    if (!t || t.closest(taken)) return;
     const area = t.closest('[data-area]')?.getAttribute('data-area');
-    press = { id: e.pointerId, area: area === 'picture' || area === 'equation' ? area : 'other' };
+    press = { id: e.pointerId, area: area === 'picture' || area === 'equation' ? area : 'other', x: e.clientX, y: e.clientY };
   }, { signal });
   main.addEventListener('pointercancel', () => { press = null; }, { signal });
+  /**
+   * The kind of what a tap hit (3.2): for one hit test at the point where it came down every mark takes it (app.css
+   * [data-probe]), also in a layer that takes no taps, and the topmost one the child can see names it.
+   * @type {(at: { x: number, y: number }) => string}
+   */
+  const hit = ({ x, y }) => {
+    main.setAttribute('data-probe', '');
+    try {
+      return tapAt(document.elementsFromPoint(x, y), (el) => getComputedStyle(el).opacity);
+    } finally {
+      main.removeAttribute('data-probe');
+    }
+  };
   main.addEventListener('pointerup', (e) => {
-    if (press?.id === e.pointerId && !solved) rec.taps[press.area] += 1;
+    if (press?.id === e.pointerId && !solved) {
+      rec.taps[press.area] += 1;
+      rec.tapsOn[hit(press)] += 1;
+    }
     press = null;
   }, { signal });
   const elapsed = () => performance.now() - rec.t0;
   const tap = async (i) => {
+    // A press on a locked card (3.9): while a display runs, in a demo, or in the closing.
+    if (busy) rec.locked[mode === 'demo' ? 'demo' : solved ? 'closing' : 'display'] += 1;
     if (busy || solved) return;
     const at = elapsed();
     rec.firstMs ??= at;
@@ -427,16 +463,26 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
  * The demo (2.6): a round from the demo seed, cards locked, the help picture drawn in symbols look;
  * the game's steps, then the hand taps the answer and `seen` runs. Nothing else is written; the bar
  * keeps `done`. In a session (none on #/dev) its exercise is one the session has not dealt, and
- * counts as dealt (3.3, 3.8). Options: done, the rounds done for the bar; seen, the entry demo's mark; session.
+ * counts as dealt (3.3, 3.8). Options: done, the rounds done for the bar; seen, the entry demo's mark; session;
+ * kind, the demo's entry in the next attempt's `demo` (`auto`, `how`), which gets its taps on "הַבָּא", or null for none.
+ * @param {Game} game
+ * @param {any} spec a session's Spec, or #/dev's
+ * @param {() => void} then
+ * @param {{ done?: number, seen?: () => void, session?: any, kind?: 'auto' | 'how' | null }} [options]
  */
-function demo(game, spec, then, { done = 0, seen = () => {}, session = null } = {}) {
+function demo(game, spec, then, { done = 0, seen = () => {}, session = null, kind = null } = {}) {
   const level = built(game, spec);
   const key = (round) => exerciseOf(game.meta.id, round);
   // R9 (3.8): other numbers than the round it shows how to solve, a plain round, and not an exercise the session dealt.
   const seed = demoSeedFor((s) => game.makeRound(level, rng(s)), spec.seed, (r) => session?.seen.get(key(r)));
   const round = dealt(game, level, seed);
   deal(session, key(round));
-  const r = runRound({ game, level, round, spec: { ...spec, seed }, record: blank(), mode: 'demo', done, onNext: then });
+  const record = blank();
+  const onNext = () => {
+    if (kind) keepDemoTaps(spec, kind, record);
+    then();
+  };
+  const r = runRound({ game, level, round, spec: { ...spec, seed }, record, mode: 'demo', done, onNext });
   const hand = h('span', { class: 'hand', 'data-hand': true, html: svg('hand') });
   r.main.append(h('div', { class: 'demo', 'data-demo': true }, hand));
   /** @type {Element | null} what the hand points at; null at rest: hidden, at its place at the foot of the round (app.css .hand) */

@@ -6,6 +6,7 @@ import { posix } from 'node:path';
 import { listFiles, read } from '../scripts/docs-parse.js';
 import { GAMES } from './all-games.js';
 import { TOPICS } from '../data/videos.js';
+import { MARKS } from '../shell/taps.js';
 
 const all = listFiles(['.js', '.css', '.html', '.webmanifest']);
 const lib = all.filter((f) => f.startsWith('lib/'));
@@ -48,6 +49,17 @@ test('games never touch storage, wait for animationend, or make their own cover'
     ...scan(js, /(className\s*=|classList\.\w+\(|setAttribute\(\s*['"]class)[^;\n]*cover/i, 'a cover class: use lib/cover.js'),
     ...css.flatMap((file) => [...read(file).matchAll(/\.(-?[\w-]*cover[\w-]*)/gi)].filter((m) => m[1] !== 'cover').map((m) => `${file}: class .${m[1]}`)),
   ]);
+});
+
+test('a mark for the off-target log names one of the four kinds, and only the drawing sets one (architecture 3.2)', () => {
+  // Every literal given to dataset.tap in lib/ and the games is a mark; the shell names none (panel and other are its
+  // own). e2e/contract.spec.js checks every [data-tap] a round draws, the stories' tapOf included.
+  const js = [...lib, ...gameFiles].filter((f) => f.endsWith('.js'));
+  const given = js.flatMap((file) => [...read(file).matchAll(/dataset\.tap\s*=\s*'([^']*)'/g)].map((m) => [file, m[1]]));
+  assert.ok(given.some(([file, kind]) => file === 'lib/cover.js' && kind === 'cover'), 'lib/cover.js marks its covers');
+  for (const kind of ['chip', 'line', 'object']) assert.ok(given.some(([, k]) => k === kind), `a game marks a ${kind}`);
+  none(given.filter(([, kind]) => !MARKS.includes(kind)).map(([file, kind]) => `${file}: data-tap "${kind}" is not one of ${MARKS.join(', ')}`));
+  none(scan(['app.js', ...shell], /dataset\.tap\s*=|setAttribute\(\s*'data-tap'/, 'the shell sets no mark: the drawing does'));
 });
 
 test('reduced motion is read only by lib/settle.js, whose reduced() is the one copy (architecture 2.7)', () => {

@@ -1,9 +1,14 @@
 // Storage (architecture 3.9, pedagogy 5.11): one key with a schema number. The storage object
 // comes from start(); every access is in try/catch, and when it fails the shell plays from memory.
+import { TAP_KINDS } from './taps.js';
 
 export const KEY = 'sifra';
-export const SCHEMA = 1;
+export const SCHEMA = 2;
 export const CAPS = { attempts: 4000, events: 500 };
+/** When an attempt's card was pressed while the cards were locked (lockedTaps, architecture 3.9). */
+export const LOCKED = ['display', 'demo', 'closing'];
+/** @type {(keys: string[]) => Record<string, number>} a count of 0 for each key */
+export const zeros = (keys) => Object.fromEntries(keys.map((k) => [k, 0]));
 
 /** @type {(day: string) => Child} */
 export const newChild = (day) => ({ created: day, sessions: 0, games: {}, skills: {}, attempts: [], events: [] });
@@ -80,6 +85,18 @@ const readRaw = (storage) => { try { return storage.getItem(KEY); } catch { retu
 /** @type {(raw: string | null) => any} the parsed value, or the raw text when it does not parse */
 const parse = (raw) => { try { return raw === null ? null : JSON.parse(raw); } catch { return raw; } };
 
+/**
+ * A schema 1 attempt with schema 2's counts, read as empty: 0 taps of each kind, 0 presses on locked cards, and
+ * one empty count for each demo it lists. A value that is not an attempt record stays as it is.
+ * @type {(a: any) => any}
+ */
+const counted = (a) => (map(a) ? {
+  ...a,
+  tapsOn: a.tapsOn ?? zeros(TAP_KINDS),
+  lockedTaps: a.lockedTaps ?? zeros(LOCKED),
+  demoTaps: a.demoTaps ?? (list(a.demo) ? a.demo.map(() => zeros(TAP_KINDS)) : []),
+} : a);
+
 /** @type {(data: any) => boolean} a schema newer than this code */
 const newer = (data) => Number.isInteger(data?.schema) && data.schema > SCHEMA;
 /** @type {(data: any) => boolean} a stored value this code reads: a schema, children, and the current child */
@@ -89,7 +106,8 @@ const valid = (data) => map(data) && Number.isInteger(data.schema) && data.schem
  * Parses and upgrades a stored value. A schema newer than this code, whatever its shape: a new
  * value that is never written, so the newer data stays. Missing, unparsable or broken (no current
  * child object): a new value, whose repair event keeps what was stored under `*`, as the first save
- * overwrites it. Then each child is brought to this code's shape (normaliseChild).
+ * overwrites it. An older schema takes each step to this one; then each child is brought to this
+ * code's shape (normaliseChild).
  * @param {string | null} raw
  * @param {() => string} newId
  * @param {{ t: string, day: string }} when the load's time and local day
@@ -104,7 +122,12 @@ export function migrate(raw, newId, when) {
     if (raw) fresh.children[id].events.push(repair(when, { '*': data }));
     return { data: fresh, writable: true };
   }
-  // Each new schema adds a step here, e.g. if (data.schema === 1) { ...; data.schema = 2; }
+  // Each new schema adds a step here. 2 (2026-11-04): an attempt counts its off-target taps by kind,
+  // its presses on locked cards and the taps during its demos; one written before reads with empty counts.
+  if (data.schema === 1) {
+    for (const c of Object.values(data.children)) if (map(c) && list(c.attempts)) c.attempts = c.attempts.map(counted);
+    data.schema = 2;
+  }
   for (const [cid, c] of Object.entries(data.children)) if (map(c)) data.children[cid] = normaliseChild(c, when);
   return { data, writable: true };
 }

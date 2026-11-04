@@ -258,10 +258,11 @@ function balanceScene(host, round, solved, signal) {
   };
   /** @type {(stack: Element, slots: number[]) => HTMLElement[]} */
   const ghosts = (stack, slots) => stagger(slots.map((slot) => put(stack, 'bl-cube bl-ghost', at(slot))));
-  /** @type {(tokens: (string | number)[], side: Side, layer: Element) => void} a chip under a pan (design 6.8) */
+  /** @type {(tokens: (string | number)[], side: Side, layer: Element) => void} a chip under a pan (design 6.8), named for the off-target log (architecture 3.2) */
   const chip = (tokens, side, layer) => {
     const node = put(layer, 'bl-chip');
     node.dataset.pan = side;
+    node.dataset.tap = 'chip';
     node.dir = 'ltr';
     for (const t of tokens) put(node, t === '+' ? 'bl-op' : t === '?' ? 'bl-q' : 'bl-n', undefined, t);
   };

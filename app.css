@@ -76,6 +76,9 @@ main {
 }
 .ctl-picture { width: 96px; height: 96px; }
 .ctl-picture svg { width: 48px; height: 48px; }
+/* What an off-target tap hit (architecture 3.2): for one hit test the shell sets data-probe, and every mark takes it,
+   also in a layer that takes no taps; an SVG line by its painted paths, not its box. */
+[data-probe] [data-tap]:not(svg), [data-probe] svg[data-tap] path { pointer-events: auto; }
 
 /* The equation row (design 6.4). */
 /* min-width 0 on both (grid items): a row wider than its box overflows it, so fitEquation shrinks it and then wraps it,

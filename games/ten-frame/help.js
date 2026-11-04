@@ -3,7 +3,7 @@
 // steps. One object per kind of picture, its displays a table by display id; game.js runs them in
 // order and settles their motion.
 import { settle } from '../../lib/settle.js';
-import { GAP, around, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
+import { GAP, around, asChip, at, boxPath, disc, el, grow, outline, put, runPath, stagger } from './draw.js';
 
 /**
  * A drawn picture: the drawing's elements (from draw.js), its size, and its state.
@@ -125,7 +125,7 @@ const ghost = (parent, box, delay, cls = '') =>
   parent.insertBefore(mark(parent, `tf-ghost tf-enter ${cls}`, box, undefined, delay), parent.querySelector(':scope > [data-ry]'));
 const ring = (parent, box, delay, cls = 'is-round') => mark(parent, `tf-ring tf-blink-in ${cls}`, box, undefined, delay);
 /** A chip with a number (design 7.2: numbers on white chips). @param {Element} parent @param {Box} box @param {string} text */
-const chipAt = (parent, box, text, cls = '') => at(parent, `tf-chip ${cls}`, { x: box.x + box.w / 2 - 0.55, y: box.y + box.h / 2 - 0.36, w: 1.1, h: 0.72 }, text);
+const chipAt = (parent, box, text, cls = '') => asChip(at(parent, `tf-chip ${cls}`, { x: box.x + box.w / 2 - 0.55, y: box.y + box.h / 2 - 0.36, w: 1.1, h: 0.72 }, text));
 /** The tour's digit: one [data-tour] per digit, in --role-unknown (design 7.2). */
 function tourDigit(parent, box, n, cls = '') {
   const node = at(parent, `tf-digit tf-tour ${cls}`, box, String(n));
@@ -845,7 +845,7 @@ export const BRIDGE = {
       for (let i = pic.top.length; i < 10; i++) at(root, 'tf-place is-target', disc(L.place(i)));
       for (const i of groups[0].cells) at(root, 'tf-place is-target', grow(disc(L.place(i)), 0.08));
     }
-    for (const g of groups) at(root, 'tf-chip', g.box, String(g.n));
+    for (const g of groups) asChip(at(root, 'tf-chip', g.box, String(g.n)));
     root.after(pic.t.whole);
   },
   /**

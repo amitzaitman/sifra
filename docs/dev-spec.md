@@ -229,3 +229,11 @@ The decision is in [§8.1](pedagogy.md) ח.
 - Nothing in the child's UI links to it, and it shows nothing a child or parent sees in normal
   use. Only the owner uses it, on test devices, like the rest of `#/dev`.
 - It reads storage only when opened, never at module load (`decisions.md`).
+- What a tap hit (schema 2, 2026-11-04; [§5.11](pedagogy.md) "how many, and on which element"): besides `taps` by
+  area, each attempt holds `tapsOn` (the same off-target taps by kind: `cover`, `chip`, `line`, `object`, `panel`,
+  `other`), `lockedTaps` (presses on an answer card while the cards are locked: `display`, `demo`, `closing`) and
+  `demoTaps` (one count by the same kinds for each entry of `demo`: a demo is not an attempt, so its taps go to the
+  next one). The drawing names a mark with one `data-tap` attribute; the shell reads it by one hit test in which every
+  mark takes the hit ([architecture.md](architecture.md) 3.2, 3.9). An attempt stored under schema 1 reads with 0 in
+  each, which means "not recorded". These counts come only from the owner's test devices, through this export: no
+  screen shows them, and the child sees nothing of them.
