@@ -3,6 +3,7 @@
 import { RULES } from '../data/errors.js';
 import * as game from '../games/ten-frame/game.js';
 import { layoutBridge } from '../games/ten-frame/draw.js';
+import { demoSeedFor } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
 import {
   test, expect, INDEX, NOW, dashProblems, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn, handSeen, ladderAt, look, roundOf, seedStore,
@@ -934,6 +935,36 @@ async function toTheTour(page, round, answerAt) {
     await unlocked(page);
   }
 }
+
+test('the cards\' dots: the digits alone at level 8, in play and in its demo; levels 6 and 10 keep them (cardDots, owner decision 2026-11-04)', async ({ page }) => {
+  // Card 2's two dots matched the bundle and the stick of 10 + 1 and invited "the bundle is one"
+  // (pv.digits-added). Only rounds whose cards are all 0 to 20, where the shell would draw dots.
+  const small = (r) => r.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
+  const make = (id) => (s) => game.makeRound(game.levels[number(id) - 1], rng(s));
+  const cards = page.locator('[data-choices] .card');
+  for (const [id, dots] of [['ten-cover', true], ['bridge-move', true], ['teen-bundle', false]]) {
+    const { round } = await devAt(page, id, (r) => small(r) && (id !== 'teen-bundle'
+      || (r.answer === 11 && r.choices.some((c) => c.rule === 'pv.digits-added' && c.value === 2))));
+    await expect(cards.locator('.card-number'), id).toHaveText(round.choices.map((c) => String(c.value)));
+    await expect(cards.locator('.card-dots'), id).toHaveCount(dots ? round.choices.length : 0);
+    if (dots) {
+      for (const [i, c] of round.choices.entries()) await expect(card(page, i).locator('.card-dots i'), `${id} card ${c.value}`).toHaveCount(c.value);
+    }
+  }
+  // Level 8's demo (app.js demo, on #/dev the seed's own) from a seed whose demo round is all 0 to 20 too.
+  const teen = make('teen-bundle');
+  let seed = 1;
+  while (!small(teen(demoSeedFor(teen, seed)))) seed += 1;
+  await page.goto(`${INDEX}#/dev/${ID}/${number('teen-bundle')}/${seed}`);
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-seed', String(seed));
+  await look(page);
+  await page.locator('[data-how]').click();
+  await expect(page.locator('main[data-screen="demo"]')).toHaveAttribute('data-level', '8');
+  const { round } = await roundOf(page);
+  expect(small(round), 'the demo round has cards that would carry dots').toBe(true);
+  await expect(cards.locator('.card-number')).toHaveText(round.choices.map((c) => String(c.value)));
+  await expect(cards.locator('.card-dots')).toHaveCount(0);
+});
 
 test('bundles at 320px: the digits above the sticks stay apart, above the outline, the last one grown (design 4, 7.2)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
