@@ -5,7 +5,8 @@ import { cover } from './lib/cover.js';
 import { buildEquation, drawEquation, fitEquation, solveEquation } from './shell/equation.js';
 import { indexOf, moveTo, needsDemo, sawDemo, startLadder, step } from './shell/ladder.js';
 import {
-  apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, isMixed, nextStep, pickMix, planSession, same, schedule, stuckTarget,
+  ROUNDS, apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, isMixed, levelSession, nextStep, pickMix, planSession, same, schedule,
+  stuckTarget,
 } from './shell/planner.js';
 import { rng, seedFrom } from './shell/rng.js';
 import { settle } from './lib/settle.js';
@@ -172,6 +173,65 @@ function goNext() {
   location.replace(`#/play/${id}`);
 }
 
+/**
+ * A session's book (3.3, 3.9): what it keeps of the child. The rounds (nextRound, mount) reach the child's record and
+ * the store only through it. `begin` runs as a round starts, before its demo: it gives the entry demo's mark when the
+ * round opens with the demo, else null. `solved` takes a solved counted round.
+ * @typedef {{ begin(session: any, spec: Spec): (() => void) | null, solved(session: any, spec: Spec, level: Level, round: Round, outcome: string): void }} Book
+ */
+
+/**
+ * A child's session (#/play, which wrote the session count): a new round takes its game's ladder level as it starts,
+ * and a game's first ladder, the entry demo seen and each solved round are written (3.3, 3.4, 3.9).
+ * @type {Book}
+ */
+const childBook = {
+  begin(session, spec) {
+    sync();
+    if (spec.index >= 0) return null;
+    // A new round takes the ladder's level now, in the session's game (it moves after a stuck return).
+    const { game } = session;
+    const fresh = !child().games[game.meta.id];
+    const ladder = (child().games[game.meta.id] ??= startLadder(game.levels));
+    const index = indexOf(game.levels, ladder.level);
+    const level = game.levels[index];
+    Object.assign(spec, { game: game.meta.id, index }, pickMix(level, session.prev, session.mix));
+    if (isMixed(level)) {
+      spec.kind = 'mixed';
+      session.prev = spec.structure ?? spec.ask;
+    }
+    if (!needsDemo(ladder, level)) return null;
+    spec.demo = ['auto'];
+    // A game's first ladder is written as its demo starts; play() wrote the session count (3.9).
+    if (fresh) persist();
+    // Seen once the hand has tapped the answer (3.4): a reload or leaving mid-demo brings it back.
+    return () => {
+      sync();
+      const now = child().games[game.meta.id];
+      if (now) child().games[game.meta.id] = sawDemo(now, level.id);
+      persist();
+    };
+  },
+  solved: finish,
+};
+
+/**
+ * #/try (3.1): every round at its planned level, the level's entry demo first, as on a child's first entry to it.
+ * It keeps nothing: neither method reads or writes the child's record, so nothing of the route reaches the store.
+ * @type {Book}
+ */
+const tryBook = {
+  begin(session, spec) {
+    if (session.i > 0 || !S.byId.get(spec.game).levels[spec.index].demo) return null;
+    spec.demo = ['auto'];
+    return () => {};
+  },
+  solved() {},
+};
+
+/** Runs a session's rounds; seen: each exercise the session dealt (a round's or a demo's), by when (dealt counts up). */
+const run = (session) => nextRound({ done: [], i: 0, prev: null, seen: new Map(), dealt: 0, ...session });
+
 /** A session of 8 counted rounds (3.3); a mix generator from the session seed picks structures. */
 function play(game) {
   const c = child();
@@ -179,9 +239,18 @@ function play(game) {
   persist();
   const seed = seedFrom(S.seeds);
   const mix = rng((seed ^ MIX) >>> 0);
-  const rounds = planSession(c, S.games, game, today(), SKILLS, rng(seed), mix);
-  // seen: each exercise the session dealt (a round's or a demo's), by when (dealt counts up).
-  nextRound({ n: c.sessions, game, done: [], i: 0, prev: null, mix, rounds, seen: new Map(), dealt: 0 });
+  run({ n: c.sessions, game, mix, rounds: planSession(c, S.games, game, today(), SKILLS, rng(seed), mix), book: childBook });
+}
+
+/**
+ * #/try/<game>/<level>[/<seed>] (3.1): a child's session at one level, for an observation (pedagogy 8.3), from the
+ * session seed given, else one drawn as play() draws it. No review, no ladder, nothing read or written (tryBook).
+ * @type {(game: Game, index: number, seed: number | null) => void}
+ */
+function tryLevel(game, index, seed) {
+  const from = seed ?? seedFrom(S.seeds);
+  const mix = rng((from ^ MIX) >>> 0);
+  run({ game, mix, rounds: levelSession(game, index, rng(from), mix), book: tryBook });
 }
 
 /** Counts an exercise as dealt in the session, now (3.3): its rounds and demos come apart from it. */
@@ -206,36 +275,10 @@ function apart(session, spec) {
 
 function nextRound(session) {
   if (session.i >= session.rounds.length) return end(session);
-  sync();
   const spec = session.rounds[session.i];
-  if (spec.index < 0) {
-    // A new round takes the ladder's level now, in the session's game (it moves after a stuck return).
-    const { game } = session;
-    const fresh = !child().games[game.meta.id];
-    const ladder = (child().games[game.meta.id] ??= startLadder(game.levels));
-    const index = indexOf(game.levels, ladder.level);
-    const level = game.levels[index];
-    Object.assign(spec, { game: game.meta.id, index }, pickMix(level, session.prev, session.mix));
-    if (isMixed(level)) {
-      spec.kind = 'mixed';
-      session.prev = spec.structure ?? spec.ask;
-    }
-    if (needsDemo(ladder, level)) {
-      spec.demo = ['auto'];
-      // A game's first ladder is written as its demo starts; play() wrote the session count (3.9).
-      if (fresh) persist();
-      apart(session, spec);
-      // Seen once the hand has tapped the answer (3.4): a reload or leaving mid-demo brings it back.
-      const seen = () => {
-        sync();
-        const now = child().games[game.meta.id];
-        if (now) child().games[game.meta.id] = sawDemo(now, level.id);
-        persist();
-      };
-      return demo(game, spec, () => mount(session, spec), { done: session.done.length, seen, session });
-    }
-  }
+  const seen = session.book.begin(session, spec);
   apart(session, spec);
+  if (seen) return demo(S.byId.get(spec.game), spec, () => mount(session, spec), { done: session.done.length, seen, session });
   mount(session, spec);
 }
 
@@ -244,7 +287,7 @@ function mount(session, spec) {
   const level = built(game, spec);
   const round = dealt(game, level, spec.seed);
   const r = runRound({ game, level, spec, round, done: session.done.length, record: (spec.record ??= blank()),
-    onSolved: (outcome) => finish(session, spec, level, round, outcome),
+    onSolved: (outcome) => session.book.solved(session, spec, level, round, outcome),
     onNext: () => { session.done.push(spec); session.i += 1; nextRound(session); },
     onHow: (solved) => {
       // "Show me how" (2.6): a demo, then the same round from the start; the record goes on.
@@ -307,8 +350,8 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   const eqArea = h('div', { class: 'equation', 'data-area': 'equation' });
   const cardsArea = h('div', { class: 'choices' });
   let [solved, busy, misses, shown] = [false, mode === 'demo', 0, level.look !== 'symbols'];
-  const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-label': T.progress, 'aria-valuemin': 0, 'aria-valuemax': 8,
-    'aria-valuenow': done, style: `--done: ${done / 8}` }, h('span'));
+  const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-label': T.progress, 'aria-valuemin': 0, 'aria-valuemax': ROUNDS,
+    'aria-valuenow': done, style: `--done: ${done / ROUNDS}` }, h('span'));
   const how = () => mode !== 'demo' && (ctl.abort(), onHow?.(solved));
   main.append(h('header', { class: 'bar' }, homeButton(), progress, control('hand', T.how, how, { 'data-how': true })), host, eqArea, cardsArea);
   const eq = drawEquation(eqArea, round.equation, round.answer, cover);
@@ -564,12 +607,29 @@ function errorScreen() {
   addEventListener('unhandledrejection', (e) => show(e.reason?.message ?? e.reason));
 }
 
+/**
+ * #/try's address after the game (3.1): its level from 1, as on #/dev, then an optional session seed, a uint32 in
+ * decimal. The level's index and the seed (null: none), or null for any other address, which goes home.
+ * @type {(game: Game | undefined, parts: string[]) => { index: number, seed: number | null } | null}
+ */
+function tryAddress(game, [level = '', seed = '', ...rest]) {
+  const n = /^[1-9]\d{0,3}$/.test(level) ? Number(level) : 0;
+  const given = /^\d{1,10}$/.test(seed) && Number(seed) <= 0xffffffff ? Number(seed) : null;
+  if (!game || n < 1 || n > game.levels.length || (seed !== '' && given === null) || rest.length) return null;
+  return { index: n - 1, seed: given };
+}
+
 function route() {
   sync();
-  const [, a, b, c, d, e] = (location.hash || '#/').split('/');
+  const parts = (location.hash || '#/').split('/');
+  const [, a, b, c, d, e] = parts;
   const game = S.byId.get(b);
   if (a === 'next') return goNext();
   if (a === 'play' && game) return play(game);
+  if (a === 'try') {
+    const at = tryAddress(game, parts.slice(3));
+    return at ? tryLevel(game, at.index, at.seed) : location.replace('#/');
+  }
   if (a === 'parents') return parents();
   if (a === 'dev' && b === 'export') return devExport();
   if (a === 'dev') return dev(game, Number(c), Number(d) >>> 0 || 1, e);

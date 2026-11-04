@@ -94,6 +94,7 @@ test('home: the next-step card, a card per game, and no parents link while the l
   await expect(page.locator('[data-card]').nth(1)).toHaveAttribute('href', '#/play/scale');
   await expect(page.locator('[data-parents]')).toHaveCount(0);
   await expect(page.locator('a[href^="#/dev"]')).toHaveCount(0);
+  await expect(page.locator('a[href^="#/try"]')).toHaveCount(0);
 });
 
 test('next step: an empty store opens the first game at level 1, and the jump is logged', async ({ page }) => {
@@ -308,6 +309,191 @@ test('R9: leaving a level\'s first demo for home brings it back on the next step
   const { child } = await stored(page);
   expect(child.games.parts.demoSeen).toEqual(['split-5']);
   expect(child.attempts).toEqual([]);
+});
+
+// #/try/<game>/<level>[/<seed>] (3.1; owner decision 2026-11-04, "איך מגיעים לרמה בתצפית"): a child's session at one
+// level for an observation, which writes nothing.
+
+/** Records each screen as it is drawn, `<screen> <level>`, from the page's first script (read with screensOf). */
+const recordScreens = (page) => page.addInitScript(() => {
+  /** @type {string[]} */
+  const screens = [];
+  Object.assign(globalThis, { screens });
+  new MutationObserver((records) => {
+    for (const node of records.flatMap((r) => [...r.addedNodes])) {
+      if (node instanceof HTMLElement && node.matches('main[data-screen]')) screens.push(`${node.dataset.screen} ${node.dataset.level ?? ''}`.trim());
+    }
+  }).observe(document, { childList: true, subtree: true });
+});
+const screensOf = (page) => page.evaluate(() => /** @type {any} */ (globalThis).screens);
+
+/** Logs every write to localStorage and sessionStorage from the page's first script on (call it after seedStore). */
+const logWrites = (page) => page.addInitScript(() => {
+  /** @type {string[]} */
+  const writes = [];
+  Object.assign(globalThis, { writes });
+  for (const name of ['setItem', 'removeItem', 'clear']) {
+    const own = Storage.prototype[name];
+    Storage.prototype[name] = function (...args) {
+      writes.push(`${this === localStorage ? 'localStorage' : 'sessionStorage'}.${name}(${args[0] ?? ''})`);
+      return own.apply(this, args);
+    };
+  }
+});
+/** Every key of localStorage with its text. */
+const localOf = (page) => page.evaluate(() => Object.fromEntries(Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+  .map((k) => [k, localStorage.getItem(k)])));
+
+/**
+ * Plays the #/try session on screen to its end screen as a child does: the level's entry demo when `demo`, then each
+ * round, which must be a new round at `level` under the child's bar, with nothing of #/dev on screen. With `help`,
+ * round 1 is solved after one miss, round 2 after "show me how" (the same round after it), round 3 after every wrong
+ * card (the tour). Returns the seeds played, the entry demo's as `demo <seed>`.
+ * @param {import('@playwright/test').Page} page
+ * @param {number} level
+ * @param {{ demo: boolean, help?: boolean }} options
+ */
+async function playTry(page, level, { demo, help = false }) {
+  const seeds = [];
+  const child = async (main) => {
+    await expect(main).not.toHaveAttribute('data-adult');
+    await expect(page.locator('[data-dev]')).toHaveCount(0);
+  };
+  if (demo) {
+    const main = page.locator('main[data-screen="demo"]');
+    await expect(main).toHaveAttribute('data-level', String(level));
+    await expect(main.locator('[data-next]')).toBeVisible({ timeout: 20000 });
+    await child(main);
+    seeds.push(`demo ${await main.getAttribute('data-seed')}`);
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+  const main = page.locator('main[data-screen="round"]');
+  for (let n = 1; n <= 8; n++) {
+    await expect(main).toHaveAttribute('data-level', String(level));
+    await expect(main).toHaveAttribute('data-kind', 'new');
+    await expect(main.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', String(n - 1));
+    await expect(main.locator('[data-home]')).toBeVisible();
+    await expect(main.locator('[data-how]')).toBeVisible();
+    await child(main);
+    await look(page);
+    if (help && n === 2) {
+      const seed = await main.getAttribute('data-seed');
+      await page.locator('[data-how]').click();
+      await expect(page.locator('main[data-screen="demo"] [data-next]')).toBeVisible();
+      await child(page.locator('main[data-screen="demo"]'));
+      await look(page);
+      await page.locator('[data-next]').click();
+      await expect(main).toHaveAttribute('data-seed', seed);
+      await look(page);
+    }
+    const { data, round, answerAt } = await roundOf(page);
+    seeds.push(data.seed);
+    const wrong = round.choices.map((_, i) => i).filter((i) => i !== answerAt);
+    for (const i of help ? wrong.slice(0, { 1: 1, 3: wrong.length }[n] ?? 0) : []) {
+      await page.locator(`button[data-index="${i}"]`).click();
+      await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked');
+    }
+    await page.locator(`button[data-index="${answerAt}"]`).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    await look(page);
+    await page.locator('[data-next]').click();
+  }
+  await expect(page.locator('main[data-screen="end"]')).toBeVisible();
+  await child(page.locator('main[data-screen="end"]'));
+  return seeds;
+}
+
+test('#/try/ten-frame/8: the level\'s entry demo, then a session of 8 rounds all at level 8 (teen-bundle), the end screen, and home (3.1)', async ({ page }) => {
+  test.setTimeout(60000);
+  await recordScreens(page);
+  await watchHand(page, { fromStart: true });
+  await open(page, `${INDEX}#/try/ten-frame/8`);
+  const demo = page.locator('main[data-screen="demo"]');
+  await expect(demo).toHaveAttribute('data-solved', '', { timeout: 20000 });
+  // The hand showed how: it tapped the demo round's answer.
+  const { round, answerAt } = await roundOf(page);
+  expect(round.skill).toBe('pv.teens.ten-and');
+  expect((await handSeen(page)).taps.at(-1)?.card, 'the hand\'s last tap').toBe(answerAt);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await playTry(page, 8, { demo: true });
+  expect(await screensOf(page)).toEqual(['demo 8', ...Array(8).fill('round 8'), 'end']);
+  await expectThumbsDrawn(page, 'the end screen');
+  await expect(page.locator('main[data-screen="end"] [data-thumb]')).toHaveCount(8);
+  await look(page);
+  await page.locator('[data-home]').click();
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  await expect(page).toHaveURL(/#\/$/);
+  // No screen links to #/try, the adults' #/dev list neither.
+  await expect(page.locator('a[href^="#/try"]')).toHaveCount(0);
+  await page.evaluate(() => { location.hash = '#/dev'; });
+  await expect(page.locator('main[data-screen="dev"] a').first()).toBeVisible();
+  await expect(page.locator('a[href^="#/try"]')).toHaveCount(0);
+});
+
+test('#/try at a level without a demo opens on its first round (3.1)', async ({ page }) => {
+  await recordScreens(page);
+  await open(page, `${INDEX}#/try/ten-frame/2`);
+  const main = page.locator('main[data-screen="round"]');
+  await expect(main).toHaveAttribute('data-level', '2');
+  await expect(main.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '0');
+  expect(await screensOf(page)).toEqual(['round 2']);
+});
+
+// A stored child at level 10 who saw level 8's demo, with a review due today: #/play would open on the review, and
+// #/try neither reads it nor changes a byte of it.
+const TRIED = registry.tenFrame.levels.map((l) => l.id);
+const STORED = storeWith({
+  sessions: 4,
+  games: { 'ten-frame': ladderAt('bridge-move', { passed: TRIED.slice(0, 9), demoSeen: ['split-5', 'teen-bundle', 'bridge-move'] }) },
+  skills: { 'num.parts.split': skillState({ last: YESTERDAY, passedDay: '2026-10-10', due: TODAY }) },
+  attempts: [{ t: '2026-10-13T08:00:00.000Z', day: YESTERDAY, session: 4, child: CHILD, game: 'ten-frame', level: 9, levelId: 'teen-symbols', outcome: 'first' }],
+  events: [{ t: '2026-10-10T08:00:00.000Z', day: '2026-10-10', type: 'jump', game: 'ten-frame', from: null, to: 1, skill: 'num.parts.split' }],
+});
+for (const [what, value] of [['an empty store', null], ['a stored child', STORED]]) {
+  test(`#/try writes nothing, byte for byte, through the demo, a miss, "show me how", the tour and the end screen: ${what} (3.1)`, async ({ page }) => {
+    test.setTimeout(60000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    if (value) await seedStore(page, value);
+    await logWrites(page);
+    await recordScreens(page);
+    await open(page, `${INDEX}#/try/ten-frame/8/7`);
+    await playTry(page, 8, { demo: true, help: true });
+    expect(await screensOf(page)).toEqual(['demo 8', 'round 8', 'round 8', 'demo 8', 'round 8', ...Array(6).fill('round 8'), 'end']);
+    await look(page);
+    await page.locator('[data-home]').click();
+    await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+    expect(await page.evaluate(() => /** @type {any} */ (globalThis).writes), 'writes to storage').toEqual([]);
+    expect(await localOf(page)).toEqual(value ? { sifra: JSON.stringify(value) } : {});
+  });
+}
+
+test('#/try: an unknown game or level, or an address it does not read, goes home with location.replace (3.1)', async ({ page }) => {
+  await open(page, `${INDEX}#/`);
+  const bad = ['#/try', '#/try/', '#/try/nope/1', '#/try/ten-frame', '#/try/ten-frame/0', '#/try/ten-frame/13', '#/try/ten-frame/x',
+    '#/try/ten-frame/1.5', '#/try/ten-frame/08', '#/try/ten-frame/8/x', '#/try/ten-frame/8/4294967296', '#/try/ten-frame/8/1/2', '#/try/parts/1'];
+  for (const [i, hash] of bad.entries()) {
+    await page.goto(`${INDEX}?bad=${i}${hash}`);
+    await expect(page, hash).toHaveURL(/\?bad=\d+#\/$/);
+    await expect(page.locator('main[data-screen="home"]'), hash).toBeVisible();
+  }
+});
+
+test('#/try/<game>/<level>/<seed>: a seed deals the same session twice; without one each opening draws its own, as #/play (3.1)', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page, `${INDEX}#/try/ten-frame/8/2026`);
+  const first = await playTry(page, 8, { demo: true });
+  await page.goto(`${INDEX}?again#/try/ten-frame/8/2026`);
+  expect(await playTry(page, 8, { demo: true })).toEqual(first);
+  const demoSeed = async (url) => {
+    await page.goto(url);
+    const demo = page.locator('main[data-screen="demo"]');
+    await expect(demo).toHaveAttribute('data-level', '8');
+    return demo.getAttribute('data-seed');
+  };
+  const drawn = [await demoSeed(`${INDEX}?a#/try/ten-frame/8`), await demoSeed(`${INDEX}?b#/try/ten-frame/8`)];
+  expect(new Set([first[0], ...drawn.map((s) => `demo ${s}`)]).size, `${first[0]}, then ${drawn.join(', ')}`).toBe(3);
 });
 
 // Seeds where the raw demo seed, demoSeed(seed), deals the round's own answer, so a shell that skipped

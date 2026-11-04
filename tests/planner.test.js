@@ -6,8 +6,8 @@ import * as parts from './fixtures/parts/game.js';
 import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import {
-  TRIES, addDays, apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, mastered, nextStep, pickMix, planSession, plainDemo, prereqs,
-  reviews, same, schedule, skillPassed, stuckTarget,
+  ROUNDS, TRIES, addDays, apartSeed, dayOf, daysBetween, demoSeedFor, exerciseOf, homeOrder, levelSession, mastered, nextStep, pickMix, planSession,
+  plainDemo, prereqs, reviews, same, schedule, skillPassed, stuckTarget,
 } from '../shell/planner.js';
 import { demoSeed, rng } from '../shell/rng.js';
 import { newChild } from '../shell/store.js';
@@ -149,6 +149,25 @@ test('mixed level: both structures appear, and about 40% of consecutive rounds s
   assert.ok(Math.abs(switches / pairs - 0.4) <= 0.05, `switch rate ${switches / pairs}`);
   assert.deepEqual(pickMix({ ask: ['more', 'total', 'which'] }, 'gone', rng(1)).ask !== undefined, true);
   assert.deepEqual(pickMix(parts.levels[0], null, rng(1)), {});
+});
+
+test('#/try\'s rounds: a session\'s length at one level, seeds as a session draws them, a mixed level picked round by round (architecture 3.1)', () => {
+  // Every round at the level, with the seeds of a session that has nothing to review.
+  const tried = levelSession(scale, 1, rng(7), rng(8));
+  assert.equal(tried.length, ROUNDS);
+  assert.deepEqual(tried, planSession(child(), GAMES, scale, TODAY, SKILLS, rng(7), rng(8)).map((r) => ({ ...r, index: 1 })));
+  // A mixed level: each round's structure as pickMix picks it after the round before, kind mixed.
+  const game = { meta: { id: 'mixed' }, levels: [{ id: 'm', structure: ['change-add', 'change-take'] }] };
+  const [mix, again] = [rng(3), rng(3)];
+  let prev = null;
+  const want = Array.from({ length: ROUNDS }, () => {
+    const { structure } = pickMix(game.levels[0], prev, again);
+    prev = structure;
+    return structure;
+  });
+  const rounds = levelSession(/** @type {any} */ (game), 0, rng(4), mix);
+  assert.deepEqual(rounds.map((r) => r.structure), want);
+  assert.ok(rounds.every((r) => r.kind === 'mixed' && r.index === 0 && r.game === 'mixed'));
 });
 
 test('prerequisites: base, then the conditions the level meets', () => {

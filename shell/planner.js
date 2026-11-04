@@ -1,7 +1,7 @@
 // Sessions, review, the next step and the stuck child (architecture 3.3, 3.5-3.7), and the demo's
 // round (3.8). Pure functions over the child's data; the shell passes the games, SKILLS and the
 // random generators in.
-import { demoSeed } from './rng.js';
+import { demoSeed, seedFrom } from './rng.js';
 
 const DAY = 86400000;
 const GAPS = [1, 3, 7, 14];
@@ -33,6 +33,8 @@ export function homeOrder(games, skills) {
 
 /** Tries for a round the session has not dealt, and for a demo's round (architecture 3.3, 3.8). */
 export const TRIES = 50;
+/** The counted rounds of a session (architecture 3.3): #/play's and #/try's. */
+export const ROUNDS = 8;
 
 /** @type {(a: any, b: any) => boolean} deep equality of plain data, whatever the key order (an answer card is an object) */
 export const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' &&
@@ -254,13 +256,33 @@ export function reviews(child, games, today, skills) {
  * @returns {Spec[]}
  */
 export function planSession(child, games, game, today, skills, seeds, mix) {
-  const seed = () => Math.floor(seeds.next() * 4294967296) >>> 0;
   /** @type {Spec[]} */
   const rounds = reviews(child, games, today, skills).map((r) => ({
-    game: r.game.meta.id, index: r.index, seed: seed(), kind: 'review', ...pickMix(r.game.levels[r.index], null, mix),
+    game: r.game.meta.id, index: r.index, seed: seedFrom(seeds), kind: 'review', ...pickMix(r.game.levels[r.index], null, mix),
   }));
-  while (rounds.length < 8) rounds.push({ game: game.meta.id, index: -1, seed: seed(), kind: 'new' });
+  while (rounds.length < ROUNDS) rounds.push({ game: game.meta.id, index: -1, seed: seedFrom(seeds), kind: 'new' });
   return rounds;
+}
+
+/**
+ * The rounds of #/try (architecture 3.1): a session at one level, for an observation (pedagogy 8.3).
+ * No review and no child: every round at the level, its seed drawn as planSession draws it, and a
+ * mixed level's structure (or ask) picked round by round as a session's new rounds pick it.
+ * @param {Game} game
+ * @param {number} index the level
+ * @param {Rng} seeds draws the round seeds
+ * @param {Rng} mix picks a mixed level's structures
+ * @returns {Spec[]}
+ */
+export function levelSession(game, index, seeds, mix) {
+  const level = game.levels[index];
+  let prev = null;
+  return Array.from({ length: ROUNDS }, () => {
+    /** @type {Spec} */
+    const spec = { game: game.meta.id, index, seed: seedFrom(seeds), kind: isMixed(level) ? 'mixed' : 'new', ...pickMix(level, prev, mix) };
+    prev = spec.structure ?? spec.ask ?? null;
+    return spec;
+  });
 }
 
 /**
