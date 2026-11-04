@@ -39,6 +39,26 @@ const fixedCover = (game, level) => (game.meta.id === 'balance' && level.model =
  */
 const passing = (game, level, display) => game.meta.id === 'stories' && level.unknown === 'change' && display !== 'flash';
 
+/**
+ * Hints that add no mark over a display, found 2026-11-04 by the hint's check below: design 7.2's written
+ * exceptions, which the owner decides. Make ten with one empty cell (`9 + ? = 10`, ten-frame levels 5-7):
+ * the slip card 0 (`count-up`) rings that cell, and the hint's one ring is round the same cell. The check
+ * skips exactly these displays, on exactly these rounds.
+ * @type {(game: Game, level: Level, round: Round, choice: Choice) => boolean}
+ */
+const hintInDisplay = (game, level, round, choice) => game.meta.id === 'ten-frame' && ['ten-empty', 'ten-cover', 'ten-symbols'].includes(level.id)
+  && round.answer === 1 && choice.rule === 'slip.near' && choice.value === 0;
+
+/**
+ * Each value of a mixed level (R3), as the planner deals them, with its name in a test's title.
+ * @param {Game} game
+ * @returns {{ level: Level, name: string }[]}
+ */
+const levelsOf = (game) => game.levels.flatMap((l) => [l.structure].flat().flatMap((structure) => [l.ask].flat().map((ask) => ({
+  level: { ...l, ...(structure !== undefined && { structure }), ...(ask !== undefined && { ask }) },
+  name: [l.id, Array.isArray(l.structure) && structure, Array.isArray(l.ask) && ask].filter(Boolean).join('/'),
+}))));
+
 const card = (page, i) => page.locator(`button[data-index="${i}"]`);
 /** What a solved picture's aria-label no longer says: a cover (מִכְסֶה, מִכְסִים) or something empty (רֵיק, רֵיקָה, רֵיקִים). */
 const SOLVED_NOT = /מִכְס|רֵיק/;
@@ -166,14 +186,9 @@ async function shellPath(page, hash, game) {
 for (const { path, games } of SITES) {
   for (const game of games) {
     const id = game.meta.id;
-    // Each value of a mixed level (R3), as the planner deals them.
-    const levels = game.levels.flatMap((l) => [l.structure].flat().flatMap((structure) => [l.ask].flat().map((ask) => ({
-      level: { ...l, ...(structure !== undefined && { structure }), ...(ask !== undefined && { ask }) },
-      name: [l.id, Array.isArray(l.structure) && structure, Array.isArray(l.ask) && ask].filter(Boolean).join('/'),
-    }))));
     // One test per level and size: a whole game in one test outran its timeout on WebKit in CI.
     for (const [width, height] of [[320, 568], [1024, 1366]]) {
-      for (const { level, name } of levels) {
+      for (const { level, name } of levelsOf(game)) {
         test(`${id} ${name} at ${width}×${height}: render and miss, seeds 1-${LOOP}, keep every box, digit and cover in place`, async ({ page }) => {
           test.setTimeout(240000);
           await page.setViewportSize({ width, height });
@@ -221,6 +236,28 @@ for (const { path, games } of SITES) {
       await page.goto(`${path}#/dev`);
       await shellPath(page, `#/dev/${id}/${n}/1`, game);
     });
+  }
+}
+
+// The hint shows more than the display before it (design 7.2): on every level, each display's quiet marks
+// against the hint's, by kind and target, on the smallest phone with reduced motion (the quiet states at once).
+for (const { path, games } of SITES) {
+  for (const game of games) {
+    const id = game.meta.id;
+    for (const { level, name } of levelsOf(game)) {
+      test(`${id} ${name}, seeds 1-${LOOP}: the hint adds a mark that no display before it shows (design 7.2)`, async ({ page }) => {
+        test.setTimeout(240000);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.setViewportSize({ width: 320, height: 568 });
+        await page.clock.install({ time: NOW });
+        await page.goto(`${path}#/dev/${id}/1/1`);
+        await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
+        const url = new URL(path === INDEX ? `/games/${id}/game.js` : `/tests/fixtures/${id}/game.js`, page.url()).pathname;
+        /** @type {{ seed: number, round: Round, choice?: Choice, what: string }[]} */
+        const found = await page.evaluate(hintMarks, { url, level, seeds: LOOP });
+        expect(found.filter((f) => !f.choice || !hintInDisplay(game, level, f.round, f.choice)).map((f) => `seed ${f.seed}: ${f.what}`)).toEqual([]);
+      });
+    }
   }
 }
 
@@ -407,5 +444,160 @@ async function loop({ url, levels, seeds }) {
     }
   }
   probe.remove();
+  return out;
+}
+
+/**
+ * In the page: the hint against each display of one level (design 7.2), seeds 1 to `seeds`, each round
+ * drawn into a host of the panel's size (the round frozen) with its cards from the shell's own module,
+ * and reduced motion on (each quiet state at once). A display's marks are what the picture shows after a
+ * first miss on its card (step 1); the hint's, after a first miss and a second (step 2), leaving out what
+ * a display left in [data-display]; both against the start picture of the same round, drawn again.
+ * A mark is a node that paints (a fill, an edge, a shadow, its own text or a pseudo-element's; an SVG
+ * shape, not a halo), shown now and not at rest, or shown at rest with another paint now (a colour, a
+ * shadow, its opacity with its parents'). Its kind: its classes, without the state ones (is-, on-, in-),
+ * the placement and the motion ones and the games' prefix, and its own text (a chip's 10); a repainted
+ * one's ends in "~". Its target, what it marks: a repainted node is its own; a new one, the things of
+ * the start picture whose middle it holds or that hold its middle, else the card it is on, else where
+ * it stands against the start picture's things, in twentieths. Returns each display whose marks hold
+ * every mark of the hint (an empty hint is in every display), and each round that threw.
+ * @param {{ url: string, level: Level, seeds: number }} arg
+ * @returns {Promise<{ seed: number, round: Round, choice?: Choice, what: string }[]>}
+ */
+async function hintMarks({ url, level, seeds }) {
+  const game = await import(url);
+  const { rng } = await import('/shell/rng.js');
+  const { RULES } = await import('/data/errors.js');
+  const { drive } = await import('/e2e/drive.js');
+  const { drawCards } = await import('/shell/cards.js');
+  const main = /** @type {HTMLElement} */ (document.querySelector('main'));
+  const panel = /** @type {HTMLElement} */ (main.querySelector('[data-area="picture"]'));
+  const host = /** @type {HTMLElement} */ (panel.cloneNode(false));
+  panel.replaceWith(host);
+  const area = /** @type {HTMLElement} */ (main.querySelector('.choices'));
+  /** Placement and motion: at(), an outline's svg, a layer, entering and blinking. */
+  const LOOSE = /^(?:[a-z]{2}-)?(?:at|svg|layer|enter|blink|blink-in)$/;
+  /** @type {(e: Element) => string} */
+  const classes = (e) => [...e.classList].filter((c) => !/^(is|on|in)-/.test(c) && !LOOSE.test(c)).map((c) => c.replace(/^[a-z]{2}-/, '')).sort().join('+') || e.tagName.toLowerCase();
+  /** @type {(n: Element) => string} */
+  const kindOf = (n) => {
+    const kind = n instanceof SVGElement && n.ownerSVGElement ? `${classes(n.ownerSVGElement)}/${classes(n)}` : classes(n);
+    const text = [...n.childNodes].filter((c) => c.nodeType === Node.TEXT_NODE).map((c) => (c.textContent ?? '').trim()).join('');
+    return text ? `${kind} "${text}"` : kind;
+  };
+  const clear = (/** @type {string} */ c) => c === 'none' || /^(transparent|rgba\(.*,\s*0\))$/.test(c);
+  /** @type {(n: Element, s: CSSStyleDeclaration) => boolean} */
+  const paints = (n, s) => {
+    if (/halo/.test(n.getAttribute('class') ?? '')) return false;
+    if (n instanceof SVGElement) return n instanceof SVGGeometryElement;
+    if ([...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent?.trim())) return true;
+    if (['::before', '::after'].some((p) => !/^(none|normal)$/.test(getComputedStyle(n, p).content))) return true;
+    return !clear(s.backgroundColor) || s.backgroundImage !== 'none' || s.boxShadow !== 'none'
+      || ['Top', 'Right', 'Bottom', 'Left'].some((e) => parseFloat(s[`border${e}Width`]) > 0 && s[`border${e}Style`] !== 'none' && !clear(s[`border${e}Color`]));
+  };
+  /**
+   * What a child sees in the host and on the cards: each node that paints, shown, with its box, its paint and its kind.
+   * @returns {Map<Element, { box: DOMRect, paint: string, kind: string, card: boolean }>}
+   */
+  const snap = () => {
+    const out = new Map();
+    for (const root of [host, area]) {
+      const seen = new Map();
+      /** @type {(e: Element | null) => number} its opacity with its parents' up to the root */
+      const opacity = (e) => {
+        if (!e || e === root) return 1;
+        if (!seen.has(e)) seen.set(e, Number(getComputedStyle(e).opacity) * opacity(e.parentElement));
+        return seen.get(e);
+      };
+      for (const n of root.querySelectorAll('*')) {
+        const box = n.getBoundingClientRect();
+        const s = getComputedStyle(n);
+        if ((!box.width && !box.height) || s.visibility === 'hidden' || !opacity(n) || !paints(n, s)) continue;
+        const paint = [opacity(n).toFixed(2), s.filter, s.backgroundColor, s.borderTopColor, s.color, s.boxShadow, s.fill, s.stroke].join('|');
+        out.set(n, { box, paint, kind: kindOf(n), card: root === area });
+      }
+    }
+    return out;
+  };
+  /** @type {(b: DOMRect, p: { x: number, y: number }) => boolean} */
+  const holds = (b, p) => p.x >= b.left - 0.5 && p.x <= b.right + 0.5 && p.y >= b.top - 0.5 && p.y <= b.bottom + 0.5;
+  /** @type {(b: DOMRect) => { x: number, y: number }} */
+  const middle = (b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
+  /** @type {(v: number, from: number, to: number) => number} */
+  const twentieths = (v, from, to) => Math.round(((v - from) / Math.max(1, to - from)) * 20);
+  /**
+   * A state's marks against the start picture, each "kind target".
+   * @param {ReturnType<typeof snap>} rest
+   * @param {ReturnType<typeof snap>} now
+   * @param {(n: Element) => boolean} [skip]
+   * @returns {Set<string>}
+   */
+  const marks = (rest, now, skip = () => false) => {
+    const things = [...rest.keys()].filter((n) => !rest.get(n).card);
+    const here = things.filter((n) => now.has(n)).map((n) => ({ i: things.indexOf(n), n, box: now.get(n).box }));
+    const all = here.reduce((u, t) => ({ l: Math.min(u.l, t.box.left), t: Math.min(u.t, t.box.top), r: Math.max(u.r, t.box.right), b: Math.max(u.b, t.box.bottom) }),
+      { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity });
+    const out = new Set();
+    for (const [n, m] of now) {
+      const was = rest.get(n);
+      if (skip(n) || (was && (m.card || was.paint === m.paint))) continue;
+      if (was) {
+        out.add(`${m.kind}~ #${things.indexOf(n)}`);
+        continue;
+      }
+      const on = here.filter((t) => !n.contains(t.n) && (holds(m.box, middle(t.box)) || holds(t.box, middle(m.box)))).map((t) => t.i);
+      const c = middle(m.box);
+      out.add(`${m.kind} ${m.card ? `card ${n.closest('[data-index]')?.getAttribute('data-index')}`
+        : on.length ? `on ${on.join(',')}` : `at ${twentieths(c.x, all.l, all.r)},${twentieths(c.y, all.t, all.b)}`}`);
+    }
+    return out;
+  };
+  const frozen = (data) => {
+    if (data === null || typeof data !== 'object' || Object.isFrozen(data)) return data;
+    Object.freeze(data);
+    for (const v of Object.values(data)) frozen(v);
+    return data;
+  };
+  const out = [];
+  for (let seed = 1; seed <= seeds && out.length < 40; seed++) {
+    const round = frozen(game.makeRound(level, rng(seed)));
+    const wrong = round.choices.flatMap((c, i) => (c.rule ? [{ ...c, i }] : []));
+    /** The round from its start, as the shell mounts it (2.5), at rest; a miss retires its card as the shell does. */
+    const open = async () => {
+      const ctl = new AbortController();
+      host.replaceChildren();
+      const dots = level.cardDots !== false && level.look !== 'symbols' && round.choices.every((c) => Number.isInteger(c.value) && c.value >= 0 && c.value <= 20);
+      const cards = drawCards(area, round.choices, { dots, face: game.face && ((el, v) => game.face(el, v, round)) }, ctl.signal);
+      const view = game.render(host, round, { signal: ctl.signal, mode: 'play', solved: false, setEquation() {}, build() {}, relabel() {}, onAttempt() {} }) ?? {};
+      if (level.look === 'symbols') view.picture?.();
+      await drive(null);
+      /** @type {(c: { value: any, rule: string, i: number }, step: number, first: boolean) => Promise<void>} */
+      const miss = async (c, step, first) => {
+        cards.retire(c.i);
+        await drive(view.miss({ value: c.value, rule: c.rule, display: RULES[c.rule].display, step, first }));
+      };
+      return { ctl, miss, rest: snap() };
+    };
+    try {
+      const shown = [];
+      for (const c of wrong) {
+        const at = await open();
+        await at.miss(c, 1, true);
+        shown.push({ c, marks: marks(at.rest, snap()) });
+        at.ctl.abort();
+      }
+      const at = await open();
+      await at.miss(wrong[0], 1, true);
+      await at.miss(wrong[1], 2, false);
+      const hint = [...marks(at.rest, snap(), (n) => n.closest('[data-display]') !== null)];
+      at.ctl.abort();
+      for (const { c, marks: m } of shown) {
+        if (!hint.every((h) => m.has(h))) continue;
+        out.push({ seed, round, choice: { value: c.value, rule: c.rule }, what: `the hint [${hint.join('; ')}] is all in ${RULES[c.rule].display} of ${c.rule} (${JSON.stringify(c.value)}): [${[...m].join('; ')}]` });
+      }
+    } catch (e) {
+      out.push({ seed, round, what: `threw ${e?.stack ?? e}` });
+    }
+  }
   return out;
 }

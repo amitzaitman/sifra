@@ -253,7 +253,8 @@ meaning (from the mount).
    `view.miss({ value, rule, display, step, first })` (`display` from RULES, `first` true on the round's first miss),
    and unlocks. After step 3 only the answer card is left, ringed (design §6.5).
 4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`; an id not in
-   `displays` throws, 2.1); from step 2 it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2;
+   `displays` throws, 2.1); from step 2 it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2,
+   with at least one mark that no display of the level shows in its quiet state, 4.8;
    a 3-option level's first miss is
    step 2 and still a first miss: its display stays to the next tap, also with reduced motion, and the hint joins
    it); at step 3 the tour: one `[data-tour]`
@@ -1170,11 +1171,30 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   the one at rest unless `setEquation` rewrote the row (level 10's tour); the shell's path checks the panel's
   aria-label the same way while the equation row reads as at rest (help changes no label, 2.4; decisions.md, row
   "תיאור התמונה אחרי הפתרון").
+- **The hint's marks** (design 7.2, 2026-11-04), a test per game and level (each value of a mixed one), at 320×568
+  with reduced motion, so each quiet state shows at once: one `page.evaluate()` (`hintMarks`) puts a host of the
+  panel's size in the panel's place and the round's cards in the cards' place, drawn by shell/cards.js with the
+  game's `face` and the shell's dots, and for seeds 1-50 draws the round from its start once per wrong card, misses
+  it (step 1, the card retired as the shell retires it) and reads the display's marks; then once more, misses two
+  cards (steps 1 and 2) and reads the hint's, leaving out what a display left in `[data-display]`. A mark is a node
+  that paints (a fill, an edge, a shadow, its own text or a pseudo-element's; an SVG shape, not a halo) shown now
+  and not in the start picture, or shown there with another paint now (a colour, a shadow, its opacity with its
+  parents'); on the cards only new ones count (a retired card's face goes). Its kind is its classes without the
+  state ones (`is-`, `on-`, `in-`), the placement and motion ones (`at`, `svg`, `layer`, `enter`, `blink`,
+  `blink-in`) and the two-letter prefix, with its own text; a repainted one's ends in `~`. Its target is what it
+  marks: a repainted node itself; a new one, the start picture's things whose middle it holds or that hold its
+  middle, else its card, else its place against those things in twentieths (so a display that shrinks the drawing
+  moves no target). The test fails each display whose marks hold every mark of the hint (an empty hint is in every
+  display), except design 7.2's written exceptions (`hintInDisplay`: ten-frame levels 5-7 on `9 + ? = 10` with the
+  slip card 0, found by this check on 2026-11-04; the owner decides), and each round that throws. Colour is not part
+  of a kind, so a magenta ring round a cell that a display's blue ring holds is no new mark. Before the level-8
+  hint's second chip it failed ten-frame level 8 on every seed: its `10` chip was label-ten's.
 - The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
   included (a `round.choices.sort()` in a render fails every clause; the shell's own freeze is site.spec.js's,
   4.6). Reverting 4781e24 (a ghost appended after
   the digits) fails the loop's topmost clause on the ten-frame's pair cards.
-- About 3.3 minutes on Chromium with two workers; the balance's loop is half of it.
+- About 3.3 minutes on Chromium with two workers; the balance's loop is half of it. The hint's marks add about 1.1
+  minutes more (42 tests, measured alone on 2026-11-04).
 
 ### 4.9 Game 3's tests (built 2026-10-30)
 

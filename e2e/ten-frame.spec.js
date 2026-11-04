@@ -2133,6 +2133,56 @@ test('level 9 with nine ones (19 = 10 + ?): the tag\'s digits stay clear of its 
   }
 });
 
+test('level 8\'s hint: the bundle\'s 10 and, beside it on the same line, a chip of the same size with the loose sticks\' count on their middle, 0 where the first two would stand; inside the tour\'s ring, the 0 clear of it (design 7.2, 7.3)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height] of [[320, 568], [390, 568], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    for (const ones of [0, 1, 2, 3, 9]) {
+      await page.goto('about:blank');
+      const { round, answerAt } = await devAt(page, 'teen-bundle', (r) => r.equation.left[2] === ones);
+      const wrong = round.choices.flatMap((c, i) => (c.rule ? [i] : []));
+      for (const i of wrong.slice(0, 2)) {
+        await card(page, i).click();
+        await unlocked(page);
+      }
+      const here = `${width}×${height}, 10 + ${ones}`;
+      // A phone held sideways scrolls to the cards: the picture back on screen for the screenshot.
+      await page.evaluate(() => scrollTo(0, 0));
+      const chips = page.locator('[data-hint] .tf-chip');
+      await expect(chips, `${here}: the parts, not the whole (R5)`).toHaveText(['10', String(ones)]);
+      const [ten, loose] = await chips.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+      const picture = page.locator('[data-area="picture"]');
+      const bundle = await picture.locator('.tf-bundle').boundingBox();
+      const sticks = await picture.locator('.tf-stick').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+      expect(Math.abs(ten.x + ten.width / 2 - (bundle.x + bundle.width / 2)), `${here}: the 10 on the bundle`).toBeLessThan(1);
+      for (const [a, b] of [[loose.y, ten.y], [loose.width, ten.width], [loose.height, ten.height]]) expect(Math.abs(a - b), `${here}: one line, one size`).toBeLessThan(0.5);
+      const middle = loose.x + loose.width / 2;
+      if (ones) expect(Math.abs(middle - (sticks[0].left + sticks.at(-1).right) / 2), `${here}: on the sticks' middle`).toBeLessThan(1);
+      else expect(loose.left, `${here}: right of the bundle and its band`).toBeGreaterThan(bundle.x + bundle.width * 1.08);
+      // The ones' digit in --ink, 2px or more from its chip's edges, as the 10's.
+      const room = await inkRoom(page, '[data-hint] .tf-chip >> nth=1', [20, 33, 61]);
+      for (const [side, px] of Object.entries(room)) expect(px, `${here}: the ones' digit, ${side}`).toBeGreaterThanOrEqual(2);
+      await expectMathLeftToRight(page);
+      await expectInPanel(page);
+      await card(page, wrong[2]).click();
+      await unlocked(page);
+      await expect(page.locator('[data-tour]').last()).toHaveText(String(round.answer));
+      await expect(card(page, answerAt)).toHaveClass(/is-shown/);
+      // The tour's ring round the bundle and the sticks holds both chips, clear of its 3px line; round the
+      // bundle alone (10 + 0) the 0 stays 3px or more off its line and its 3px halo. Read in one go: the
+      // tap scrolled a phone held sideways.
+      const { ring, both } = await page.evaluate(() => ({
+        ring: document.querySelector('[data-area="picture"] .tf-ring.is-unknown').getBoundingClientRect().toJSON(),
+        both: [...document.querySelectorAll('[data-hint] .tf-chip')].map((e) => e.getBoundingClientRect().toJSON()),
+      }));
+      const inside = (c) => Math.min(c.left - ring.left, ring.right - c.right, c.top - ring.top, ring.bottom - c.bottom);
+      expect(inside(both[0]), `${here}: the 10 inside the ring`).toBeGreaterThan(3);
+      if (ones) expect(inside(both[1]), `${here}: the ones' chip inside the ring`).toBeGreaterThan(3);
+      else expect(both[1].left - ring.right, `${here}: the 0 clear of the ring`).toBeGreaterThanOrEqual(3 + 3);
+    }
+  }
+});
+
 for (const [level, ok, what] of [['ten-cover', (r) => r.answer === 5, '5 + 5'], ['split-10', (r) => r.equation.left[0] === 4 && r.answer === 4, 'a double, 4 + 4']]) {
   test(`${what}: the cover holds the unknown's cells, the cards keep two real errors and a slip, and the tour ends on the answer`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });

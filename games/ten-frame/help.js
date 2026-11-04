@@ -124,8 +124,10 @@ const digit = (parent, box, text, delay, cls = '') => mark(parent, `tf-digit ${c
 const ghost = (parent, box, delay, cls = '') =>
   parent.insertBefore(mark(parent, `tf-ghost tf-enter ${cls}`, box, undefined, delay), parent.querySelector(':scope > [data-ry]'));
 const ring = (parent, box, delay, cls = 'is-round') => mark(parent, `tf-ring tf-blink-in ${cls}`, box, undefined, delay);
+/** @type {(box: Box) => Box} a chip's box, centred on a box */
+const chipBox = (box) => ({ x: box.x + box.w / 2 - 0.55, y: box.y + box.h / 2 - 0.36, w: 1.1, h: 0.72 });
 /** A chip with a number (design 7.2: numbers on white chips). @param {Element} parent @param {Box} box @param {string} text */
-const chipAt = (parent, box, text, cls = '') => at(parent, `tf-chip ${cls}`, { x: box.x + box.w / 2 - 0.55, y: box.y + box.h / 2 - 0.36, w: 1.1, h: 0.72 }, text);
+const chipAt = (parent, box, text, cls = '') => at(parent, `tf-chip ${cls}`, chipBox(box), text);
 /** The tour's digit: one [data-tour] per digit, in --role-unknown (design 7.2). */
 function tourDigit(parent, box, n, cls = '') {
   const node = at(parent, `tf-digit tf-tour ${cls}`, box, String(n));
@@ -549,6 +551,12 @@ const stickBox = (pic, j) => pic.t.L.stick(j);
 const veil = (node) => node.querySelector('.tf-veil');
 /** @type {(b: Box) => Box} a bundle with its band, which passes 8% of its width on each side (game.css) */
 const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
+/**
+ * The hint's chip of the loose sticks (design 7.3): on their middle, or with none where the first
+ * two would stand, so the tour's ring round the bundle alone (9px with its halo) stays off it.
+ * @type {(pic: Pic) => Box}
+ */
+const onesChip = (pic) => chipBox(around(Array.from({ length: pic.t.sticks.length || 2 }, (_, j) => stickBox(pic, j))));
 
 export const BUNDLES = {
   /** @type {Record<string, Display>} */
@@ -595,8 +603,18 @@ export const BUNDLES = {
     },
   },
   prep: () => [],
-  /** The bundle gets a 10 label (place value: the ten is ten things tied). @param {Pic} pic @param {HTMLElement} root */
-  hint: (pic, root) => chipAt(root, pic.t.L.bundle, '10'),
+  /**
+   * Each part with its number, on one line (R7; design 7.3): the bundle gets a 10 (place value: the
+   * ten is ten things tied), and beside it the loose sticks a chip of the same size with their count,
+   * as bridging ten's hint labels its parts. Nine sticks make the unit small: both are held in pixels
+   * round their 14px digits, as level 9's 10 (game.css). The parts, never the whole (R5), and a mark
+   * that label-ten does not show (design 7.2).
+   * @param {Pic} pic @param {HTMLElement} root
+   */
+  hint(pic, root) {
+    chipAt(root, pic.t.L.bundle, '10', 'is-held');
+    at(root, 'tf-chip is-held', onesChip(pic), String(pic.t.sticks.length));
+  },
   /** Counts on from 10 over the loose sticks (R5: the unknown is the whole). @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
   async tour(pic, root, signal) {
     const { t } = pic;
@@ -606,8 +624,10 @@ export const BUNDLES = {
       ...t.sticks.map((s, j) => ({ box: L.above(stickBox(pic, j)), n: 11 + j, cls: 'is-above', before: () => show(veil(s)) })),
     ], signal);
     // A ring round the bundle with its band and the sticks, in pixels (game.css .is-around): its
-    // inner halo is a 3px gap off them, so the band's tips and the last stick keep their size.
-    const boxes = [banded(L.bundle), ...t.sticks.map((_, j) => stickBox(pic, j))];
+    // inner halo is a 3px gap off them, so the band's tips and the last stick keep their size. It
+    // holds the hint's chip of the sticks too, wider than one stick (10 + 1); not a 0 beside a bundle alone.
+    const chip = pic.hint && t.sticks.length ? [onesChip(pic)] : [];
+    const boxes = [banded(L.bundle), ...t.sticks.map((_, j) => stickBox(pic, j)), ...chip];
     if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', around(boxes))), signal);
   },
   solve: () => [],
