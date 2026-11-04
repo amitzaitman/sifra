@@ -848,16 +848,60 @@ test('"show me how": the taps during its demo go to the attempt, next to its `ho
   expect(saved.tapsOn).toEqual(NONE);
 });
 
+test('the entry demo, then "show me how" twice: a count for each entry of `demo`, the second "how" added to the first (pedagogy 5.11, 3.9)', async ({ page }) => {
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-5', { demoSeen: [] }) } }));
+  await open(page, `${FIXTURE}?seed=1#/play/parts`);
+  const demo = page.locator('main[data-screen="demo"]');
+  await expect(demo).toBeVisible();
+  await look(page);
+  /** @type {(what: string[]) => Promise<void>} taps during the demo on screen, then its "הַבָּא", back to the round */
+  const through = async (what) => {
+    expect(await tapDuringDemo(page, what)).toEqual({ solved: false, locked: true });
+    await expect(demo.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+    await look(page);
+    await demo.locator('[data-next]').click();
+    await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+    await look(page);
+  };
+  await through(['panel', 'button[data-index]']);
+  for (const what of [['panel', 'panel'], ['panel', 'button[data-index]', 'button[data-index]']]) {
+    await page.locator('[data-how]').click();
+    await expect(demo).toBeVisible();
+    await look(page);
+    await through(what);
+  }
+  await page.locator(`button[data-index="${(await roundOf(page)).answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const saved = (await stored(page)).child.attempts.at(-1);
+  expect(saved).toMatchObject({ levelId: 'split-5', outcome: 'help', help: ['how'], demo: ['auto', 'how'] });
+  expect(saved.demoTaps).toEqual([{ ...NONE, panel: 1 }, { ...NONE, panel: 3 }]);
+  expect(saved.lockedTaps).toEqual({ display: 0, demo: 3, closing: 0 });
+  expect(saved.tapsOn).toEqual(NONE);
+});
+
+/**
+ * Fixes the session seed, which app.js takes from crypto when index.html gives none (3.3, 3.8), so the rounds a
+ * session deals there are known; a child id still comes from crypto.
+ * @param {import('@playwright/test').Page} page
+ * @param {number} seed
+ */
+const pinSeed = (page, seed) => page.addInitScript((n) => {
+  const real = crypto.getRandomValues.bind(crypto);
+  crypto.getRandomValues = (a) => (a instanceof Uint32Array && a.length === 1 ? Object.assign(a, { 0: n }) : real(a));
+}, seed);
+
 // The layers of a picture take no taps (the stories' marks, the balance's hint, the ten-frame's lines): for one hit
-// test every mark takes it, so a tap on one is counted by its kind, not as the panel under it (3.2).
+// test every mark takes it, so a tap on one is counted by its kind, not as the panel under it (3.2). Each session
+// from a fixed seed: a ten-empty round may have no empty cell (10 + ? = 10), and then no '?' bracket.
 const LAYERED = [
-  { game: 'ten-frame', level: 'ten-empty', want: { line: 1, cover: 1 } },
-  { game: 'stories', level: 'add-change', want: { cover: 1, chip: 1, line: 1, object: 1 } },
-  { game: 'balance', level: 'missing-left', want: { cover: 1, chip: 1, object: 1 } },
+  { game: 'ten-frame', level: 'ten-empty', seed: 1, want: { line: 1, cover: 1 } },
+  { game: 'stories', level: 'add-change', seed: 1, want: { cover: 1, chip: 1, line: 1, object: 1 } },
+  { game: 'balance', level: 'missing-left', seed: 1, want: { cover: 1, chip: 1, object: 1 } },
 ];
-for (const { game, level, want } of LAYERED) {
+for (const { game, level, seed, want } of LAYERED) {
   test(`${game} ${level}: a tap on a mark counts by its kind, also where its layer takes no taps (3.2)`, async ({ page }) => {
     await seedStore(page, storeWith({ games: { [game]: ladderAt(level) } }));
+    await pinSeed(page, seed);
     await open(page, `${INDEX}#/play/${game}`);
     await expect(page.locator(`main[data-screen="round"][data-game="${game}"]`)).toBeVisible();
     // A story's event ends before its marks are all there (design 6.10).
@@ -871,6 +915,7 @@ for (const { game, level, want } of LAYERED) {
     }).then((mark) => mark !== null);
     const { round, answerAt } = await roundOf(page);
     if (game === 'ten-frame') {
+      expect(round.answer, `seed ${seed}: a round with empty cells, so with a '?' bracket`).toBeGreaterThan(0);
       // A point on the '?' bracket's line where the game's own hit test finds the tray or a cell under it.
       const at = await picture.locator('.tf-bracket path.tf-line').evaluate((path) => {
         const p = /** @type {SVGPathElement} */ (path);
