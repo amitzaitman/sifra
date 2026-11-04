@@ -477,6 +477,14 @@ test('#/try: an unknown game or level, or an address it does not read, goes home
     await expect(page, hash).toHaveURL(/\?bad=\d+#\/$/);
     await expect(page.locator('main[data-screen="home"]'), hash).toBeVisible();
   }
+  // Within one page, a bad address replaces itself: going back leaves the page it was typed on, never the bad address.
+  await page.goto(`${INDEX}?inpage#/parents`);
+  const length = await page.evaluate(() => history.length);
+  await page.evaluate(() => { location.hash = '#/try/ten-frame/13'; });
+  await expect(page.locator('main[data-screen="home"]')).toBeVisible();
+  expect(await page.evaluate(() => history.length), 'the bad address left no history entry').toBe(length + 1);
+  await page.goBack();
+  await expect(page).toHaveURL(/\?inpage#\/parents$/);
 });
 
 test('#/try/<game>/<level>/<seed>: a seed deals the same session twice; without one each opening draws its own, as #/play (3.1)', async ({ page }) => {
