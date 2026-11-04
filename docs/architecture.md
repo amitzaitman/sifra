@@ -444,11 +444,14 @@ a stylesheet that fails to load holds nothing up.
 | `#/dev/export` | one button that downloads the export (3.9) |
 
 Anything else goes home. Nothing a child reaches links to `#/dev`, and no screen links to `#/try` (#/dev's list
-neither): the observer types the address on the device.
+neither): the observer types the address on the device. Home orders games by the SKILLS position (the learning order,
+3.6) of the skill of their first level (ten-frame, then balance; with game 3: ten-frame, stories, balance, as
+`addsub.meaning.change-add` comes between `num.parts.split` and `eq.sign.same-as`). Thumbs use seed 1, drawn with
+`mode: 'thumb'` once their host is in the page.
 
 `#/try/<game>/<level>[/<seed>]`, the level from 1 as on `#/dev`: one session of `ROUNDS` (8) rounds, every round at
 that level (`levelSession` in shell/planner.js: the seeds drawn as `planSession` draws them, a mixed level's structure
-or ask picked round by round as a session's new rounds pick it), with no review, no ladder and no planner; nothing
+or ask picked round by round as a session's new rounds pick it), with no review, no ladder, no `planSession` and no next step; nothing
 of the child's record is read to plan it. Rounds and demos are dealt as a session deals them (`apart`, `demoSeedFor`
 with the session's exercises, 3.3, 3.8). The session seed is the `<seed>` given (a uint32 in decimal: an observation
 can be repeated, a test replays one), else one drawn as `#/play` draws it (from the start seed, crypto's on
@@ -457,12 +460,8 @@ how"), the help ladder, "הַבָּא", the end screen, whose home goes to `#/`;
 and `data-kind` is `new` (`mixed` on a mixed level). On a level with `demo: true` the level's entry demo runs first,
 as on a child's first entry to it, every time the address opens. Nothing is stored (3.9): the session's book
 (`tryBook` in app.js, 3.3) is the one way from its rounds to the store, and this one keeps nothing. An unknown game,
-a level out of range, a seed that is no uint32 or a part after the seed go home with `location.replace('#/')`.
-
-Home orders games by the SKILLS position (the
-learning order, 3.6) of the skill of their first level (ten-frame, then balance; with game 3: ten-frame, stories,
-balance, as `addsub.meaning.change-add` comes between `num.parts.split` and `eq.sign.same-as`). Thumbs use seed 1,
-drawn with `mode: 'thumb'` once their host is in the page.
+a level out of range, a seed that is no uint32 or a part after the seed go home with `location.replace('#/')`, so
+the bad address leaves no history entry.
 
 ### 3.2 Screens and test hooks
 
@@ -716,8 +715,7 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   once per start.
 - Storage is read again before each write (`refresh` in store.js, bug hunt #8): at each route, at the top of each
   round of a child's session (`childBook.begin`, 3.3), as the entry demo is seen, and for a solved round once its
-  closing has run, at the write itself (`persist`
-  applies `S.pending`, the round's ladder step, review, stuck return and attempt, on what it has just read; so does
+  closing has run, at the write itself (`persist` applies `S.pending`, the round's ladder step, review, stuck return and attempt, on what it has just read; so does
   the `pagehide` and hidden flush): two visible tabs (iPad split view, a desktop) may write within one closing, and a
   write applied before the closing undid the other's. Another tab of the site (a WhatsApp link
   opens a new Safari tab, and old tabs keep their state for days) may have written since this one read or wrote;
