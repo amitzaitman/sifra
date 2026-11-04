@@ -555,11 +555,35 @@ const veil = (node) => node.querySelector('.tf-veil');
 /** @type {(b: Box) => Box} a bundle with its band, which passes 8% of its width on each side (game.css) */
 const banded = (b) => ({ ...b, x: b.x - b.w * 0.08, w: b.w * 1.16 });
 /**
- * The hint's chip of the loose sticks (design 7.3): on their middle, or with none where the first
- * two would stand, so the tour's ring round the bundle alone (9px with its halo) stays off it.
+ * From the loose sticks down to the hint's chip under them, in units: over nine sticks the unit is
+ * about 20px at 320px and the chip is held at 18px tall, so its edge stays 6px off them (13px with up
+ * to four sticks). Apart enough to read as the group's label, not a stick's.
+ */
+const UNDER = 0.4;
+/** How far a chip held at 26 x 18px (game.css .is-held) passes its box at that unit: the tour's ring holds that too. */
+const HELD = 0.1;
+/** The band the chip takes under the sticks (its 0.72 units tall box and the room above it). */
+const UNDER_BAND = UNDER + 0.72;
+/**
+ * The hint's chip of the loose sticks (design 7.2, 7.3): centred under them on the paper, as bridging
+ * ten's chips stand by their group, so it covers no stick and no ink dot a touch left (6.3). With none
+ * it stands under the place of the first two, off the tour's ring round the bundle alone.
  * @type {(pic: Pic) => Box}
  */
-const onesChip = (pic) => chipBox(around(Array.from({ length: pic.t.sticks.length || 2 }, (_, j) => stickBox(pic, j))));
+const onesChip = (pic) => {
+  const group = around(Array.from({ length: pic.t.sticks.length || 2 }, (_, j) => stickBox(pic, j)));
+  return { ...chipBox(group), y: group.y + group.h + UNDER };
+};
+
+/**
+ * Grows the drawing for the rest of the round, for what the hint keeps on it (7.2): a display drawn
+ * later grows it further and gives this size back (resize). @param {Pic} pic @param {number} dh
+ */
+function hold(pic, dh) {
+  if (dh <= pic.size.dh) return;
+  pic.size = { ...pic.size, dh };
+  pic.draw.style.setProperty('--dh', String(Math.max(dh, Number(pic.draw.style.getPropertyValue('--dh')) || 0)));
+}
 
 export const BUNDLES = {
   /** @type {Record<string, Display>} */
@@ -577,9 +601,11 @@ export const BUNDLES = {
     },
     build(pic, root, { value }) {
       const L = pic.t.L;
-      // The chosen number built next to the real one, the same way: bundles and sticks.
-      const row = L.row(Math.floor(value / 10), value % 10, L.below);
-      resize(pic, row.right + 0.3, L.belowH);
+      // The chosen number built next to the real one, the same way: bundles and sticks. Once the
+      // hint's chip stands under the sticks (a third miss), the row goes under it.
+      const down = pic.hint ? UNDER_BAND : 0;
+      const row = L.row(Math.floor(value / 10), value % 10, L.below + down);
+      resize(pic, row.right + 0.3, L.belowH + down);
       const all = [...row.bundles, ...row.sticks];
       all.forEach((box, j) => ghost(root, box, stagger(j, all.length), j < row.bundles.length ? 'is-bundle' : 'is-stick'));
       if (row.bundles.length) ring(root, around(row.bundles), '300ms', 'is-around');
@@ -607,16 +633,18 @@ export const BUNDLES = {
   },
   prep: () => [],
   /**
-   * Each part with its number, on one line (R7; design 7.3): the bundle gets a 10 (place value: the
-   * ten is ten things tied), and beside it the loose sticks a chip of the same size with their count,
-   * as bridging ten's hint labels its parts. Nine sticks make the unit small: both are held in pixels
-   * round their 14px digits, as level 9's 10 (game.css). The parts, never the whole (R5), and a mark
-   * that label-ten does not show (design 7.2).
+   * Each part with its number, left to right (R7; design 7.3): the bundle gets a 10 on its band
+   * (place value: the ten is ten things tied), and the loose sticks a chip of the same size with
+   * their count, under them, as bridging ten's hint labels its parts; the drawing grows to hold it.
+   * Nine sticks make the unit small: both are held in pixels round their 14px digits, as level 9's
+   * 10 (game.css). The parts, never the whole (R5), and a mark that no display shows (design 7.2).
    * @param {Pic} pic @param {HTMLElement} root
    */
   hint(pic, root) {
     chipAt(root, pic.t.L.bundle, '10', 'is-held');
-    at(root, 'tf-chip is-held', onesChip(pic), String(pic.t.sticks.length));
+    const chip = onesChip(pic);
+    at(root, 'tf-chip is-held', chip, String(pic.t.sticks.length));
+    hold(pic, chip.y + chip.h + HELD + 0.3);
   },
   /** Counts on from 10 over the loose sticks (R5: the unknown is the whole). @param {Pic} pic @param {HTMLElement} root @param {AbortSignal} signal */
   async tour(pic, root, signal) {
@@ -628,8 +656,8 @@ export const BUNDLES = {
     ], signal);
     // A ring round the bundle with its band and the sticks, in pixels (game.css .is-around): its
     // inner halo is a 3px gap off them, so the band's tips and the last stick keep their size. It
-    // holds the hint's chip of the sticks too, wider than one stick (10 + 1); not a 0 beside a bundle alone.
-    const chip = pic.hint && t.sticks.length ? [onesChip(pic)] : [];
+    // holds the hint's chip under the sticks too; not a 0 beside a bundle alone.
+    const chip = pic.hint && t.sticks.length ? [grow(onesChip(pic), HELD)] : [];
     const boxes = [banded(L.bundle), ...t.sticks.map((_, j) => stickBox(pic, j)), ...chip];
     if (!signal.aborted) await settle(under(root, at(root, 'tf-ring is-around is-unknown tf-enter', around(boxes))), signal);
   },

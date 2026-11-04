@@ -253,7 +253,7 @@ meaning (from the mount).
    and unlocks. After step 3 only the answer card is left, ringed (design §6.5).
 4. In `miss` the game removes the previous display and runs the new one (root `[data-display="<id>"]`; an id not in
    `displays` throws, 2.1); from step 2 it adds the hint (`[data-hint]`, kept to the end of the round, design §7.2,
-   with at least one mark that no display of the level shows in its quiet state, 4.8;
+   with at least one mark that no display of the round shows in its quiet state, 4.8;
    a 3-option level's first miss is
    step 2 and still a first miss: its display stays to the next tap, also with reduced motion, and the hint joins
    it); at step 3 the tour: one `[data-tour]`
@@ -1163,12 +1163,14 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   state ones (`is-`, `on-`, `in-`), the placement and motion ones (`at`, `svg`, `layer`, `enter`, `blink`,
   `blink-in`) and the two-letter prefix, with its own text; a repainted one's ends in `~`. Its target is what it
   marks: a repainted node itself; a new one, the start picture's things whose middle it holds or that hold its
-  middle, else its card, else its place against those things in twentieths (so a display that shrinks the drawing
-  moves no target). The test fails each display whose marks hold every mark of the hint (an empty hint is in every
-  display), except design 7.2's written exceptions (`hintInDisplay`: ten-frame levels 5-7 on `9 + ? = 10` with the
-  slip card 0, found by this check on 2026-11-04; the owner decides), and each round that throws. Colour is not part
-  of a kind, so a magenta ring round a cell that a display's blue ring holds is no new mark. Before the level-8
-  hint's second chip it failed ten-frame level 8 on every seed: its `10` chip was label-ten's.
+  middle, else its card, else its place against those things in twentieths (so a display, or a hint, that shrinks
+  the drawing moves no target). The page returns each round's marks; the test fails each round where the marks of
+  all its displays together hold every mark of the hint (an empty hint fails), leaving out of them design 7.2's
+  written exceptions (`hintInDisplay`: ten-frame levels 5-7 on `9 + ? = 10`, the slip card 0's `count-up`, found by
+  this check on 2026-11-04; the owner decides), and each round that throws. Colour is not part of a kind, so a
+  magenta ring round a cell that a display's blue ring holds is no new mark. Before the level-8 hint's second chip
+  it failed ten-frame level 8 on every seed: its `10` chip was label-ten's. Without the exceptions it fails exactly
+  ten-empty seed 10, ten-cover seed 10 and ten-symbols seed 37 (2026-11-04).
 - The errors fixture (4.5) fails any test here whose page throws or logs an error, a write to the frozen round
   included (a `round.choices.sort()` in a render fails every clause; the shell's own freeze is site.spec.js's,
   4.6). Reverting 4781e24 (a ghost appended after

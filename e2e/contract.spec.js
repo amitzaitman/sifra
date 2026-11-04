@@ -40,10 +40,10 @@ const fixedCover = (game, level) => (game.meta.id === 'balance' && level.model =
 const passing = (game, level, display) => game.meta.id === 'stories' && level.unknown === 'change' && display !== 'flash';
 
 /**
- * Hints that add no mark over a display, found 2026-11-04 by the hint's check below: design 7.2's written
- * exceptions, which the owner decides. Make ten with one empty cell (`9 + ? = 10`, ten-frame levels 5-7):
- * the slip card 0 (`count-up`) rings that cell, and the hint's one ring is round the same cell. The check
- * skips exactly these displays, on exactly these rounds.
+ * Displays that show every mark of the hint, found 2026-11-04 by the hint's check below: design 7.2's
+ * written exceptions, which the owner decides. Make ten with one empty cell (`9 + ? = 10`, ten-frame
+ * levels 5-7): the slip card 0 (`count-up`) rings that cell, and the hint's one ring is round the same
+ * cell. The check leaves exactly these displays out of what the hint is held against, on exactly these rounds.
  * @type {(game: Game, level: Level, round: Round, choice: Choice) => boolean}
  */
 const hintInDisplay = (game, level, round, choice) => game.meta.id === 'ten-frame' && ['ten-empty', 'ten-cover', 'ten-symbols'].includes(level.id)
@@ -239,13 +239,14 @@ for (const { path, games } of SITES) {
   }
 }
 
-// The hint shows more than the display before it (design 7.2): on every level, each display's quiet marks
-// against the hint's, by kind and target, on the smallest phone with reduced motion (the quiet states at once).
+// The hint shows more than the displays (design 7.2): on every level, the hint's marks against the quiet marks
+// of every display the round can show, by kind and target, on the smallest phone with reduced motion (the
+// quiet states at once). A round fails when no mark of the hint is outside all of them.
 for (const { path, games } of SITES) {
   for (const game of games) {
     const id = game.meta.id;
     for (const { level, name } of levelsOf(game)) {
-      test(`${id} ${name}, seeds 1-${LOOP}: the hint adds a mark that no display before it shows (design 7.2)`, async ({ page }) => {
+      test(`${id} ${name}, seeds 1-${LOOP}: the hint adds a mark that no display of the round shows (design 7.2)`, async ({ page }) => {
         test.setTimeout(240000);
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.setViewportSize({ width: 320, height: 568 });
@@ -253,9 +254,15 @@ for (const { path, games } of SITES) {
         await page.goto(`${path}#/dev/${id}/1/1`);
         await expect(page.locator('main[data-screen="round"] [data-area="picture"]')).toBeVisible();
         const url = new URL(path === INDEX ? `/games/${id}/game.js` : `/tests/fixtures/${id}/game.js`, page.url()).pathname;
-        /** @type {{ seed: number, round: Round, choice?: Choice, what: string }[]} */
         const found = await page.evaluate(hintMarks, { url, level, seeds: LOOP });
-        expect(found.filter((f) => !f.choice || !hintInDisplay(game, level, f.round, f.choice)).map((f) => `seed ${f.seed}: ${f.what}`)).toEqual([]);
+        const failed = found.flatMap((f) => {
+          if (f.threw) return [`seed ${f.seed}: threw ${f.threw}`];
+          const held = f.shown.filter((s) => !hintInDisplay(game, level, f.round, s.choice));
+          const all = new Set(held.flatMap((s) => s.marks));
+          if (f.hint.some((h) => !all.has(h))) return [];
+          return [`seed ${f.seed}: the hint [${f.hint.join('; ')}] adds no mark over ${held.map((s) => `${RULES[s.choice.rule].display} of ${s.choice.rule} (${JSON.stringify(s.choice.value)}): [${s.marks.join('; ')}]`).join(', ')}`];
+        });
+        expect(failed).toEqual([]);
       });
     }
   }
@@ -448,7 +455,7 @@ async function loop({ url, levels, seeds }) {
 }
 
 /**
- * In the page: the hint against each display of one level (design 7.2), seeds 1 to `seeds`, each round
+ * In the page: the hint and each display of one level (design 7.2), seeds 1 to `seeds`, each round
  * drawn into a host of the panel's size (the round frozen) with its cards from the shell's own module,
  * and reduced motion on (each quiet state at once). A display's marks are what the picture shows after a
  * first miss on its card (step 1); the hint's, after a first miss and a second (step 2), leaving out what
@@ -459,10 +466,11 @@ async function loop({ url, levels, seeds }) {
  * the placement and the motion ones and the games' prefix, and its own text (a chip's 10); a repainted
  * one's ends in "~". Its target, what it marks: a repainted node is its own; a new one, the things of
  * the start picture whose middle it holds or that hold its middle, else the card it is on, else where
- * it stands against the start picture's things, in twentieths. Returns each display whose marks hold
- * every mark of the hint (an empty hint is in every display), and each round that threw.
+ * it stands against the start picture's things, in twentieths. Returns, for each round, the hint's marks
+ * and each wrong card's display's marks ("kind target"; the test holds the hint against all of them,
+ * so an empty hint fails), or what it threw.
  * @param {{ url: string, level: Level, seeds: number }} arg
- * @returns {Promise<{ seed: number, round: Round, choice?: Choice, what: string }[]>}
+ * @returns {Promise<{ seed: number, round: Round, hint: string[], shown: { choice: Choice, marks: string[] }[], threw?: string }[]>}
  */
 async function hintMarks({ url, level, seeds }) {
   const game = await import(url);
@@ -559,7 +567,7 @@ async function hintMarks({ url, level, seeds }) {
     return data;
   };
   const out = [];
-  for (let seed = 1; seed <= seeds && out.length < 40; seed++) {
+  for (let seed = 1; seed <= seeds; seed++) {
     const round = frozen(game.makeRound(level, rng(seed)));
     const wrong = round.choices.flatMap((c, i) => (c.rule ? [{ ...c, i }] : []));
     /** The round from its start, as the shell mounts it (2.5), at rest; a miss retires its card as the shell does. */
@@ -591,12 +599,9 @@ async function hintMarks({ url, level, seeds }) {
       await at.miss(wrong[1], 2, false);
       const hint = [...marks(at.rest, snap(), (n) => n.closest('[data-display]') !== null)];
       at.ctl.abort();
-      for (const { c, marks: m } of shown) {
-        if (!hint.every((h) => m.has(h))) continue;
-        out.push({ seed, round, choice: { value: c.value, rule: c.rule }, what: `the hint [${hint.join('; ')}] is all in ${RULES[c.rule].display} of ${c.rule} (${JSON.stringify(c.value)}): [${[...m].join('; ')}]` });
-      }
+      out.push({ seed, round, hint, shown: shown.map(({ c, marks: m }) => ({ choice: { value: c.value, rule: c.rule }, marks: [...m] })) });
     } catch (e) {
-      out.push({ seed, round, what: `threw ${e?.stack ?? e}` });
+      out.push({ seed, round, hint: [], shown: [], threw: String(e?.stack ?? e) });
     }
   }
   return out;

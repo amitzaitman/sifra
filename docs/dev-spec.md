@@ -146,8 +146,8 @@ export function classify(round, result) { /* -> 'correct' | ruleId */ } // build
 - **R5 [browser]:** `page.clock.install()` before `goto`. Tap a tagged wrong option: it is removed,
   `[data-display="<id>"]` is visible, and the attempt is logged with the rule.
   `page.clock.runFor(60000)` changes nothing. Second miss: the structure hint is visible, and it adds a
-  mark that the display before it does not show (design §7.2: e2e/contract.spec.js compares, on every
-  game and level, the hint's marks with each display's quiet marks, by kind and target). Third:
+  mark that no display of the round shows (design §7.2: e2e/contract.spec.js holds, on every game and
+  level, the hint's marks against the quiet marks of all the round's displays together, by kind and target). Third:
   only the answer remains, the last tour digit equals `answer` (it counts the unknown from 1 when
   the unknown is a part, and counts on when it is the whole), and the outcome is `shown`. With
   `page.emulateMedia({ reducedMotion: 'reduce' })`, options accept taps right after a miss.
