@@ -147,7 +147,7 @@ school grade (owner decision 2026-10-14, pedagogy §8.1); the generic test fails
   cards go small to large, so a level whose rule values all fall on one side of the answer would leave it on one card;
   makeRound varies its place (lib/place.js), and a level that cannot says why here. No level has one today. The
   generic test fails a level at 80% without it, and one with it below 80%.
-- Levels are numbered from 1 wherever a person or a URL sees them (§6 tables, `#/dev`, records).
+- Levels are numbered from 1 wherever a person or a URL sees them (§6 tables, `#/dev`, `#/try`, records).
 
 ### 2.3 Rounds and rules
 
@@ -452,11 +452,28 @@ a stylesheet that fails to load holds nothing up.
 | `#/` | the next-step card (links to `#/next`, with a thumb at that level); "כָּל הַמִּשְׂחָקִים": a card per game with a thumb at its level, linking to `#/play/<id>`; the parents link when `VERIFIED` |
 | `#/next` | computes the next step, applies the jump, replaces the hash with `#/play/<game>` |
 | `#/play/<game>` | a session (3.3); after a stuck return into another game the address names that game (3.7) |
+| `#/try/<game>/<level>[/<seed>]` | a child's session at one level, for an observation (pedagogy §8.3; owner decision 2026-11-04, "איך מגיעים לרמה בתצפית"): below |
 | `#/parents` | the parents page (3.10) |
 | `#/dev`, `#/dev/<game>/<level>/<seed>` | a list of every level (seed 1); one round with the full help ladder, nothing stored, its JSON in `<pre data-dev>` |
 | `#/dev/export` | one button that downloads the export (3.9) |
 
-Anything else goes home. Nothing a child reaches links to `#/dev`. Home orders games by the SKILLS position (the
+Anything else goes home. Nothing a child reaches links to `#/dev`, and no screen links to `#/try` (#/dev's list
+neither): the observer types the address on the device.
+
+`#/try/<game>/<level>[/<seed>]`, the level from 1 as on `#/dev`: one session of `ROUNDS` (8) rounds, every round at
+that level (`levelSession` in shell/planner.js: the seeds drawn as `planSession` draws them, a mixed level's structure
+or ask picked round by round as a session's new rounds pick it), with no review, no ladder and no planner; nothing
+of the child's record is read to plan it. Rounds and demos are dealt as a session deals them (`apart`, `demoSeedFor`
+with the session's exercises, 3.3, 3.8). The session seed is the `<seed>` given (a uint32 in decimal: an observation
+can be repeated, a test replays one), else one drawn as `#/play` draws it (from the start seed, crypto's on
+index.html). It is a child's session on screen: the round and demo screens with the bar (home, progress, "show me
+how"), the help ladder, "הַבָּא", the end screen, whose home goes to `#/`; no `[data-dev]`, no JSON, not `data-adult`,
+and `data-kind` is `new` (`mixed` on a mixed level). On a level with `demo: true` the level's entry demo runs first,
+as on a child's first entry to it, every time the address opens. Nothing is stored (3.9): the session's book
+(`tryBook` in app.js, 3.3) is the one way from its rounds to the store, and this one keeps nothing. An unknown game,
+a level out of range, a seed that is no uint32 or a part after the seed go home with `location.replace('#/')`.
+
+Home orders games by the SKILLS position (the
 learning order, 3.6) of the skill of their first level (ten-frame, then balance; with game 3: ten-frame, stories,
 balance, as `addsub.meaning.change-add` comes between `num.parts.split` and `eq.sign.same-as`). Thumbs use seed 1,
 drawn with `mode: 'thumb'` once their host is in the page.
@@ -524,6 +541,12 @@ drawn with `mode: 'thumb'` once their host is in the page.
 - 8 counted rounds (demos do not count), as a list of `{ game, level, seed, kind, structure?, ask? }`: 0 to 2 review
   rounds (3.5), then new rounds in the chosen game. The 8 seeds come from the session seed through `rng`. A new
   round's level is filled in when it starts, so the ladder moves within a session.
+- A session carries its book (app.js), the one way from its rounds to the child's record and the store: `begin` runs
+  as each round starts, before its demo, and gives the entry demo's mark when the round opens with it; `solved` takes
+  the solved round. `play()` writes the session count, then `#/play`'s `childBook` reads storage again, gives a new
+  round its ladder level, writes a game's first ladder and the demo seen, and `finish`es a solved round (3.9).
+  `#/try`'s `tryBook` (3.1) opens round 1 with the level's entry demo when it has one, and keeps nothing: it neither
+  reads nor writes the child's record. The round runner, the demos and the end screen are the same for both.
 - No exercise twice in a session: when a round starts (before its demo), its seed goes up by 1 while its round is
   an exercise the session dealt already, 50 tries at most (`apart` in app.js, `apartSeed` in shell/planner.js). The
   same exercise is `exerciseOf(game, round)` in shell/planner.js: the game, the answer and the two sides of the
@@ -706,7 +729,8 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   written, so the half comes back and nothing is lost from memory (bug hunt #21). `navigator.storage.persist()` runs
   once per start.
 - Storage is read again before each write (`refresh` in store.js, bug hunt #8): at each route, at the top of each
-  round, as the entry demo is seen, and for a solved round once its closing has run, at the write itself (`persist`
+  round of a child's session (`childBook.begin`, 3.3), as the entry demo is seen, and for a solved round once its
+  closing has run, at the write itself (`persist`
   applies `S.pending`, the round's ladder step, review, stuck return and attempt, on what it has just read; so does
   the `pagehide` and hidden flush): two visible tabs (iPad split view, a desktop) may write within one closing, and a
   write applied before the closing undid the other's. Another tab of the site (a WhatsApp link
@@ -730,6 +754,16 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   The round itself is not stored: seed, `version`, `params` and `answer` rebuild it. The attempt is taken once, at
   the solve (its `t` and `day` too), from copies of the round's record, and never changes after it: an off-target
   tap or the picture button after the solve is not logged.
+- The written exception to "every attempt is recorded" (CLAUDE.md "ready to grow" 3): `#/dev` and `#/try` (3.1)
+  record nothing. Neither writes an attempt, a level, a demo seen, a session count, a day, an event or the schema, and
+  a store seeded before `#/try` is the same text byte for byte after a whole session (e2e/site.spec.js, 4.6). This
+  is structural, not a check at each write: a round on `#/dev` is run with no `onSolved` and its demo with no mark,
+  and `#/try`'s session has `tryBook` (3.3), whose methods reach neither `persist` nor the child's record, so
+  `S.pending` is never set and the closing's and the `pagehide` flush have nothing to write. `route()` still reads
+  storage as each route opens; a `#/play` round left during its closing is written then, as on every route: its
+  attempt, not the observation's. An observation is noted by hand (pedagogy §8.3, device-checks.md "ילד משחק"): the
+  owner rejected an address that writes progress the child did not earn, which would corrupt the log and §8.4's
+  hypotheses (decisions.md, 2026-11-04, "איך מגיעים לרמה בתצפית").
 - Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`, `<day>` the local day like every
   day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time and `data` the
   stored value as is.
@@ -899,7 +933,8 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   on made-up rounds (the same answer, the same row with another answer, edge rounds only, nothing else: the first
   demo seed after `TRIES` rounds; a dealt exercise skipped, and when all were, a plain one dealt longest ago);
   `apartSeed` (the first try not dealt, else the oldest; pools of 3, 7 and 9 over 8 rounds: none twice in a row,
-  each repeat the one dealt longest ago).
+  each repeat the one dealt longest ago). `levelSession` (3.1): `ROUNDS` rounds at its level, the seeds of a session
+  with nothing to review, and a mixed level's structures as `pickMix` picks them round after round, kind `mixed`.
 - store (tests/store.test.js, besides migrate, the shape, caps and export): a quota error sets the oldest half aside
   and retries once; a retry that fails too puts the half back, so all ten stay and a later save writes them (bug hunt
   #21); `refresh` takes another tab's write before this tab writes, keeps memory on the same text, a failed read or a
@@ -1036,6 +1071,20 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   touch tap logs one, and in Chromium a real swipe through the DevTools protocol scrolls the page and logs none; at
   320×568 and 375×548 no visible hand rests on a card while a hint or a tour is drawn (`watchHand`'s `onCards`; five
   demos, and the first screen's entry demo).
+- `#/try` (3.1, owner decision 2026-11-04), on index.html; each test is red with the route taken out of `route()`.
+  `#/try/ten-frame/8` runs the level's entry demo first (the hand's last tap on the demo round's answer, `watchHand`),
+  then 8 new rounds at level 8 (`teen-bundle`) under the child's bar (home, progress 0 to 7, "show me how"), not
+  `data-adult` and with no `[data-dev]`, to the end screen with 8 solved thumbs; every screen drawn is logged (a
+  MutationObserver from the page's first script: the demo, 8 rounds, the end, nothing else); home goes to `#/`, and
+  neither home nor #/dev's list links to `#/try`. Level 2 (no demo) opens on its first round. Through the demo, a
+  miss (round 1), "show me how" (round 2, then the same round), the tour (round 3, every wrong card) and the end
+  screen, then home, no `setItem`, `removeItem` or `clear` reaches localStorage or sessionStorage (each wrapped from
+  the page's first script) and localStorage holds what it held: nothing for an empty store, the seeded text byte for
+  byte for a child at level 10 who saw level 8's demo and has a review due (red when `tryBook` takes `finish`, or
+  when its demo's mark writes). An unknown game, a level 0, 13, `x`, `1.5` or `08`, a seed `x` or 2³², a part after
+  the seed, or a fixture's game on index.html, each lands on `#/` (`location.replace('#/')`; red without the route,
+  as home drew at the bad address). `#/try/ten-frame/8/2026` deals the same demo and rounds twice, and two openings
+  without a seed draw two other demos.
 - On index.html, looping over the registry (every game: ten-frame, stories and balance): no horizontal scroll at
   320×568 and 375×550 on `#/`, `#/parents` and every level through `#/dev`, and at 375×550 picture, equation, cards
   and "הַבָּא" visible; at 320×568 each level's widest exercise (`widestRoutes`: of seeds 1-400, the widest row in em
@@ -1428,6 +1477,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | A level of fewer exercises than a session deals (stories level 6) | When every try is an exercise the session dealt, the one dealt longest ago comes back, never the last one while another can (`apartSeed`, 3.3); `whole-5` keeps its 7 exercises, named in tests/games.test.js's `SMALL`, and every other level deals at least 8. Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "רמה עם פחות תרגילים ממפגש") | `whole-5` has 7 exercises since "כרטיס 0" (no 0 and no equal parts in the basket): a child who stays at the level, with no review round, gets a repeat by round 8, and the 51st try was a random one of the 7, the previous round's in 14% of sessions. Widening the level to 6 breaks §6.4's whole of at most 5, and bringing back `1 + 1` and `2 + 2` reverses "כרטיס 0" (hunt 2 #11, option B) |
 | Off-target taps | A press of the primary pointer on no button, link or `[data-target]`, counted at its pointerup, with no pointercancel and no second finger between: a scroll and a pinch are no taps (3.2). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "נגיעה שלא במטרה היא רק נגיעה") | Counted on pointerdown, one swipe was a tap on the picture and a pinch two; on a phone held sideways every round needs a scroll to reach its cards, so nearly every landscape round logged a tap that never was, in the log that should show what a child who cannot read thinks is tappable (§5.7; hunt 2 #6) |
 | The address after a stuck return | Into another game, the address becomes `#/play/<target game>` by `history.replaceState`, only while it still names the session's game (3.1, 3.7). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "הכתובת אחרי חזרה של ילד תקוע") | A reload or a restored tab opened the stuck game at the stuck level, its stuck counter reset, instead of the prerequisite and its demo. Without the check, home tapped during the closing opened the target's session: `route()` applies the solved round before it reads the address (hunt 2 #12) |
+| The observation route (`#/try`) | The owner chose the address (decisions.md, 2026-11-04, "איך מגיעים לרמה בתצפית"); how it is built is engineering, which the owner may reverse. A session carries a book (3.3), the one way from its rounds to the store: `#/play`'s `childBook` is what `nextRound` did with the child's record before, with `finish`, `#/try`'s `tryBook` keeps nothing, and the round runner, the demos and the end screen are shared (3.1, 3.9). Its rounds come from `levelSession` in shell/planner.js, beside `planSession`, with one `ROUNDS` (8) for both and the progress bar. `data-kind` stays `new` (or `mixed`), as in a child's session. The address is read strictly: the level in decimal from 1, an optional seed a uint32 in decimal (a trailing `/` is no seed), nothing after it; any other goes home with `location.replace('#/')`, so the bad address leaves no history entry | Structural, as the owner asked: a `#/try` session has no path to `persist`, so no write is left to a check that a later change could miss, and the stored record needs no flag that a test or a migration must know. The rounds and the demos still go through `apart` and `demoSeedFor` with the session's exercises, so what the observer sees is dealt as a child's session deals it. A `data-kind` of its own would be one more thing a child's session does not show; the address tells the tests. A loose read, as #/dev's (a seed that is no number is seed 1), would play one fixed session for a mistyped seed, and an observer could repeat it without knowing |
 | A slip in `? = a + b` (balance, R4) | `slip.near` is last in `eq.sign.missing`'s rules (skills.md), and the balance offers it in `? = a + b` alone (`SLIP_FORMS` in games/balance/game.js): there every real error is under the answer (`equal.copy` a, `op.other` the difference, `count.start-included` a + b − 1; `equal.add-all` is the answer and drops), so lib/place.js can now move the answer one place down, with the answer plus 1 over it in place of `count.start-included`, drawn as `count-up` (ghosts on the empty pan, one past the unknown's places, the beam tipped). The answer is the third card or the fourth there, about 48/52, and the best simple rule finds it in 54-64%; every other form is unchanged, level 6's 99 first-card rounds too. The deal check (4.2) also checks each form of a mixed level alone. Balance version 8, the lock with it (levels 4-6 changed). Option A (★★★★★) of hunt 2 #4, decided 2026-11-01 by the owner's delegation; see decisions.md, "טעות מקרית ב-`? = a + b`" (an engineering decision the owner may reverse). Tests: tests/games.test.js (the per-form check and its self-test, red on balance levels 4-6 before), tests/balance.test.js (the card sets of `? = a + b`, the answer on card 3 or 4, no slip on a missing part) | `? = a + b` was the only form in the three games with the answer on one card in 80% of its rounds or more: 2503/2503 at level 4, 1009/1009 at levels 5 and 6, and a child who taps the largest card when `?` stands alone on the left won about 75% of level 4. Option B kept the cue under a `samePlace` per form; option C (`slip.near` in every form of the skill) would put a slip in place of a real error in 36-48% of the skill's rounds, levels 2-3 included, and move level 6's decided rounds |
 | The balance's rows at once (hunt 2 #10) | `--cube` and `--cell` registered as `<length>` (`@property` in games/balance/game.css), and no transition on `--rows` or `--len`: a display that needs more rows makes the picture smaller at once, and its end brings it back at once, as a reset (`is-instant`) did; the beam, pans, ghosts and rings move as before (2.8). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "שורות המאזניים בבת אחת"). Test: tests/balance.test.js scans game.css (red before) | The report's step 3: registering the lengths alone left up to 9 frames over 34ms per display at 4x CPU (8/3), more than its bar of 4; with the step, 0-2 on 7/3, 8/3, 9/3 and 11/3 at 320 and 390 |
 | The jumps' marks on small cubes (balance, hunt 2 #14) | A mark is at least 15px (`--m: max(var(--cube), min(var(--u), 15px))` on `.bl-stack > .bl-mark`): on a smaller cube it grows into the 3px gap round its place, centred, above the rings beside it, and the arcs (`z-index: 2`) over it; the display's rows stay the rest rows, dome included (design 7.1, 7.3). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "סימנים על קוביות קטנות"). Test: e2e/balance.spec.js, `? + 19 = 20` (level 6, seed 1) at 320x568, 568x320 and 844x390: each mark 15px, its digits inside its ring and centred, arcs, rings (red before at 12.69px) | `displayRows` counts the dome's rows though the jumps lift it, so `? + 19 = 20` drew 12.7px marks with 14px digits at 320. Counting the places' rows instead would change design 7.3's "within the rest rows" and grow the picture mid-display; `budget` would drop three exercises and bump the version |
