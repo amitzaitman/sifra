@@ -91,7 +91,8 @@ export const lidPlaces = ({ row, col }) => {
 };
 
 /**
- * Colours a quantity by its role (R6), and a second known part in the part's light shade.
+ * Colours a quantity by its role (R6), and a second known part in the part's light shade. A cube or a dot is
+ * a counted thing: an object in the off-target log (architecture 3.2), once its touch has left its mark.
  * @param {HTMLElement} node
  * @param {{ role: string, second?: boolean }} spot
  * @returns {HTMLElement}
@@ -99,6 +100,7 @@ export const lidPlaces = ({ row, col }) => {
 export function paint(node, spot) {
   node.dataset.role = spot.role;
   node.toggleAttribute('data-second', Boolean(spot.second));
+  node.dataset.tap = 'object';
   return node;
 }
 

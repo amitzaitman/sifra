@@ -7,7 +7,8 @@ import * as scale from './fixtures/scale/game.js';
 import { moveTo, startLadder, step } from '../shell/ladder.js';
 import { nextStep, planSession, reviews, schedule } from '../shell/planner.js';
 import { rng } from '../shell/rng.js';
-import { CAPS, KEY, SCHEMA, SHAPE, capped, childOf, exportFile, load, migrate, newChild, normaliseChild, refresh, save } from '../shell/store.js';
+import { CAPS, KEY, LOCKED, SCHEMA, SHAPE, capped, childOf, exportFile, load, migrate, newChild, normaliseChild, refresh, save, zeros } from '../shell/store.js';
+import { TAP_KINDS } from '../shell/taps.js';
 import { SKILLS } from '../data/skills.js';
 
 const newId = () => 'c0000abcd';
@@ -34,6 +35,17 @@ const SHAPES = {
     ladder: ['level', 'fast', 'streak', 'window', 'passed', 'at', 'demoSeen', 'demoDue', 'hold'],
     skill: ['last', 'passedDay', 'box', 'due', 'reviewDays', 'lastReviewFirst'],
   },
+  // 2 (2026-11-04): a child, a ladder and a skill state keep schema 1's keys; an attempt has new counts (COUNTS).
+  2: {
+    child: ['created', 'sessions', 'games', 'skills', 'attempts', 'events'],
+    ladder: ['level', 'fast', 'streak', 'window', 'passed', 'at', 'demoSeen', 'demoDue', 'hold'],
+    skill: ['last', 'passedDay', 'box', 'due', 'reviewDays', 'lastReviewFirst'],
+  },
+};
+// The keys of an attempt's counts, from the schema that added them (architecture 3.9): a new kind or a new key in
+// any of them needs a new SCHEMA and its migrate step; never edit an old row.
+const COUNTS = {
+  2: { tapsOn: ['cover', 'chip', 'line', 'object', 'panel', 'other'], lockedTaps: ['display', 'demo', 'closing'] },
 };
 
 /** A Storage in memory; setItem can be made to throw. */
@@ -67,8 +79,8 @@ test('importing and loading with a storage that throws on any access does not th
   assert.doesNotThrow(() => exportFile(throwing, new Date(), null, DAY));
 });
 
-test('migrate: missing, unparsable or broken gives a new value that keeps what was stored; schema 1 stays', () => {
-  const fresh = (events) => ({ schema: 1, current: 'c0000abcd', children: { c0000abcd: { ...newChild(DAY), events } } });
+test('migrate: missing, unparsable or broken gives a new value that keeps what was stored; the current schema stays', () => {
+  const fresh = (events) => ({ schema: SCHEMA, current: 'c0000abcd', children: { c0000abcd: { ...newChild(DAY), events } } });
   for (const raw of [null, '']) assert.deepEqual(migrate(raw, newId, WHEN), { data: fresh([]), writable: true }, 'nothing stored, nothing logged');
   const broken = ['{"schema":1,"current":"x","children":{}}', '{"schema":1,"current":"x","children":{"x":5}}',
     '{"schema":1,"current":"x","children":{"x":null}}', '{"schema":1,"current":"0","children":[{}]}', '{"schema":1,"current":"x","children":{"x":[]}}'];
@@ -79,7 +91,7 @@ test('migrate: missing, unparsable or broken gives a new value that keeps what w
     assert.equal(writable, true, raw);
     assert.deepEqual(data, fresh([{ t: WHEN.t, day: DAY, type: 'repair', lost: { '*': was } }]), raw);
   }
-  const stored = { schema: 1, current: 'c1', children: { c1: { ...newChild('2026-01-01'), sessions: 4 } } };
+  const stored = { schema: SCHEMA, current: 'c1', children: { c1: { ...newChild('2026-01-01'), sessions: 4 } } };
   assert.deepEqual(migrate(JSON.stringify(stored), newId, WHEN), { data: stored, writable: true });
   // The records the shell writes stay as they are, and nothing is logged.
   const c = { ...newChild('2026-01-01'), sessions: 2, attempts: [{ outcome: 'first' }] };
@@ -88,8 +100,56 @@ test('migrate: missing, unparsable or broken gives a new value that keeps what w
   schedule(c.skills, 'num.parts.split', { day: '2026-01-01', kind: 'new', outcome: 'first', passed: true });
   schedule(c.skills, 'num.parts.split', { day: '2026-01-02', kind: 'review', outcome: 'first', passed: false });
   c.events.push({ type: 'jump', game: 'parts' });
-  const full = { schema: 1, current: 'c1', children: { c1: c, c2: newChild('2026-02-01') } };
+  const full = { schema: SCHEMA, current: 'c1', children: { c1: c, c2: newChild('2026-02-01') } };
   assert.deepEqual(migrate(JSON.stringify(full), newId, WHEN), { data: full, writable: true });
+});
+
+test('migrate: schema 1 reads at schema 2, each attempt with empty counts: taps by kind, locked presses, one per demo it lists', () => {
+  const none = zeros(TAP_KINDS);
+  const old = [
+    { outcome: 'first', demo: [], taps: { picture: 1, equation: 0, other: 0 } },
+    { outcome: 'help', demo: ['auto', 'how'], taps: { picture: 0, equation: 2, other: 1 } },
+    // Older than the demo field: no demo, no demo counts.
+    { outcome: 'shown' },
+  ];
+  const stored = { schema: 1, current: 'c1', children: {
+    c1: { ...newChild('2026-10-01'), sessions: 3, attempts: old },
+    // Every child, not only the current one; a value that is not an attempt stays, as do attempts that are not a list.
+    c2: { ...newChild('2026-10-02'), attempts: [{ outcome: 'first', demo: ['auto'] }, 'x', null] },
+    c3: { ...newChild('2026-10-03'), attempts: {} },
+  } };
+  const { data, writable } = migrate(JSON.stringify(stored), newId, WHEN);
+  assert.equal(writable, true);
+  assert.equal(data.schema, SCHEMA);
+  assert.equal(SCHEMA, 2, 'the step below is the last one: a newer schema adds its own test');
+  assert.deepEqual(data.children.c1.attempts, [
+    { ...old[0], tapsOn: none, lockedTaps: { display: 0, demo: 0, closing: 0 }, demoTaps: [] },
+    { ...old[1], tapsOn: none, lockedTaps: { display: 0, demo: 0, closing: 0 }, demoTaps: [none, none] },
+    { ...old[2], tapsOn: none, lockedTaps: { display: 0, demo: 0, closing: 0 }, demoTaps: [] },
+  ]);
+  assert.deepEqual(data.children.c1.events, [], 'nothing was lost: no repair event');
+  assert.deepEqual(data.children.c2.attempts, [{ outcome: 'first', demo: ['auto'], tapsOn: none, lockedTaps: zeros(LOCKED), demoTaps: [none] }, 'x', null]);
+  // A list that is not a list is mended as before (normaliseChild), and its value kept in the repair event.
+  assert.deepEqual(data.children.c3.attempts, []);
+  assert.deepEqual(data.children.c3.events.at(-1).lost, { attempts: {} });
+  // Each count is its own object, so a later count on one attempt never moves another's.
+  const [a, b] = data.children.c1.attempts;
+  assert.notEqual(a.tapsOn, b.tapsOn);
+  assert.notEqual(b.demoTaps[0], b.demoTaps[1]);
+  // Read again (another tab's text, refresh) it is the same; and a schema 2 value is not stepped again.
+  assert.deepEqual(migrate(JSON.stringify(stored), newId, WHEN).data, data);
+  assert.deepEqual(migrate(JSON.stringify(data), newId, WHEN).data, data);
+  // Saved, the next load reads schema 2 as stored.
+  const storage = memory({ [KEY]: JSON.stringify(stored) });
+  const store = load(storage, newId, WHEN);
+  assert.equal(save(store), true);
+  assert.equal(JSON.parse(storage.getItem(KEY)).schema, 2);
+  assert.deepEqual(childOf(load(storage, newId, WHEN)).attempts, data.children.c1.attempts);
+});
+
+test('the counts an attempt keeps are pinned to the schema that added them (COUNTS)', () => {
+  const last = Math.max(...Object.keys(COUNTS).map(Number).filter((s) => s <= SCHEMA));
+  assert.deepEqual({ tapsOn: TAP_KINDS, lockedTaps: LOCKED }, COUNTS[last], 'a changed count needs a new SCHEMA, its migrate step and its row in COUNTS');
 });
 
 test('a ladder without passed migrates and nextStep runs (it threw on the stored record)', () => {
@@ -190,7 +250,7 @@ test('migrate: a newer schema plays from memory and is never written', () => {
   assert.equal(store2.writable, false);
   assert.equal(save(store2), false);
   assert.equal(storage2.getItem(KEY), other);
-  assert.equal(migrate('{"schema":2,"current":"x","children":{}}', newId, WHEN).writable, false);
+  assert.equal(migrate(`{"schema":${SCHEMA + 1},"current":"x","children":{}}`, newId, WHEN).writable, false);
 });
 
 test('save and load round-trip under one key', () => {
@@ -290,12 +350,16 @@ test('refresh: another tab\'s write replaces memory before this tab writes; the 
   assert.equal(a.writable, false);
 });
 
-test('export: the stored value as is, with key, schema, time and persisted', () => {
-  const stored = { schema: 1, current: 'c1234abcd', children: { c1234abcd: newChild('2026-10-01') } };
+test('export: the stored value as is, with key, the code\'s schema, time and persisted', () => {
+  const stored = { schema: SCHEMA, current: 'c1234abcd', children: { c1234abcd: newChild('2026-10-01') } };
   // 00:30 in Israel is still the day before in UTC: the name takes the local day it is given.
   const file = exportFile(memory({ [KEY]: JSON.stringify(stored) }), new Date('2026-10-13T21:30:00Z'), true, '2026-10-14');
   assert.equal(file.name, 'sifra-c1234abcd-2026-10-14.json');
-  assert.deepEqual(JSON.parse(file.text), { key: 'sifra', schema: 1, exported: '2026-10-13T21:30:00.000Z', persisted: true, data: stored });
+  assert.deepEqual(JSON.parse(file.text), { key: 'sifra', schema: SCHEMA, exported: '2026-10-13T21:30:00.000Z', persisted: true, data: stored });
+  // A value stored by older code (not written since) is exported as stored, under the code's schema.
+  const old = { ...stored, schema: 1 };
+  assert.deepEqual(JSON.parse(exportFile(memory({ [KEY]: JSON.stringify(old) }), new Date('2026-11-04T08:00:00Z'), null, DAY).text), {
+    key: 'sifra', schema: SCHEMA, exported: '2026-11-04T08:00:00.000Z', persisted: null, data: old });
   assert.equal(JSON.parse(exportFile(memory({ [KEY]: '{oops' }), new Date(), null, DAY).text).data, '{oops');
   assert.equal(exportFile(memory(), new Date('2026-10-14T08:00:00Z'), null, DAY).name, 'sifra-none-2026-10-14.json');
 });

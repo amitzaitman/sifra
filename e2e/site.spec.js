@@ -9,6 +9,7 @@ import * as scale from '../tests/fixtures/scale/game.js';
 import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
 import { demoSeedFor, exerciseOf, pickMix, plainDemo } from '../shell/planner.js';
+import { SCHEMA } from '../shell/store.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
@@ -927,6 +928,196 @@ test('a real swipe up the picture scrolls the page and logs no off-target tap (p
   expect((await stored(page)).child.attempts.at(-1)).toMatchObject({ outcome: 'first', taps: { picture: 0, equation: 0, other: 0 } });
 });
 
+// What an off-target tap hit (pedagogy 5.11, architecture 3.2, 3.9): counted by kind as well as by area; presses on
+// the locked cards by when; a demo's taps go to the next attempt, next to its entry in `demo`.
+/** No kind counted: the counts an attempt starts with. */
+const NONE = { cover: 0, chip: 0, line: 0, object: 0, panel: 0, other: 0 };
+/** @type {(page: import('@playwright/test').Page, locator: import('@playwright/test').Locator) => Promise<void>} a touch at an element's middle */
+const touchMiddle = async (page, locator) => {
+  const b = await locator.boundingBox();
+  await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+};
+/** @type {(page: import('@playwright/test').Page) => Promise<void>} a touch on the picture's panel, 4px under its top edge: no mark there */
+const touchPanel = async (page) => {
+  const b = await page.locator('[data-area="picture"]').boundingBox();
+  await page.touchscreen.tap(b.x + b.width / 2, b.y + 4);
+};
+/**
+ * Taps on the demo screen in one task in the page, so the hand cannot reach the answer between them: each a primary
+ * touch down and up at the middle of the first element a selector names on the screen (`panel`: the panel's top
+ * edge), on whatever is there, then its click. Returns whether the demo was still unsolved and its cards locked.
+ * @param {import('@playwright/test').Page} page
+ * @param {string[]} what
+ */
+const tapDuringDemo = (page, what) => page.evaluate((list) => {
+  const main = /** @type {HTMLElement} */ (document.querySelector('main[data-screen="demo"]'));
+  list.forEach((sel, i) => {
+    const b = /** @type {Element} */ (main.querySelector(sel === 'panel' ? '[data-area="picture"]' : sel)).getBoundingClientRect();
+    const [x, y] = [b.left + b.width / 2, sel === 'panel' ? b.top + 4 : b.top + b.height / 2];
+    const el = /** @type {Element} */ (document.elementFromPoint(x, y));
+    const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 40 + i, isPrimary: true, pointerType: 'touch' };
+    for (const type of ['pointerdown', 'pointerup', 'click']) el.dispatchEvent(new PointerEvent(type, init));
+  });
+  return { solved: main.hasAttribute('data-solved'), locked: Boolean(main.querySelector('[data-choices][data-locked]')) };
+}, what);
+
+test('the attempt counts off-target taps by what they hit, presses on locked cards by when, and the taps during its demo (pedagogy 5.11, 3.9)', async ({ page }) => {
+  // A new child: ten-frame level 1, whose demo comes first; a five-frame with the whole's tag and a cover.
+  await open(page, `${INDEX}#/play/ten-frame`);
+  const demo = page.locator('main[data-screen="demo"]');
+  await expect(demo.locator('.tf-tag')).toBeVisible();
+  await look(page);
+  // A counter (in a demo nothing answers its touch, so it is no target), the tag, the empty panel, a locked card.
+  expect(await tapDuringDemo(page, ['.tf-disc[data-role="part"]', '.tf-tag', 'panel', 'button[data-index]'])).toEqual({ solved: false, locked: true });
+  await expect(demo.locator('[data-next]')).toBeVisible({ timeout: 15000 });
+  await look(page);
+  await demo.locator('[data-next]').click();
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  const { round, answerAt } = await roundOf(page);
+  const [first, second] = round.choices.flatMap((_, i) => (i === answerAt ? [] : [i]));
+  // The picture's cover, the tag, the empty panel, a counter twice (the first takes its ink dot: a target, not
+  // logged; marked, the second is), and the exercise's cover.
+  await touchMiddle(page, page.locator('[data-area="picture"] .cover').first());
+  await touchMiddle(page, page.locator('[data-area="picture"] .tf-tag'));
+  await touchPanel(page);
+  const disc = page.locator('[data-area="picture"] .tf-disc[data-role="part"]').first();
+  await touchMiddle(page, disc);
+  await expect(disc.locator('.tf-mark')).toHaveCount(1);
+  await touchMiddle(page, disc);
+  await touchMiddle(page, page.locator('[data-area="equation"] .cover'));
+  // A miss: its display's animations held, the cards stay locked, and a press on another card is a locked one.
+  const cards = page.locator('[data-choices]');
+  const hold = await page.addStyleTag({ content: '[data-area="picture"] * { animation-play-state: paused !important; }' });
+  await page.locator(`button[data-index="${first}"]`).click();
+  await expect(cards).toHaveAttribute('data-locked', '');
+  await touchMiddle(page, page.locator(`button[data-index="${second}"]`));
+  await hold.evaluate((s) => s.remove());
+  await expect(cards).not.toHaveAttribute('data-locked', { timeout: 10000 });
+  await expect(page.locator(`button[data-index="${second}"]`), 'the locked press answered nothing').not.toHaveClass(/is-retired/);
+  // The answer, its closing held: a press on the card left is a press in the closing.
+  const closing = await page.addStyleTag({ content: 'main * { animation-play-state: paused !important; }' });
+  await page.locator(`button[data-index="${answerAt}"]`).click();
+  await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
+  await expect(page.locator('[data-next]')).toHaveCount(0);
+  await touchMiddle(page, page.locator(`button[data-index="${second}"]`));
+  await closing.evaluate((s) => s.remove());
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const saved = (await stored(page)).child.attempts.at(-1);
+  expect(saved).toMatchObject({ levelId: 'split-5', outcome: 'help', wrong: [round.choices[first].rule], demo: ['auto'] });
+  expect(saved.taps).toEqual({ picture: 4, equation: 1, other: 0 });
+  expect(saved.tapsOn).toEqual({ ...NONE, cover: 2, chip: 1, object: 1, panel: 1 });
+  expect(saved.lockedTaps).toEqual({ display: 1, demo: 1, closing: 1 });
+  expect(saved.demoTaps).toEqual([{ ...NONE, chip: 1, object: 1, panel: 1 }]);
+  // The owner reads them in the export (dev-spec A.4), the stored value as is.
+  await page.evaluate(() => { location.hash = '#/dev/export'; });
+  await expect(page.locator('[data-export]')).toBeVisible();
+  await look(page);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-export]').click()]);
+  const file = JSON.parse(readFileSync(await download.path(), 'utf8'));
+  expect(file.schema).toBe(SCHEMA);
+  expect(file.data.schema, 'written by this code').toBe(SCHEMA);
+  expect(file.data.children[file.data.current].attempts.at(-1)).toEqual(saved);
+});
+
+test('"show me how": the taps during its demo go to the attempt, next to its `how` (pedagogy 5.11, 3.9)', async ({ page }) => {
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await open(page, `${FIXTURE}?seed=1#/play/parts`);
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  await page.locator('[data-how]').click();
+  await expect(page.locator('main[data-screen="demo"]')).toBeVisible();
+  await look(page);
+  expect(await tapDuringDemo(page, ['panel', 'panel', 'button[data-index]'])).toEqual({ solved: false, locked: true });
+  await expect(page.locator('main[data-screen="demo"] [data-next]')).toBeVisible({ timeout: 15000 });
+  await look(page);
+  await page.locator('[data-next]').click();
+  // The same round again, from the start; solved at once.
+  await expect(page.locator('main[data-screen="round"]')).toBeVisible();
+  await look(page);
+  await page.locator(`button[data-index="${(await roundOf(page)).answerAt}"]`).click();
+  await expect(page.locator('[data-next]')).toBeVisible();
+  const saved = (await stored(page)).child.attempts.at(-1);
+  expect(saved).toMatchObject({ outcome: 'help', help: ['how'], demo: ['how'] });
+  expect(saved.demoTaps).toEqual([{ ...NONE, panel: 2 }]);
+  expect(saved.lockedTaps).toEqual({ display: 0, demo: 1, closing: 0 });
+  expect(saved.tapsOn).toEqual(NONE);
+});
+
+// The layers of a picture take no taps (the stories' marks, the balance's hint, the ten-frame's lines): for one hit
+// test every mark takes it, so a tap on one is counted by its kind, not as the panel under it (3.2).
+const LAYERED = [
+  { game: 'ten-frame', level: 'ten-empty', want: { line: 1, cover: 1 } },
+  { game: 'stories', level: 'add-change', want: { cover: 1, chip: 1, line: 1, object: 1 } },
+  { game: 'balance', level: 'missing-left', want: { cover: 1, chip: 1, object: 1 } },
+];
+for (const { game, level, want } of LAYERED) {
+  test(`${game} ${level}: a tap on a mark counts by its kind, also where its layer takes no taps (3.2)`, async ({ page }) => {
+    await seedStore(page, storeWith({ games: { [game]: ladderAt(level) } }));
+    await open(page, `${INDEX}#/play/${game}`);
+    await expect(page.locator(`main[data-screen="round"][data-game="${game}"]`)).toBeVisible();
+    // A story's event ends before its marks are all there (design 6.10).
+    await expect(page.locator('[data-event]')).toHaveCount(0, { timeout: 15000 });
+    await look(page);
+    const picture = page.locator('[data-area="picture"]');
+    /** Whether the game's own hit test, at an element's middle, finds no mark: there only the probe can tell it. */
+    const plainHit = (locator) => locator.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-tap]') ?? null;
+    }).then((mark) => mark !== null);
+    const { round, answerAt } = await roundOf(page);
+    if (game === 'ten-frame') {
+      // A point on the '?' bracket's line where the game's own hit test finds the tray or a cell under it.
+      const at = await picture.locator('.tf-bracket path.tf-line').evaluate((path) => {
+        const p = /** @type {SVGPathElement} */ (path);
+        const [ctm, length] = [p.getScreenCTM(), p.getTotalLength()];
+        for (let i = 1; i < 40; i++) {
+          const { x, y } = new DOMPoint(p.getPointAtLength((length * i) / 40).x, p.getPointAtLength((length * i) / 40).y).matrixTransform(ctm ?? undefined);
+          if (!document.elementFromPoint(x, y)?.closest('[data-tap], [data-target]')) return { x, y };
+        }
+        return null;
+      });
+      expect(at, 'a bare point on the bracket').not.toBeNull();
+      await page.touchscreen.tap(at.x, at.y);
+      await touchMiddle(page, picture.locator('.tf-lid.is-small > .cover'));
+    } else if (game === 'stories') {
+      const chip = picture.locator('.st-chip').first();
+      expect(await plainHit(chip), 'the chips\' layer takes no taps').toBe(false);
+      await touchMiddle(page, chip);
+      await touchMiddle(page, picture.locator('.st-lid > .cover'));
+      // The whole's line: its lowest piece, clear of the chip on its top.
+      const pieces = await picture.locator('.st-line[data-tone="whole"]').all();
+      const bottoms = await Promise.all(pieces.map((p) => p.boundingBox().then((b) => b.y + b.height)));
+      await touchMiddle(page, pieces[bottoms.indexOf(Math.max(...bottoms))]);
+      const ball = picture.locator('.st-obj[data-role="part"]').first();
+      await touchMiddle(page, ball);
+      await expect(ball.locator('.st-touch')).toHaveCount(1);
+      await touchMiddle(page, ball);
+    } else {
+      await touchMiddle(page, picture.locator('.bl-lid.is-fixed > .cover'));
+      const cube = picture.locator('.bl-pan .bl-cube[data-role="part"]').first();
+      await touchMiddle(page, cube);
+      await expect(cube.locator('.bl-touch')).toHaveCount(1);
+      await touchMiddle(page, cube);
+      // Two misses bring the hint, whose chips stand under the pans in a layer that takes no taps.
+      for (const i of round.choices.flatMap((_, j) => (j === answerAt ? [] : [j])).slice(0, 2)) {
+        await page.locator(`button[data-index="${i}"]`).click();
+        await expect(page.locator('[data-choices]')).not.toHaveAttribute('data-locked', { timeout: 10000 });
+      }
+      const chip = picture.locator('[data-hint] .bl-chip').first();
+      await expect(chip).toBeVisible();
+      expect(await plainHit(chip), 'the hint\'s layer takes no taps').toBe(false);
+      await touchMiddle(page, chip);
+    }
+    await page.locator(`button[data-index="${answerAt}"]`).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    const saved = (await stored(page)).child.attempts.at(-1);
+    expect(saved.levelId).toBe(level);
+    expect(saved.tapsOn).toEqual({ ...NONE, ...want });
+    expect(saved.taps.picture).toBe(Object.values(want).reduce((a, b) => a + b, 0));
+  });
+}
+
 test('a wide exercise never widens the page\'s column: the gutters stay and the row shrinks or wraps (design 5, 6.4, bug hunt #9)', async ({ page }) => {
   // 10 + 10 = ? + 18, the widest exercise of balance level 8 (seeds 379, 577, 699 of 3000).
   for (const [width, height] of [[320, 568], [390, 844]]) {
@@ -1149,7 +1340,8 @@ test('#/dev/export: one button downloads the stored value as is, named by the lo
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-export]').click()]);
   expect(download.suggestedFilename()).toBe(`sifra-${CHILD}-2026-10-14.json`);
   const file = JSON.parse(readFileSync(await download.path(), 'utf8'));
-  expect(file).toMatchObject({ key: 'sifra', schema: 1, data: value });
+  // The code's schema; the value as stored, here by older code (storeWith writes schema 1) and not written since.
+  expect(file).toMatchObject({ key: 'sifra', schema: SCHEMA, data: value });
 });
 
 test('index.html: the first load of home is at most 200 KB of same-origin responses, gzipped as Pages serves them', async ({ page, baseURL }) => {

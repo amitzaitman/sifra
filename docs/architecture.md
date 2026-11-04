@@ -29,7 +29,7 @@ shell/                the shell's own modules: only app.js (and the tests) impor
   cards.js  equation.js                       answer cards (AlefBet answer-choices.js), equation row (design §6.4)
   ladder.js  planner.js  store.js             levels (3.4), session/review/next step/stuck/demo (3.3-3.8), storage (3.9)
   rng.js                                      seeds (3.8): the shell hands makeRound an rng; tests rebuild rounds
-  taps.js                                     the double-tap window (3.2)
+  taps.js                                     the double-tap window, and the kind of what an off-target tap hit (3.2)
 lib/                  code the games share: a game imports each module; each imports nothing; under 600 lines together
                       (tests/code.test.js counts their newlines)
   settle.js  cover.js  weights.js             animation ends and reduced() (2.7), covers (2.8), a pick by weight for a
@@ -283,7 +283,8 @@ meaning (from the mount).
   comes from a derived seed (3.8), a plain round with other numbers than the round it shows how to solve; the cards
   stay locked; in `symbols` look the shell calls `view.picture()` at once, so the hand works on the help picture;
   the bar keeps the session's rounds done. `await view.demo?.(hand)`, then the hand taps the answer card and step 5
-  runs; "הַבָּא" leads to the real round. No attempt is written; the next one lists the demo in `demo`. An entry
+  runs; "הַבָּא" leads to the real round. No attempt is written; the next one lists the demo in `demo`, and the
+  child's taps during it, off-target and on the locked cards, in `demoTaps` and `lockedTaps.demo` (3.2, 3.9). An entry
   demo counts as seen once the hand has tapped the answer (3.4).
 - The hand (`Hand` in types.d.ts): `tap(el)` first scrolls the page, never the picture's panel, so that `el` and the
   hand under its middle are on screen (on a phone held sideways the round is taller than the screen), then moves the
@@ -355,8 +356,19 @@ meaning (from the mount).
   `--cover-h` square at both ends, so the cover covers every place between them; without it the equation's square
   cover is unchanged.
 - Everything mathematical has the attribute `dir="ltr"` and `data-math` (R7). Elements the child is meant to tap in
-  the picture have `data-target`, so they are not counted as off-target taps; in a demo too, as the demo's hand
-  taps only them (2.6).
+  the picture have `data-target`, so they are not counted as off-target taps in play. In a demo they carry it too, as
+  the demo's hand taps only them (2.6), but there a child's tap on them counts (nothing answers a touch in a demo, 3.9).
+- What a child may take for a target carries one `data-tap`, which the attempt log counts off-target taps by (3.2,
+  pedagogy 5.11): `cover` (lib/cover.js sets it on every cover, the equation's too), `chip`, `line`, `object` (each
+  game's drawing code; an attribute, so the drawing still takes `(host, data)` only). Ten-frame: `object` on every
+  countable thing (`countable` in draw.js: a known disc or dot, a counter, a bundle, a stick, an empty cell of the
+  `?` bracket), `chip` on a tag, a hint's number chip and a circle of the bond (`asChip`), `line` on every outline
+  (`outline`: the bracket, the bond's stems, the whole's line, a hint's or a display's line). Balance: `object` on
+  every cube and dot it paints (`paint` in stage.js), `chip` on the numbers under the pans (view.js). Stories:
+  `object` on an object and on the outline a leaver left, `chip` on a chip, `line` on a line but the basket's rim
+  (a frame), set as drawScene makes the mark's node (`tapOf` in view.js). A frame (tray, basket, the balance's beam
+  and pans), a ring, a digit, a ghost or a place has none: a tap there counts as the panel, or as the mark under it.
+  The marks keep the game's own hit test: a layer that takes no taps still takes none (the shell finds the mark, 3.2).
 - game.css: every selector starts with `[data-game="<id>"]`; keyframe names start with the id; no CSS nesting.
 - A helper a second game needs moves to lib/ as it is, in a step of its own (CLAUDE.md "Shared code"), keeping the scans of
   4.4, as lib/weights.js did (2026-10-30). A game branch does not edit lib/ (section 7).
@@ -519,6 +531,20 @@ the bad address leaves no history entry.
   pinch are no taps (2026-11-01: counted on pointerdown, one swipe was one tap, a pinch two, and on a phone held
   sideways every round needs a scroll to reach its cards; hunt 2 #6). A press the double-tap window drops is not
   counted: its pointerdown never reaches the screen.
+- What it hit (2026-11-04, pedagogy 5.11): each such tap is also counted by kind, `tapsOn` { `cover`, `chip`, `line`,
+  `object`, `panel`, `other` }. At its pointerup the shell sets `data-probe` on main, where app.css lets every
+  `[data-tap]` take the hit (an SVG line by its painted paths, not its box), reads `document.elementsFromPoint` at the
+  point where the press came down, and removes it in the same task, so the game's own hit test never changes. The
+  topmost element the child can see (`tapAt` in shell/taps.js: no ancestor at opacity 0, so a hidden outline, a lifted
+  cover or an unknown not yet shown is passed over) names it: its nearest `data-tap` (2.8, `tapKind`), else `panel`
+  inside `[data-area="picture"]`, else `other`. The probe is needed: the stories' marks and the balance's and the
+  ten-frame's help layers take no taps, and neither do the ten-frame's lines, so the event's target there is the panel's
+  stage, whatever the finger was on. A counted thing is a target, so its first touch (the ink dot) is not counted;
+  marked, it is no longer one, and the next counts as `object`. In a demo nothing answers a touch, so there a counted
+  thing is no target: every tap on no button or link counts, in the demo's own record, which the shell hands to the
+  next attempt (3.9). A press on an answer card while the cards are locked (`[data-locked]`: a display, a demo, the
+  closing) does nothing and is counted in `locked`, by when: its click, so a scroll is none; a keyboard press counts
+  too. Nothing of this shows on a screen; it is read only through the export (3.9).
 - Double tap (design 6.9; owner decision 2026-10-14, "חלון של 0.3 שנייה"): the shell drops a tap that comes within
   300 ms of a change under the finger: a screen drawn (`screen()`: every route, round and demo) or "הַבָּא" put in
   the cards' place, where it stays until the next screen. shell/taps.js decides on event times alone. A change is
@@ -701,15 +727,20 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
 
 ### 3.9 Storage (§5.11, dev-spec A.4)
 
-- One localStorage key, `sifra`: `{ schema: 1, current, children: { [childId]: Child } }`. Child: `{ created,
+- One localStorage key, `sifra`: `{ schema: 2, current, children: { [childId]: Child } }`. Child: `{ created,
   sessions, games: { [gameId]: ladder state }, skills: { [skillId]: { last, passedDay, box, due, reviewDays,
   lastReviewFirst } }, attempts, events }`. The child id is `c` plus 8 hex digits from crypto.
 - Storage is read only inside start and route handlers (the export reads when opened), always in try/catch; when it
   throws or is missing, the shell plays from memory. `migrate(raw, newId, { t, day })` (the load's time and local
   day): a schema newer than the code, whatever its shape, is checked first: play from memory, never write; then
   missing, unparsable or broken (no current child object) gives a new value, and when something was stored, the new
-  child's `repair` event keeps it whole under `*` (the first save overwrites it, other children included); schema 1
-  stays; each new schema adds a step. Then every stored child is brought to `SHAPE` (store.js, pinned to the schema
+  child's `repair` event keeps it whole under `*` (the first save overwrites it, other children included); schema 2
+  stays; each new schema adds a step. Schema 1 to 2 (2026-11-04): every child's attempts take `tapsOn`, `lockedTaps`
+  and `demoTaps` (below), all 0, one empty count for each entry of the attempt's `demo` (a value that is not an
+  attempt stays as it is); a child, a ladder and a skill state keep their keys. So an attempt written before then
+  reads 0 for what was not recorded, not for "no tap". The keys of those counts are pinned to the schema
+  (tests/store.test.js `COUNTS`), as `SHAPE` is. A tab still running schema 1's code sees schema 2 as newer and writes no
+  more until it reloads (the newer case below). Then every stored child is brought to `SHAPE` (store.js, pinned to the schema
   by tests/store.test.js, so changing a key of a child, a ladder or a skill state needs a schema step): a missing or
   wrong-typed value takes its default (a ladder's `fast` null), a ladder whose `level` is not a string and a skill
   state that is not an object are dropped, keys outside the shape stay, and whatever was replaced or dropped is kept
@@ -746,12 +777,20 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   `help` after any miss, `picture` or `how`; else `first`), `wrong` (rules in tap order), `firstMs` and `ms` (from
   the mount to the first tap and to the correct tap; one read of the clock when the first tap is correct, so equal),
   `help` (`hint`, `tour`, `picture`, `how` in arrival order), `demo` (the demos shown before the correct tap, in
-  order: `auto` on entry, `how` for the hand; `[]` for none), `taps` (off-target, by area), `options`,
-  `levelBefore`, `levelAfter` (the game's level once the round is applied, a stuck return that moved this game
-  included), `sinceDays`.
+  order: `auto` on entry, `how` for the hand; `[]` for none), `demoTaps` (one count per entry of `demo`, by the
+  kinds of `tapsOn`: the taps during the demos of that entry, a second "show me how" added to the first),
+  `taps` (off-target, by area), `tapsOn` (the same taps by what they hit, 3.2: `cover`, `chip`, `line`, `object`,
+  `panel`, `other`), `lockedTaps` (presses on an answer card while the cards were locked, by when: `display`,
+  `demo`, `closing`), `options`, `levelBefore`, `levelAfter` (the game's level once the round is applied, a stuck
+  return that moved this game included), `sinceDays`.
   The round itself is not stored: seed, `version`, `params` and `answer` rebuild it. The attempt is taken once, at
   the solve (its `t` and `day` too), from copies of the round's record, and never changes after it: an off-target
-  tap or the picture button after the solve is not logged.
+  tap or the picture button after the solve is not logged. Only `lockedTaps.closing` is read as the attempt is
+  applied (`S.pending`), once the closing has run, so it counts the presses until then; the cards go when "הַבָּא"
+  takes their place. A demo is not an attempt: its own record counts its taps (3.2), and on its "הַבָּא" the shell
+  adds them to the spec (`demoTaps` by entry, `demoLocked`), which the next attempt of that spec copies. A demo left
+  for home goes with its session, and a "show me how" after the solve gives its taps to none (the attempt is taken).
+  These counts exist for the owner's test devices: no screen shows them; the export (below) carries them.
 - The written exception to "every attempt is recorded" (CLAUDE.md "ready to grow" 3): `#/dev` and `#/try` (3.1)
   record nothing. Neither writes an attempt, a level, a demo seen, a session count, a day, an event or the schema, and
   a store seeded before `#/try` is the same text byte for byte after a whole session (e2e/site.spec.js, 4.6). This
@@ -763,8 +802,9 @@ every level and mixed value over seeds 1-2000 (`checkDemo`, 4.2).
   owner rejected an address that writes progress the child did not earn, which would corrupt the log and §8.4's
   hypotheses (decisions.md, 2026-11-04, "איך מגיעים לרמה בתצפית").
 - Export: a button (iOS downloads need a tap) that saves `sifra-<child>-<day>.json`, `<day>` the local day like every
-  day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time and `data` the
-  stored value as is.
+  day in the store: `{ key: 'sifra', schema, exported, persisted, data }`, `exported` the ISO time, `schema` the
+  code's and `data` the stored value as is (a value older code stored and nothing has written since keeps its own
+  schema there).
 
 ### 3.10 Parents page
 
@@ -911,7 +951,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
 - taps (3.2): nothing dropped before a change; 299.9 ms after it dropped, 300 ms taken; a tap stamped before the
   change dropped; the click of a pointer that came down in the window dropped, however late, and the next tap taken;
   a pointer's click with `detail` 0 (Chromium) dropped with its pointerdown; a keyboard click by its own time; each
-  change starts the window again.
+  change starts the window again. What a tap hit, on elements made up in Node: `tapKind` takes the nearest
+  `data-tap` (a chip's digit, the ink dot on a counted thing, an SVG line's path, the exercise's cover), else `panel`
+  inside the picture's panel, else `other`, and a name that is not one of the four marks is none; `tapAt` takes the
+  topmost hit with no ancestor at opacity 0 (a hidden outline, a lifted cover, a faded layer pass; a mark fading in
+  counts).
 - ladder: each rule of 3.4 alone: up after 4; first, help, first, help goes down; the window empties on a level
   change; mixed only up; reviews nothing; the fast climb up on each first try, back one and unmarked on the first
   miss, staying on a miss in its first round, at the last level once passed there, and on a mixed round; the last
@@ -946,7 +990,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   so the planner runs (a ladder without `passed`, a child with only `created`, wrong-typed values, dropped records
   and the one `repair` event keeping each by its path), while what the shell
   writes stays as it is; the keys of `newChild`, `startLadder` and a new skill state equal `SHAPE`, and `SHAPE`
-  equals the test's row for `SCHEMA`; caps; quota retry; export named by the local day.
+  equals the test's row for `SCHEMA`; schema 1 read at schema 2: every child's attempts with all-0 `tapsOn` and
+  `lockedTaps` and one all-0 count per `demo` entry in `demoTaps`, a value that is not an attempt kept, nothing
+  logged as lost, the same on a second read, a schema 2 value not stepped again, and saved it loads as schema 2; the
+  keys of those counts equal the test's `COUNTS` row for the schema that added them; caps; quota retry; export named
+  by the local day, under the code's schema, the stored value as it is (an older one too).
 
 ### 4.4 Code scans
 
@@ -954,6 +1002,9 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   `Math.random`.
 - games/: no `localStorage`, `sessionStorage`, `indexedDB`, `cookie` or the storage manager (condition 1); no
   `animationend` or `transitionend`; no class name containing "cover" but lib/cover.js's.
+- lib/ and games/: every literal a mark is given as its `data-tap` is one of the four marks (`cover`, `chip`, `line`, `object`;
+  3.2), lib/cover.js marks its covers, and some game marks each of the other three; app.js and shell/ set no mark.
+  The stories' `tapOf` is checked where it runs, by the contract loop (4.8).
 - app.js, shell/, lib/, games/ and the fixtures: `prefers-reduced-motion` in JS only in lib/settle.js, whose
   `reduced()` is the one copy (2.7); CSS media queries are not scanned.
 - lib/: no import and no `export ... from`, under 600 lines, and a game (games/) imports each module. shell/:
@@ -1068,7 +1119,15 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   synthetic scroll (pointercancel) and pinch (a second finger) on the picture log no off-target tap and one real
   touch tap logs one, and in Chromium a real swipe through the DevTools protocol scrolls the page and logs none; at
   320×568 and 375×548 no visible hand rests on a card while a hint or a tour is drawn (`watchHand`'s `onCards`; five
-  demos, and the first screen's entry demo).
+  demos, and the first screen's entry demo). What a tap hit (2026-11-04, 3.2, 3.9): a new child's ten-frame level 1,
+  whose entry demo is tapped in one task in the page (a counter, the tag, the empty panel, a locked card), then the
+  round (its cover, the tag, the empty panel, a counter twice, the exercise's cover; a miss whose display is held, a
+  press on another card; the answer, its closing held, a press on the card left): the attempt holds `taps`,
+  `tapsOn`, `lockedTaps` (one of each) and `demoTaps` exactly, and the export carries it as stored; "show me how" on
+  a fixture round, tapped during its demo, gives `demo: ['how']` its `demoTaps`; and in each game a mark in a layer
+  that takes no taps counts by its kind (the ten-frame's bracket line at a point where the game's own hit test finds
+  the tray, its dome; the stories' chip, cover, whole's line, a ball touched twice; the balance's dome, a cube touched
+  twice, the hint's chip after two misses).
 - `#/try` (3.1, owner decision 2026-11-04), on index.html; each test is red with the route taken out of `route()`.
   `#/try/ten-frame/8` runs the level's entry demo first (the hand's last tap on the demo round's answer, `watchHand`),
   then 8 new rounds at level 8 (`teen-bundle`) under the child's bar (home, progress 0 to 7, "show me how"), not
@@ -1204,7 +1263,8 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
   opacity, 0.0009 in a local WebKit run, and its ghosts over the cover; a child sees the 200 ms fade end). The wait is `drive` in e2e/drive.js, which the loop
   imports from the test server; tests/drive.test.js runs it on fake animations. After each step: nothing
   threw; every box shown (no `display: none`, `visibility: hidden` or opacity 0 on it or above it) is finite and
-  inside the host (1px), and no inline style holds `NaN`, `Infinity` or `undefined`; after a solve no cover is
+  inside the host (1px), no inline style holds `NaN`, `Infinity` or `undefined`, and every `data-tap` names one of
+  the four marks (3.2, the stories' `tapOf` included); after a solve no cover is
   shown, and no shown node's own text holds a `?` (a cover's `?` is drawn by CSS; the balance's hint chip kept its
   `?` in the solved picture: hunt 2 #3, decisions.md 2026-11-01, "המספר מתחת לכף בסגירה"); in the panel, every digit shown (a node with a digit in its own text) and every cover with a mark is
   topmost at its centre, by `elementFromPoint` with the painted nodes taking hits as `paintedOver` (4.7) does, and a
@@ -1400,7 +1460,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 
 | Topic | Choice | Why |
 |---|---|---|
-| What lib/ and shell/ hold | Who imports a module decides. shell/: the modules only app.js (and the tests) import: cards, equation, ladder, planner, rng, store, taps (the double-tap window, 3.2); they may import lib/, data/ and shell/, and no game imports them. lib/: what the games share (cover, settle, weights, place); a game imports each module, each imports nothing, under 600 lines. Decided 2026-10-14 ("להפריד את המעטפת"), see decisions.md; shell/'s import rule and "a game imports each lib/ module" are an engineering decision the owner may reverse | lib/ was 596 of 600 lines, 359 of them the shell's alone (ladder, planner, store), so the first helper both games need had no room. The limit and "only when a second game needs it" were written for game code; node:test still needs the shell's logic outside app.js, and the scans (4.4) keep the boundary both ways. rng.js goes with the shell: no game imports it, the shell hands makeRound an rng |
+| What lib/ and shell/ hold | Who imports a module decides. shell/: the modules only app.js (and the tests) import: cards, equation, ladder, planner, rng, store, taps (the double-tap window and what an off-target tap hit, 3.2); they may import lib/, data/ and shell/, and no game imports them. lib/: what the games share (cover, settle, weights, place); a game imports each module, each imports nothing, under 600 lines. Decided 2026-10-14 ("להפריד את המעטפת"), see decisions.md; shell/'s import rule and "a game imports each lib/ module" are an engineering decision the owner may reverse | lib/ was 596 of 600 lines, 359 of them the shell's alone (ladder, planner, store), so the first helper both games need had no room. The limit and "only when a second game needs it" were written for game code; node:test still needs the shell's logic outside app.js, and the scans (4.4) keep the boundary both ways. rng.js goes with the shell: no game imports it, the shell hands makeRound an rng |
 | "Mastered" | Skill passed (last level passed) for the next step; mastered (R11) for the stuck rule | §5.12 defines it by the level rule and §5.4 by R11; one definition would stall the next step for days |
 | Attempt | One record per round, by the shell; `onAttempt` is only a build-round commit | The CLAUDE.md fields describe a round, and R5 must act the same in every game |
 | Help ladder | The shell counts, picks the step, locks and decides; the game draws | R5 is one rule: one implementation, tested once |
@@ -1474,6 +1534,7 @@ so a new game passes them without a spec of its own (its 4.7 spec checks what it
 | The stories' browser tests (step 4c) | e2e/stories.spec.js (4.9). The calibration compares every mark's node with the layout (1px), not only the six the plan named, and `--u` with `unitFor` at the panel's content box (0.25px). The glyph check reads a Range rect only against the element's own box; the circle is checked against the ink read from the page's pixels (each two-digit number and the tour's grown last digit, alone, black on white, at the digits' floor). The event is held phase by phase; a phase with nothing that moves (the basket's rest) is not held, and every other one is, the first where the start enters too (2026-10-31). No hollow-unknown case: take-change is deferred, and with it the only unknown drawn hollow. The spec picks its rounds by story in Node (`makeRound` over seeds), so a pool change moves a seed, not a test. The calibration runs on level 3 too (the chips, the fixed dome, the hint's stretched cover), and every display of every level is compared with the layout, each rule at least once (the rounds are picked greedily in Node, and a test checks the union). The help ladder compares the picture with the layout at each step once nothing moves (`expectCalm`, which waits out the shown card's own 100 ms ring, app.css `.btn`'s transition, as it does any finite animation in `[data-choices]`, 4.5). The contract's fixed-cover clause (4.8) covers level 3, in pixels: the stories have no cube to measure in, and level 3 holds the whole's rows from the mount, so the unit is the same in every round. Built 2026-10-30, an engineering choice the owner may reverse (decisions.md, "הבדיקה בדפדפן של סיפורים") | Every mark catches a mark that moved where six chosen ones would not; the displays are where Node's geometry test proved the clearances, so a display drawn elsewhere would escape it. A shown card's ring transition still running made `expectCalm` fail four runs in six of `1 + ? = 9`: a race of the test, not a pause on screen, and one any game's spec could meet after a third miss, so the helper waits it out. The fixed dome is the rule the owner set for the balance (2026-10-18), and level 3 follows it; the clause that guards the balance's should guard this one. A Range rect is the font's content box (about 1.2em), not its ink: at the floor the corners of `10`'s rect leave its 22.3px disc by 0.7px while its ink keeps 1.5px from the edge, so a circle test on the rect would fail a right picture. A phase with no animation ends in the task it starts in, so no test can stop it there, and the child sees it only as the first frame of the next |
 | A level of fewer exercises than a session deals (stories level 6) | When every try is an exercise the session dealt, the one dealt longest ago comes back, never the last one while another can (`apartSeed`, 3.3); `whole-5` keeps its 7 exercises, named in tests/games.test.js's `SMALL`, and every other level deals at least 8. Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "רמה עם פחות תרגילים ממפגש") | `whole-5` has 7 exercises since "כרטיס 0" (no 0 and no equal parts in the basket): a child who stays at the level, with no review round, gets a repeat by round 8, and the 51st try was a random one of the 7, the previous round's in 14% of sessions. Widening the level to 6 breaks §6.4's whole of at most 5, and bringing back `1 + 1` and `2 + 2` reverses "כרטיס 0" (hunt 2 #11, option B) |
 | Off-target taps | A press of the primary pointer on no button, link or `[data-target]`, counted at its pointerup, with no pointercancel and no second finger between: a scroll and a pinch are no taps (3.2). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "נגיעה שלא במטרה היא רק נגיעה") | Counted on pointerdown, one swipe was a tap on the picture and a pinch two; on a phone held sideways every round needs a scroll to reach its cards, so nearly every landscape round logged a tap that never was, in the log that should show what a child who cannot read thinks is tappable (§5.7; hunt 2 #6) |
+| What an off-target tap hit (2026-11-04) | `taps` by area stays; `tapsOn` counts the same taps by kind, from one `data-tap` on the mark (2.8), found by one hit test in which every mark takes the hit (`data-probe`, 3.2) and the topmost one seen names it; `lockedTaps` counts presses on locked cards by when (`display`, `demo`, `closing`); `demoTaps` holds a count per entry of `demo`, as the next attempt copies it; schema 2, whose migrate step gives older attempts 0 counts (3.9). Seen only through the export. An engineering choice built for §5.11's "on which element", which the owner may reverse | The event's target alone said `panel` for every tap on the stories' marks, the balance's hint and the ten-frame's lines, as their layers take no taps; letting the marks take taps in play would have taken some from the targets beside them, and changed what an ink dot answers. The lock's three moments are different signs: a child who presses during a display waits less than it lasts, during a demo copies the hand, in the closing taps twice. A demo is no attempt, so its taps wait for the next one; one count per entry keeps the entry demo apart from "show me how". 0 in an older attempt is "not recorded": its date says so (pedagogy 5.11) |
 | The address after a stuck return | Into another game, the address becomes `#/play/<target game>` by `history.replaceState`, only while it still names the session's game (3.1, 3.7). Decided 2026-11-01, an engineering decision the owner may reverse (decisions.md, "הכתובת אחרי חזרה של ילד תקוע") | A reload or a restored tab opened the stuck game at the stuck level, its stuck counter reset, instead of the prerequisite and its demo. Without the check, home tapped during the closing opened the target's session: `route()` applies the solved round before it reads the address (hunt 2 #12) |
 | The observation route (`#/try`) | The owner chose the address (decisions.md, 2026-11-04, "איך מגיעים לרמה בתצפית"); how it is built is engineering, which the owner may reverse. A session carries a book (3.3), the one way from its rounds to the store: `#/play`'s `childBook` is what `nextRound` did with the child's record before, with `finish`, `#/try`'s `tryBook` keeps nothing, and the round runner, the demos and the end screen are shared (3.1, 3.9). Its rounds come from `levelSession` in shell/planner.js, beside `planSession`, with one `ROUNDS` (8) for both and the progress bar. `data-kind` stays `new` (or `mixed`), as in a child's session. The address is read strictly: the level in decimal from 1, an optional seed a uint32 in decimal (a trailing `/` is no seed), nothing after it; any other goes home with `location.replace('#/')`, so the bad address leaves no history entry | Structural, as the owner asked: a `#/try` session has no path to `persist`, so no write is left to a check that a later change could miss, and the stored record needs no flag that a test or a migration must know. The rounds and the demos still go through `apart` and `demoSeedFor` with the session's exercises, so what the observer sees is dealt as a child's session deals it. A `data-kind` of its own would be one more thing a child's session does not show; the address tells the tests. A loose read, as #/dev's (a seed that is no number is seed 1), would play one fixed session for a mistyped seed, and an observer could repeat it without knowing |
 | A slip in `? = a + b` (balance, R4) | `slip.near` is last in `eq.sign.missing`'s rules (skills.md), and the balance offers it in `? = a + b` alone (`SLIP_FORMS` in games/balance/game.js): there every real error is under the answer (`equal.copy` a, `op.other` the difference, `count.start-included` a + b − 1; `equal.add-all` is the answer and drops), so lib/place.js can now move the answer one place down, with the answer plus 1 over it in place of `count.start-included`, drawn as `count-up` (ghosts on the empty pan, one past the unknown's places, the beam tipped). The answer is the third card or the fourth there, about 48/52, and the best simple rule finds it in 54-64%; every other form is unchanged, level 6's 99 first-card rounds too. The deal check (4.2) also checks each form of a mixed level alone. Balance version 8, the lock with it (levels 4-6 changed). Option A (★★★★★) of hunt 2 #4, decided 2026-11-01 by the owner's delegation; see decisions.md, "טעות מקרית ב-`? = a + b`" (an engineering decision the owner may reverse). Tests: tests/games.test.js (the per-form check and its self-test, red on balance levels 4-6 before), tests/balance.test.js (the card sets of `? = a + b`, the answer on card 3 or 4, no slip on a missing part) | `? = a + b` was the only form in the three games with the answer on one card in 80% of its rounds or more: 2503/2503 at level 4, 1009/1009 at levels 5 and 6, and a child who taps the largest card when `?` stands alone on the left won about 75% of level 4. Option B kept the cue under a `samePlace` per form; option C (`slip.near` in every form of the skill) would put a slip in place of a real error in 36-48% of the skill's rounds, levels 2-3 included, and move level 6's decided rounds |

@@ -397,6 +397,8 @@ export function outline(parent, { dw, dh }, paths, cls, halo = true) {
   svg.setAttribute('viewBox', `0 0 ${unit(dw)} ${unit(dh)}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('aria-hidden', 'true');
+  // A line, for the off-target log (architecture 3.2): its paths take the hit only while the shell looks.
+  svg.dataset.tap = 'line';
   put(svg, { x: 0, y: 0, w: dw, h: dh });
   for (const part of halo ? ['tf-halo', 'tf-line'] : ['tf-line']) {
     for (const d of paths.filter(Boolean)) {
@@ -425,10 +427,27 @@ export function lid(parent, box, cover, mark, cls = '') {
   return node;
 }
 
-/** A countable thing: a tap leaves a mark (design 6.3), so it is a target. @param {HTMLElement} node */
+/**
+ * A countable thing: a tap leaves a mark (design 6.3), so it is a target; once marked, a tap on it is off-target,
+ * logged as an object (architecture 3.2).
+ * @param {HTMLElement} node
+ */
 const countable = (node) => {
   node.dataset.count = '';
   node.dataset.target = '';
+  node.dataset.tap = 'object';
+  return node;
+};
+
+/**
+ * A number in the picture that is not a target (a tag, a hint's label, a circle of the bond): a chip in the
+ * off-target log (architecture 3.2).
+ * @template {HTMLElement} T
+ * @param {T} node
+ * @returns {T}
+ */
+export const asChip = (node) => {
+  node.dataset.tap = 'chip';
   return node;
 };
 
@@ -552,7 +571,7 @@ export function drawFrame(host, d) {
       covers = [lid(host, domeOver(segments(run)[0], run[0].row > 0), d.cover, '?', 'is-small')];
     } else covers = [lid(host, { x: empty.x + 0.13, y: empty.y + 0.2, w: 0.74, h: 0.6 }, d.cover, '?', 'is-small')];
   }
-  const chip = d.tag === null ? null : at(host, 'tf-chip tf-tag', L.tag, String(d.tag));
+  const chip = d.tag === null ? null : asChip(at(host, 'tf-chip tf-tag', L.tag, String(d.tag)));
   return { L, tray, cells, parts, unknowns, run, empty, covers, wrap, chip };
 }
 
@@ -575,14 +594,14 @@ export function drawTree(host, d) {
     return `M${n(ax + ux * a.w / 2)} ${n(ay + uy * a.h / 2)}L${n(bx - ux * b.w / 2)} ${n(by - uy * b.h / 2)}`;
   };
   outline(host, L, [stem(L.top, L.left) + stem(L.top, L.right)], 'tf-line-frame tf-stems', false);
-  const top = at(host, 'tf-circle', L.top, String(d.whole));
+  const top = asChip(at(host, 'tf-circle', L.top, String(d.whole)));
   top.dataset.role = 'whole';
   const wholeDots = Array.from({ length: d.whole }, (_, i) => countable(at(host, 'tf-dot', L.wholeAt(i))));
   for (const dot of wholeDots) dot.dataset.role = 'whole';
   const side = (part, box, place) => {
     const circle = at(host, 'tf-circle', box, String(part.n));
     const dots = Array.from({ length: part.n }, (_, i) => at(host, 'tf-dot', place(i)));
-    if (part.known) for (const node of [circle, ...dots.map(countable)]) node.dataset.role = 'part';
+    if (part.known) for (const node of [asChip(circle), ...dots.map(countable)]) node.dataset.role = 'part';
     else [circle, ...dots].forEach((node, j) => unknown(node, j, dots.length + 1));
     const covers = part.known || d.solved ? [] : [lid(host, box, d.cover, '?', 'is-round')];
     return { ...part, circle, dots, box, place, covers };
@@ -604,7 +623,7 @@ export function drawBundles(host, d) {
   if (tagged) {
     const { l, r, y, end } = L.bracket;
     outline(host, L, [`M${n(l)} ${n(end)}V${n(y)}H${n(r)}V${n(end)}`], 'tf-line-frame tf-bracket-whole', false);
-    const chip = at(host, 'tf-chip tf-tag on-bracket', L.tag, String(d.tag));
+    const chip = asChip(at(host, 'tf-chip tf-tag on-bracket', L.tag, String(d.tag)));
     const bundle = countable(at(host, 'tf-bundle', L.bundle));
     bundle.dataset.role = 'part';
     bundle.append(el('span', 'tf-band'));

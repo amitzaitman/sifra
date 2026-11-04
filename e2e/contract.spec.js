@@ -274,7 +274,7 @@ for (const { path, games } of SITES) {
  * in order with the shell's step and first, then solved; in symbols look also solved first and the
  * picture asked for after; and the round as a thumb (unsolved at seed 1, solved at every seed).
  * Animations are finished as they start. After each step: nothing threw; every box shown is finite
- * and inside the host, and no inline style holds NaN; after a solve no cover and no written '?' are shown; in the panel,
+ * and inside the host, no inline style holds NaN, and every data-tap names a mark (3.2); after a solve no cover and no written '?' are shown; in the panel,
  * every digit shown is topmost at its centre and its text fits its box, and every cover with a mark
  * is topmost (architecture 4.8); the view's label, at rest and solved, puts a hyphen after a one-letter word only
  * before a digit, and solved says no cover and nothing empty (design 6.3), and differs from the one at rest where the
@@ -287,6 +287,7 @@ async function loop({ url, levels, seeds }) {
   const game = await import(url);
   const { rng } = await import('/shell/rng.js');
   const { RULES } = await import('/data/errors.js');
+  const { MARKS } = await import('/shell/taps.js');
   const out = [];
   const main = /** @type {HTMLElement} */ (document.querySelector('main'));
   const panel = /** @type {HTMLElement} */ (main.querySelector('[data-area="picture"]'));
@@ -332,6 +333,9 @@ async function loop({ url, levels, seeds }) {
     };
     for (const n of nodes) {
       if (/NaN|Infinity|undefined/.test(n.getAttribute('style') ?? '')) out.push(`${where}: ${name(n)} style "${n.getAttribute('style')}"`);
+      // A mark for the off-target log names one of the four kinds (architecture 3.2).
+      const mark = n.getAttribute('data-tap');
+      if (mark !== null && !MARKS.includes(mark)) out.push(`${where}: ${name(n)} data-tap "${mark}"`);
       const b = n.getBoundingClientRect();
       if (![b.left, b.top, b.width, b.height].every(Number.isFinite)) out.push(`${where}: ${name(n)} box not finite`);
       if ((!b.width && !b.height) || hidden(n)) continue;

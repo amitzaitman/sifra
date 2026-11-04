@@ -30,6 +30,13 @@ const CLASS = {
 const DOMES = ['lid', 'cover', 'dome'];
 /** The kinds drawn in their object's shape (a balloon's egg) at its place. */
 const SHAPED = ['object', 'outline', 'ghost', 'place', 'ring'];
+/**
+ * What a tap on a mark is in the off-target log (architecture 3.2), by kind: a counted thing (an object, the outline
+ * a leaver left), a chip, a line (the basket's rim, a frame, is none); a cover is lib/cover.js's own.
+ * @type {(m: Mark) => string | null}
+ */
+const tapOf = (m) => (m.kind === 'object' || m.kind === 'outline' ? 'object' : m.kind === 'chip' ? 'chip'
+  : m.kind === 'line' && m.role !== 'frame' ? 'line' : null);
 const SVG = 'http://www.w3.org/2000/svg';
 
 /**
@@ -149,6 +156,8 @@ export function drawScene(host, { layout, set, cover: make }) {
       el = document.createElement('span');
       el.className = `st-mark ${CLASS[m.kind]}`;
       el.dataset.id = m.id;
+      const tap = tapOf(m);
+      if (tap) el.dataset.tap = tap;
       if (DOMES.includes(m.kind)) el.append(make(m.mark ?? '?'));
       // A node keeps its shape: a dot that was a balloon is a node of its own (the morph).
       if (m.kind === 'object' && m.shape === 'balloon') el.append(balloonString());
