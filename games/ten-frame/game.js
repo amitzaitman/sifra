@@ -9,7 +9,7 @@ import { place } from '../../lib/place.js';
 import { pickWeighted } from '../../lib/weights.js';
 import { drawBridge, drawBundles, drawFrame, drawTree, el } from './draw.js';
 import { pictureOf } from './picture.js';
-import { KINDS, displayOf, draws, layer, move } from './help.js';
+import { KINDS, displayOf, draws, land, layer, move } from './help.js';
 
 export const meta = {
   id: 'ten-frame',
@@ -536,7 +536,7 @@ export function render(host, round, ctx) {
         const moving = move(pic, pic.bottom.includes(counter) ? counter : undefined);
         ctx.relabel();   // the frames hold other counts now (bug hunt #24)
         await Promise.all(moving.map((m) => settle(m, signal)));
-        for (const m of moving) m.classList.remove('is-moving');
+        land(moving);
         return;
       }
       if (counter) touch(counter);

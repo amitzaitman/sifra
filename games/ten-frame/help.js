@@ -692,13 +692,16 @@ export const BUNDLES_PART = {
 /** @param {Pic} pic @param {number} i */
 const slot = (pic, i) => disc(pic.t.L.place(i));
 
+/** @type {WeakMap<HTMLElement, HTMLElement[]>} each counter's latest move (what move returned) */
+const lastMove = new WeakMap();
+
 /**
  * Moves a counter of the second frame into the first frame's next cell; the rest of the second
  * frame closes up from the left (R6). When the first frame is full, the exercise is rewritten
  * as 10 + the rest (pedagogy 6.2: level 10 only; its picture is the only one that moves).
  * @param {Pic} pic
  * @param {HTMLElement} [which]
- * @returns {HTMLElement[]} what moves
+ * @returns {HTMLElement[]} what moves; land() it once it has settled
  */
 export function move(pic, which) {
   if (!pic.d.move || pic.top.length >= 10 || !pic.bottom.length) return [];
@@ -706,13 +709,25 @@ export function move(pic, which) {
   const [node] = pic.bottom.splice(i, 1);
   pic.top.push(node);
   const moving = [node, ...pic.bottom.slice(i)];
-  for (const m of moving) m.classList.add('is-moving');
+  for (const m of moving) {
+    m.classList.add('is-moving');
+    lastMove.set(m, moving);
+  }
   // A counter keeps its shade where it goes: the second addend's stay light (design 3).
   const spots = pic.t.L.counters(pic.top.length - pic.d.a);
   [...pic.top, ...pic.bottom].forEach((m, k) => put(m, slot(pic, spots[k].cell)));
   if (pic.top.length === 10) pic.full?.();
   if (pic.hint) BRIDGE.hint(pic, pic.hint);   // the hint follows the counters
   return moving;
+}
+
+/**
+ * Ends a settled move: its counters stop sliding (is-moving carries the transition), except those a
+ * later move took on while this one ran (a second tap, the tour's fill): they still slide there.
+ * @param {HTMLElement[]} moving what move returned
+ */
+export function land(moving) {
+  for (const m of moving) if (lastMove.get(m) === moving) m.classList.remove('is-moving');
 }
 
 /** Moves until the first frame is full, one counter at a time (level 10). @param {Pic} pic @param {AbortSignal} signal @param {Hand} [hand] */
@@ -722,7 +737,7 @@ export async function fill(pic, signal, hand) {
     if (signal.aborted) return;
     const moving = move(pic);
     await settled(moving, signal);
-    for (const m of moving) m.classList.remove('is-moving');
+    land(moving);
   }
 }
 
