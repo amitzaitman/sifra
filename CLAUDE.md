@@ -6,8 +6,7 @@ server, no build step, no audio.
 
 Status: milestone 1 (`docs/decisions.md`, "שלב 2: אבן הדרך הראשונה"): the shell, three games (`ten-frame`,
 `balance`, and since 2026-10-30 `stories`, pedagogy §6.4), the tests and CI. CI puts every merge to main on GitHub
-Pages; a game goes live (its link is shared with children) only after the owner's iPhone check there is logged in
-`docs/device-checks.md`.
+Pages. The games are still in development: their link is not shared with children yet.
 
 ## Where things are
 
@@ -72,9 +71,6 @@ Pages; a game goes live (its link is shared with children) only after the owner'
 - `tests/rounds.lock.json` locks each game's rounds (seeds 1-50 per level): `tests/lock.test.js` fails when they change without a `meta.version` bump or a locked level id goes; after a bump, `npm run lock`.
 - `node start.js [port]` serves the site. Playwright takes its port from `SIFRA_PORT` (default 4173) and never reuses a running server. Where WebKit is not installed: `npx playwright test --project=chromium`.
 - One CI workflow (`.github/workflows/ci.yml`) that tests on Chromium and WebKit on a push to any branch, and deploys main to Pages.
-- Right after a merge to main: the owner's manual iPhone check on the GitHub Pages address, logged with a date in
-  `docs/device-checks.md`. Until it is logged the link is not shared with children ("goes live"); a failed check is
-  fixed or reverted on main at once.
 
 ## Reuse from AlefBet
 
