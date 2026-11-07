@@ -552,10 +552,9 @@ function devExport() {
 
 /** The error screen, after AlefBet's error-screen.js: a home button instead of a white page. */
 function errorScreen() {
-  let shown = false;
   const show = (message) => {
-    if (shown || /ResizeObserver loop|^Script error/.test(String(message ?? ''))) return;
-    shown = true;
+    // One at a time, read from the page: errors while it is up add none; left by Back, the next error shows it again.
+    if (S.root.querySelector(':scope > [data-screen="error"]') || /ResizeObserver loop|^Script error/.test(String(message ?? ''))) return;
     const reload = () => { location.hash = '#/'; location.reload(); };
     const main = screen('error', T.oops);
     main.append(h('p', { class: 'error-text' }, T.oops), h('div', { class: 'end-home' }, homeButton({ class: 'next btn btn-action', onclick: reload })));
