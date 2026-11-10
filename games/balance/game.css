@@ -1,4 +1,4 @@
-/* The balance (design 6.8, 7). The cube is (W - 84px) / 10 up to 28px, less when the pans need more
+/* The balance (design 6.8, 7). The cube is (W - 84px) / 10 up to 28px (times the shell's --zoom on a tablet), less when the pans need more
    rows than the stage's height holds; places are in units of the cube (--c --r --w --h). The cubes
    stand 11px in from a bowl's outer edge (its 3px rim, a 3px --halo, a ring's 5px), so a ring keeps
    off the rim; the pans reach the scene's ends, and the pole passes between them 5px clear of each,
@@ -25,7 +25,7 @@
    height in cubes (stage.js el), and a length inherited from here would shadow a ring's var(--h, 1) fallback. */
 [data-game="balance"] .bl-scene {
   --t: 0; --gx: 84px; --gt: 12px; --gc: 68px;
-  --cube: min(28px, calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 11px - 3px * var(--rows)) / (1.8 + var(--rows))));
+  --cube: min(calc(28px * var(--zoom, 1)), calc((100cqw - var(--gx)) / 10), calc((100cqh - var(--gt) - var(--gc) - 11px - 3px * var(--rows)) / (1.8 + var(--rows))));
   --u: calc(var(--cube) + 3px); --scene-w: calc(var(--cube) * 10 + var(--gx)); --pan: calc(var(--cube) * 5 + 34px);
   --half: calc(var(--cube) * 2.5 + var(--gx) / 2 - 17px); --yb: calc(var(--cube) * .6 + var(--gt)); --bowl: calc(var(--cube) * .5 + 11px);
   --scene-h: calc(var(--cube) * (1.8 + var(--rows)) + var(--gt) + var(--gc) + 11px + 3px * var(--rows));

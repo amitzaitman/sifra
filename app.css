@@ -59,10 +59,25 @@ svg[data-icon] { display: block; width: 32px; height: 32px; }
 /* One centred column; the page scrolls down, never sideways (design 5). */
 /* One column as wide as main's content box: nothing in it, a wide equation row included, can widen it (bug hunt #9). */
 main {
-  position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; width: 100%; max-width: calc(560px + 2 * var(--gutter));
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; width: 100%; max-width: calc(var(--column, 560px) + 2 * var(--gutter));
   min-height: 100dvh; margin: 0 auto; padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
 }
 @media (min-height: 700px) { main { gap: 16px; } }
+/* A tall screen (design 5): the spare height goes to the round, not under it. The picture is a little taller, the
+   exercise and the cards larger, and the exercise stands in the middle of what is left, so the cards rest at the
+   bottom, under the thumb. A short screen (375x550, a phone on its side) keeps the sizes above. */
+@media (min-height: 640px) {
+  :root { --card-h: clamp(112px, 17dvh, 148px); --fs-card: clamp(36px, 5.2dvh, 44px); --fs-eq: clamp(28px, 13vw, 60px); --panel-h: clamp(200px, 46dvh, 440px); }
+  main:is([data-screen="round"], [data-screen="demo"]) { grid-template-rows: auto auto 1fr auto; }
+}
+/* A tablet (design 5): the same screen, larger. The column is 760px, and home shows three games in a row. --zoom is
+   how much a picture's own size cap grows there (the balance's cube, the stories' unit); a thumb keeps 1. */
+@media (min-width: 700px) and (min-height: 760px) {
+  :root { --card-h: 148px; --fs-card: 48px; --fs-eq: 68px; --gap: 12px; --panel-h: clamp(200px, 50dvh, 560px); --column: 760px; --zoom: 1.4; }
+  .games { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card-dots { grid-template-columns: repeat(5, 11px); gap: 4px; width: 71px; }
+  .card-dots i { width: 11px; height: 11px; }
+}
 /* A screen comes in once (design 8): its parts fade in, 250ms, and on every screen but a round they also rise 16px to
    their place. A round's picture and exercise only fade: the game measures the picture as it mounts, and the demo's
    hand aims at what it measured, so nothing there may be moved by the shell. The bar stands still, and the cards come
@@ -81,7 +96,7 @@ main:is([data-screen="round"], [data-screen="demo"]) > :is(.panel, .equation) { 
 
 /* The picture panel (design 6.3). */
 .panel {
-  position: relative; display: grid; place-items: center; height: clamp(200px, 40dvh, 380px); padding: clamp(8px, 3vw, 16px);
+  position: relative; display: grid; place-items: center; height: var(--panel-h, clamp(200px, 40dvh, 380px)); padding: clamp(8px, 3vw, 16px);
   overflow: hidden; border-radius: var(--r-panel); background: var(--panel);
 }
 .ctl-picture { width: 96px; height: 96px; }
@@ -188,6 +203,7 @@ main:is([data-screen="round"], [data-screen="demo"]) > :is(.panel, .equation) { 
   background: var(--surface); color: var(--ink); font-size: 18px; font-weight: 700; text-decoration: none;
 }
 .thumb { position: relative; display: grid; place-items: center; height: 96px; overflow: hidden; pointer-events: none; }
+[data-thumb] { --zoom: 1; }
 [data-thumb] *, [data-thumb] *::before, [data-thumb] *::after { animation: none !important; transition: none !important; }
 .parents-link { display: flex; align-items: center; min-height: var(--target); color: var(--ink-soft); font-size: 16px; font-weight: 500; }
 /* Soft grey under 24px needs paper behind it, off the grid's lines (design 3: 4.11:1 on a line; bug hunt #25). */

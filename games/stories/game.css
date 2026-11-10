@@ -12,7 +12,7 @@
 /* The stage is the host's content box (the panel's, or a thumb's), a size container. */
 [data-game="stories"] .st-stage { position: absolute; inset: 0; display: grid; place-items: center; padding: inherit; container-type: size; }
 [data-game="stories"] .st-draw {
-  --u: min(calc(var(--umax) * 1px), calc((100cqw - var(--dwp) * 1px) / var(--dwu)), calc((100cqh - var(--dhp) * 1px) / var(--dhu)));
+  --u: min(calc(var(--zoom, 1) * var(--umax) * 1px), calc((100cqw - var(--dwp) * 1px) / var(--dwu)), calc((100cqh - var(--dhp) * 1px) / var(--dhu)));
   position: relative; width: calc(var(--dwu) * var(--u) + var(--dwp) * 1px); height: calc(var(--dhu) * var(--u) + var(--dhp) * 1px);
   transition: --dhu var(--t-move) var(--ease), --dhp var(--t-move) var(--ease);
 }
