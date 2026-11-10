@@ -9,7 +9,7 @@ import {
   stuckTarget,
 } from './shell/planner.js';
 import { rng, seedFrom } from './shell/rng.js';
-import { settle } from './lib/settle.js';
+import { reduced, settle } from './lib/settle.js';
 import { CAPS, LOCKED, capped, childOf, exportFile, load, refresh, save, zeros } from './shell/store.js';
 import { TAP_KINDS, byPointer, tapAt, tapWindow } from './shell/taps.js';
 import { RULES } from './data/errors.js';
@@ -483,6 +483,7 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
     // Every token, and out of aria-busy, before the cover lifts: a tap during a story's event comes here first (2.5).
     buildEquation(eq.row, null);
     solveEquation(eq);
+    land(eq.row, cards.buttons[i]);
     try {
       await Promise.all([settle(eqArea, signal), view.solve?.()]);
     } finally {
@@ -500,6 +501,28 @@ function runRound({ game, level, round, spec, record: rec, done = 0, mode = 'pla
   };
   if (mode !== 'demo') cards.buttons[0]?.focus({ preventScroll: true });
   return { main, view, cards, answerAt, solve, signal, next };
+}
+
+/**
+ * The solved answer flies from its card to its place in the exercise, and lands a little past it (design 6.9, 8): each
+ * answer of the row starts on the card's number, near that size, 400 ms, with app.css's --ease-pop. settle() waits for
+ * it with the lifting cover. Nothing moves in reduced motion, or in a row with no '?'.
+ * @param {HTMLElement} row the solved row
+ * @param {HTMLElement} card the card tapped right
+ */
+function land(row, card) {
+  if (reduced()) return;
+  const face = card.querySelector('.card-number') ?? card;
+  const [from, size] = [face.getBoundingClientRect(), parseFloat(getComputedStyle(face).fontSize)];
+  const easing = getComputedStyle(row).getPropertyValue('--ease-pop').trim() || 'ease-out';
+  for (const el of row.querySelectorAll('.eq-answer')) {
+    const to = el.getBoundingClientRect();
+    const k = Math.min(1, Math.max(0.5, size / parseFloat(getComputedStyle(el).fontSize)));
+    const [dx, dy] = [from.left + from.width / 2 - to.left - to.width / 2, from.top + from.height / 2 - to.top - to.height / 2];
+    el.classList.add('is-landing');
+    const done = () => el.classList.remove('is-landing');
+    el.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${k})` }, { transform: 'none' }], { duration: 400, easing }).finished.then(done, done);
+  }
 }
 
 /**

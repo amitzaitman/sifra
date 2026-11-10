@@ -503,6 +503,15 @@ the bad address leaves no history entry.
 - Every screen opens at the top: `screen()` scrolls the page to (0, 0) when it is scrolled. On a landscape phone a
   round is taller than the window, and it opened where the last screen was (the home page scrolled to a card, or the
   place of "הַבָּא"), so a story's event and its `?` played above the fold (playtest 2026-10-31).
+- Motion the shell owns (design 6.5, 6.9, 8; owner decision 2026-11-10, "תחושת משחק"): a screen's parts come in once,
+  by app.css alone (`screen-in`: a fade and a 16px rise; on a round or demo screen `round-in`, the picture and the
+  exercise only fade; the bar has none; the cards `card-in`, 30 ms apart, a face rising inside a card whose box stands).
+  The shell never moves the picture: a game measures it as it mounts and the demo's hand aims at what was measured (a
+  round that slid in put the hand's taps beside the counted things). It all ends within the double-tap window below.
+  On the solve `land(row, card)` in app.js flies each `.eq-answer` of the solved row from the tapped card's number to
+  its place (one WAAPI animation, 400 ms, `--ease-pop`, the class `is-landing` while it runs), which the solve's
+  `settle(eqArea)` waits for with the lifting cover, and the card swells once (`card-pop`). No row with a `?`, or
+  reduced motion: nothing flies. No timer, and nothing here is a game's: every game gets it.
 - Cards' focus ring: the shell focuses the first card, and after a miss the next live one, so a keyboard works; app.css
   draws a card's `:focus-visible` ring only under `:root[data-keys]`, which a capture `keydown` listener sets and a
   capture `pointerdown` listener removes (start()). A page loaded straight at a round (iOS Safari reloads a discarded
@@ -1101,7 +1110,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   tap (3.2), on a paused clock so every tap of a double tap has one time, on every project: on the right card with
   reduced motion ("הַבָּא" stays), on "הַבָּא" in a session and in `#/dev` (the next round, unanswered: a later wrong
   tap is its only miss), at the window's edge (a tap on "הַבָּא" and on the next round's card at 299 ms dropped, at
-  300 ms taken), and on the end screen's home button (home stays); a broken stored record (3.9) opens home, plays the
+  300 ms taken), and on the end screen's home button (home stays); the shell's motion (3.2): the solved answer's one
+  flight, read from `Element.prototype.animate` as it starts (from over the tapped card's number, to its place, 400 ms,
+  landed at rest and out of `is-landing`; none with reduced motion), and a screen's entry, read from computed styles
+  (home's parts `screen-in`, a round's picture and exercise `round-in`, the bar none, `round-in` and `card-in` fades
+  with no transform, the cards 30 ms apart and all in place within `WINDOW`; none with reduced motion); a broken stored record (3.9) opens home, plays the
   next step and logs one `repair` event with what it lost; a next step that throws (shell/planner.js replaced by a
   Playwright route) leaves home without its card, the games drawn, and `#/next` goes home; a game whose render throws
   (its module replaced the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a

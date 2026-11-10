@@ -19,6 +19,7 @@
   --fs-eq: clamp(28px, 11vw, 48px); --fs-card: 36px; --fs-next: 28px; --fs-title: 30px; --fs-label: 16px;
   --t-press: 100ms; --t-move: 250ms; --t-beam: 500ms; --t-blink: 600ms; --t-display: 1000ms;
   --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-pop: cubic-bezier(.3, 1.45, .5, 1);  /* lands a little past its place: only the solved answer (design 8) */
 }
 /* Pinch zoom works everywhere; only double-tap zoom is off. No zoom-lock script. */
 html { touch-action: manipulation; }
@@ -62,6 +63,15 @@ main {
   min-height: 100dvh; margin: 0 auto; padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom));
 }
 @media (min-height: 700px) { main { gap: 16px; } }
+/* A screen comes in once (design 8): its parts fade in, 250ms, and on every screen but a round they also rise 16px to
+   their place. A round's picture and exercise only fade: the game measures the picture as it mounts, and the demo's
+   hand aims at what it measured, so nothing there may be moved by the shell. The bar stands still, and the cards come
+   one after another. All of it ends inside the 0.3 s in which the shell takes no tap (6.9), so nothing moves under a
+   finger. */
+main > :not(.bar, .sr-only, .demo, .choices) { animation: screen-in var(--t-move) var(--ease) backwards; }
+main:is([data-screen="round"], [data-screen="demo"]) > :is(.panel, .equation) { animation-name: round-in; }
+@keyframes screen-in { from { opacity: 0; transform: translateY(16px); } }
+@keyframes round-in { from { opacity: 0; } }
 
 /* Top bar (design 6.2): home at the start, progress in the middle, the hand at the end. */
 .bar { display: grid; grid-template-columns: var(--target) minmax(0, 1fr) var(--target); align-items: center; min-height: var(--target); }
@@ -93,6 +103,8 @@ main {
 .eq-slot { position: relative; display: inline-grid; place-items: center; min-width: 1.3em; height: 1.3em; }
 .eq-answer { opacity: 0; color: var(--role-unknown); }
 [data-solved] .eq-answer { opacity: 1; }
+/* The solved answer flies here from its card (app.js land, design 6.9), over the cards on its way. */
+.eq-answer.is-landing { position: relative; z-index: 1; }
 /* A story's event builds the row (architecture 2.4): an unbuilt token keeps its place, hidden; solved, every token shows. */
 .eq > .is-unbuilt { visibility: hidden; }
 [data-solved] .eq > .is-unbuilt { visibility: visible; }
@@ -117,6 +129,13 @@ main {
   display: grid; place-content: center; justify-items: center; gap: 6px; height: var(--card-h); padding: 0 4px;
   border-radius: var(--r-card); background: var(--surface); color: var(--ink); font-weight: 800;
 }
+/* The cards come in one after another, 30ms apart: five are in place by 0.3 s (design 8). A card fades in where it
+   stands, and its face rises into it: the card's own box never moves, so what is measured or aimed at it holds. */
+.cards > .card { animation: card-in 180ms var(--ease) backwards; animation-delay: calc(var(--i, 0) * 30ms); }
+.card > * { animation: face-in 180ms var(--ease) backwards; animation-delay: calc(var(--i, 0) * 30ms); }
+.cards > .card:nth-child(2) { --i: 1; } .cards > .card:nth-child(3) { --i: 2; } .cards > .card:nth-child(4) { --i: 3; } .cards > .card:nth-child(5) { --i: 4; }
+@keyframes card-in { from { opacity: 0; } }
+@keyframes face-in { from { transform: translateY(12px); } }
 .card-number { font-size: var(--fs-card); line-height: 1.2; }
 .card-number[data-len="3"] { font-size: 28px; }
 .card-number[data-len="4"] { font-size: 20px; }
@@ -126,6 +145,9 @@ main {
 .card.is-retired > * { visibility: hidden; animation: card-out var(--t-move) var(--ease); }
 @keyframes card-out { from { visibility: visible; } to { visibility: visible; opacity: 0; transform: translateY(40%); } }
 .card.is-correct { background: var(--role-unknown-tint); box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown); transform: none; }
+/* The card tapped right swells once as its answer leaves for the exercise (design 6.9). */
+.cards > .card.is-correct { animation: card-pop var(--t-move) var(--ease); animation-delay: 0s; }
+@keyframes card-pop { 50% { scale: 1.07; } }
 .card.is-shown { box-shadow: 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
 .card.is-shown.is-correct { box-shadow: inset 0 0 0 var(--ring-strong) var(--role-unknown), 0 0 0 3px var(--paper), 0 0 0 7px var(--role-unknown); }
 /* The focus ring goes round the shown answer's ring (3-7px out), not over it, and over the empty

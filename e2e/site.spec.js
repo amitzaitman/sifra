@@ -10,6 +10,7 @@ import { TOPICS } from '../data/videos.js';
 import { rng } from '../shell/rng.js';
 import { demoSeedFor, exerciseOf, pickMix, plainDemo } from '../shell/planner.js';
 import { SCHEMA } from '../shell/store.js';
+import { WINDOW } from '../shell/taps.js';
 import {
   test, expect, CHILD, FIXTURE, INDEX, NOW, TODAY, YESTERDAY, expectCalm, expectHandOnTargets, expectMathLeftToRight, expectRoleColours, expectThumbsDrawn,
   expectTouchTargets, handSeen, ladderAt, look, roundOf, seedStore, skillState, storeWith, stored, watchHand,
@@ -739,6 +740,83 @@ test('the window\'s edge: a tap 299 ms after "הַבָּא" or a new round appea
   await page.locator(`button[data-index="${answerAt}"]`).click();
   await expect(page.locator('main[data-screen="round"]')).toHaveAttribute('data-solved', '');
   expect((await stored(page)).child.attempts.map((a) => a.outcome)).toEqual(['first', 'first']);
+});
+
+test('the solved answer flies from its card to the "?" of the exercise and lands in its place; with reduced motion nothing flies (design 6.9, 8)', async ({ page }) => {
+  // Every script animation of the page, as it starts: the element's classes and its two keyframes.
+  await page.addInitScript(() => {
+    const animate = Element.prototype.animate;
+    Object.assign(globalThis, { flights: [] });
+    Element.prototype.animate = function (frames, options) {
+      /** @type {any} */ (globalThis).flights.push({ cls: this.className, from: frames[0].transform, to: frames[1].transform, ms: options.duration, easing: options.easing });
+      return animate.call(this, frames, options);
+    };
+  });
+  const centre = (locator) => locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+  });
+  await open(page, `${FIXTURE}#/dev/parts/2/1`);
+  for (const reducedMotion of /** @type {const} */ (['no-preference', 'reduce'])) {
+    await page.emulateMedia({ reducedMotion });
+    await page.reload();
+    await look(page);
+    const { answerAt, round } = await roundOf(page);
+    // The cards' faces have come in: the window above runs on the page's clock, the entry on the real one.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))));
+    const card = await centre(page.locator(`button[data-index="${answerAt}"] .card-number`));
+    await page.locator(`button[data-index="${answerAt}"]`).click();
+    await expect(page.locator('[data-next]')).toBeVisible();
+    const flights = (await page.evaluate(() => /** @type {any} */ (globalThis).flights)).filter((f) => f.cls.includes('eq-answer'));
+    const answer = page.locator('[data-area="equation"] .eq-answer');
+    // Landed: in the row, shown, at rest, and no longer above the cards.
+    await expect(answer).toHaveText(String(round.answer));
+    await expect(answer).toHaveCSS('opacity', '1');
+    await expect(answer).toHaveCSS('transform', 'none');
+    await expect(answer).not.toHaveClass(/is-landing/);
+    if (reducedMotion === 'reduce') {
+      expect(flights, 'reduced motion: nothing flies').toEqual([]);
+      continue;
+    }
+    expect(flights.length, 'one flight, of the one answer').toBe(1);
+    const [flight] = flights;
+    expect(flight).toMatchObject({ cls: 'eq-answer is-landing', to: 'none', ms: 400 });
+    expect(flight.easing, 'app.css --ease-pop').toMatch(/^cubic-bezier\(/);
+    // It starts on the card's number (a card just released may still be up to 3px down), smaller than in the row.
+    const [, dx, dy, k] = flight.from.match(/^translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)$/).map(Number);
+    const place = await centre(answer);
+    expect(Math.abs(place[0] + dx - card[0]), 'starts over the card, x').toBeLessThanOrEqual(1);
+    expect(Math.abs(place[1] + dy - card[1]), 'starts over the card, y').toBeLessThanOrEqual(4);
+    expect(dy, 'the card is below the exercise').toBeGreaterThan(40);
+    expect(k).toBeGreaterThanOrEqual(0.5);
+    expect(k).toBeLessThanOrEqual(1);
+  }
+});
+
+test('a screen comes in once: home\'s parts rise, a round\'s picture and exercise only fade, the bar stands, and the cards are in place within the 0.3 s window (design 8)', async ({ page }) => {
+  const motion = (selector) => page.locator(selector).evaluateAll((els) => els.map((el) => {
+    const s = getComputedStyle(el);
+    const ms = (t) => (t.trim().endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000);
+    return { name: s.animationName, end: Math.round(ms(s.animationDelay) + ms(s.animationDuration)), fill: s.animationFillMode, count: s.animationIterationCount };
+  }));
+  await open(page, FIXTURE);
+  for (const part of await motion('main > .next-step, main > .games')) expect(part).toEqual({ name: 'screen-in', end: 250, fill: 'backwards', count: '1' });
+  await page.goto(`${FIXTURE}#/dev/parts/2/1`);
+  await expect(page.locator('[data-choices]')).toBeVisible();
+  for (const part of await motion('main > .panel, main > .equation')) expect(part).toEqual({ name: 'round-in', end: 250, fill: 'backwards', count: '1' });
+  expect((await motion('main > .bar, main > .choices')).map((m) => m.name)).toEqual(['none', 'none']);
+  // round-in moves nothing: a game measures the picture as it mounts, and the demo's hand aims at what it measured.
+  const frames = await page.evaluate(() => [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules])
+    .filter((rule) => rule instanceof CSSKeyframesRule && ['round-in', 'card-in'].includes(rule.name)).map((rule) => rule.cssText));
+  expect(frames.length).toBe(2);
+  for (const text of frames) expect(text, 'a fade alone, so no measured box moves').not.toMatch(/transform|translate|scale/);
+  const cards = await motion('[data-choices] > button');
+  expect(cards.length).toBeGreaterThan(1);
+  cards.forEach((card, i) => expect(card).toEqual({ name: 'card-in', end: 180 + 30 * i, fill: 'backwards', count: '1' }));
+  // Five cards, the most a row holds, are in place as the shell begins to take taps.
+  expect(180 + 30 * 4).toBeLessThanOrEqual(WINDOW);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect((await motion('main > .panel, [data-choices] > button')).every((m) => m.name === 'none')).toBe(true);
 });
 
 test('a double tap on the end screen\'s home button opens home and stays there (design 6.9)', async ({ page }) => {
