@@ -61,7 +61,19 @@ export async function gameOf(id) {
  * clock (installed before goto) stamps the events, and only the stamps move.
  * @param {import('@playwright/test').Page} page
  */
-export const look = (page) => page.clock.runFor(WINDOW);
+export const look = async (page) => {
+  await page.clock.runFor(WINDOW);
+  await entered(page);
+};
+
+/**
+ * The screen has come in (design 8): its entry runs 250 ms on the real clock, inside the window, which a test passes
+ * on the page's clock alone. Until it ends the picture is not yet at full opacity, so a tap's hit test would pass over it.
+ * @param {import('@playwright/test').Page} page
+ */
+export const entered = (page) => page.evaluate(() => Promise.all(document.getAnimations()
+  .filter((a) => ['screen-in', 'round-in', 'card-in', 'face-in'].includes(/** @type {CSSAnimation} */ (a).animationName))
+  .map((a) => a.finished.catch(() => null))).then(() => undefined));
 
 /** The games of games/registry.js, imported in Node. */
 export async function registered() {
@@ -192,6 +204,7 @@ export async function expectMathLeftToRight(page) {
 export async function expectCalm(page) {
   // A story's event runs 2 to 5 s at its calm pace (decisions.md 2026-11-03).
   await expect(page.locator('[data-event]'), 'a story\'s event ends').toHaveCount(0, { timeout: 15000 });
+  await entered(page);
   await page.evaluate(() => Promise.all(document.getAnimations()
     .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity && /** @type {KeyframeEffect} */ (a.effect)?.target?.closest('[data-area="picture"], [data-hint], [data-display], [data-choices]'))
     .map((a) => a.finished.catch(() => null))));
