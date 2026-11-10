@@ -1114,7 +1114,11 @@ Each item implements its A.2 entry; the notes say only what A.2 leaves open.
   flight, read from `Element.prototype.animate` as it starts (from over the tapped card's number, to its place, 400 ms,
   landed at rest and out of `is-landing`; none with reduced motion), and a screen's entry, read from computed styles
   (home's parts `screen-in`, a round's picture and exercise `round-in`, the bar none, `round-in` and `card-in` fades
-  with no transform, the cards 30 ms apart and all in place within `WINDOW`; none with reduced motion); a broken stored record (3.9) opens home, plays the
+  with no transform, the cards 30 ms apart and all in place within `WINDOW`; none with reduced motion); the round's sizes
+  by screen (design 5, `LAYOUTS`: the picture's height, the exercise's font, a card's height and the column at seven
+  sizes, a short phone and a phone on its side unchanged, from 640px of height no scroll, the cards 16px over the
+  bottom and the exercise in the middle of what is left, "הַבָּא" in the cards' place), and a tablet's home (three games
+  in a row, `--zoom` 1 on a thumb and 1.4 in a round, the balance's cube at its tablet cap, 11px card dots); a broken stored record (3.9) opens home, plays the
   next step and logs one `repair` event with what it lost; a next step that throws (shell/planner.js replaced by a
   Playwright route) leaves home without its card, the games drawn, and `#/next` goes home; a game whose render throws
   (its module replaced the same way) leaves its home card with the title only, its thumb empty and `data-broken`; a

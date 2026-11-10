@@ -3029,13 +3029,20 @@ async function sweepHeights(page, w) {
     const [box, pad] = [p.getBoundingClientRect(), parseFloat(getComputedStyle(p).paddingLeft)];
     return { width: box.width - 2 * pad, height: box.height, pad, inner: innerHeight };
   });
-  await page.setViewportSize({ width: w, height: heights[0] });
+  // A tall screen's share (app.css, from 640px of height; design 5), which every height of the sweep but 320px's first has.
+  heights.push(639, 640);
+  heights.sort((x, y) => x - y);
+  await page.setViewportSize({ width: w, height: Math.max(heights[0], 640) });
   const small = await read();
   await page.setViewportSize({ width: w, height: 4000 });
   const largest = (await read()).height;
   const needs = (small.width * dh) / dw + 2 * small.pad;
   if (needs > largest) return { heights, crossing: null };
   const crossing = (needs * small.inner) / small.height;
+  // Under 640px the panel's share is the short screen's, smaller: a crossing worked out there is none (at 320px the
+  // panel is too short for the box under 640px and taller than it from 640px on).
+  await page.setViewportSize({ width: w, height: Math.round(crossing) });
+  if (Math.abs((await read()).height - needs) > 1) return { heights, crossing: null };
   return { heights: [...new Set([...heights, Math.floor(crossing), Math.ceil(crossing)])].sort((x, y) => x - y), crossing };
 }
 
@@ -3108,7 +3115,9 @@ async function leastClip(page, plan, state) {
 // -4.9px at 320x729, -4.0 at 360x830, -3.3 at 390x906 and -1.2 at 412x960 (the crossing at 412px is at the panel's
 // largest height, so the grid is its worst), and at dpr 3 the bottom corners of the line painted 9.2 and 7.0px squared
 // of 50 and 52 at the top. Bridging now keeps the room for the line in its own margin (draw.js BRIDGE_MARGIN), and
-// the line stands inside the drawing: 6.8px at 320x698, 9.3 at 360x795, 11.3 at 390x867 and 12.7 at 412x921 (1 asked),
+// the line stands inside the drawing: 6.8px at 320x698, 9.3 at 360x795, 11.3 at 390x867 and 12.7 at 412x921 (1 asked;
+// since the tall screen's taller panel, 2026-11-10, the crossings are at 360x691, 390x754 and 412x801 with the same
+// room, and 320px has none: its least, 10.1px, is at 320x580),
 // the four corners within 2% of each other. For each width the sizes are 1.8 to 2.8 times the width in steps of 20 and the
 // exact crossing, one page resized between them, at the tour's end and solved.
 const SWEEP_WIDTHS = [320, 360, 390, 412];

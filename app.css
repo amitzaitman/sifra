@@ -70,13 +70,10 @@ main {
   :root { --card-h: clamp(112px, 17dvh, 148px); --fs-card: clamp(36px, 5.2dvh, 44px); --fs-eq: clamp(28px, 13vw, 60px); --panel-h: clamp(200px, 46dvh, 440px); }
   main:is([data-screen="round"], [data-screen="demo"]) { grid-template-rows: auto auto 1fr auto; }
 }
-/* A tablet (design 5): the same screen, larger. The column is 760px, and home shows three games in a row. --zoom is
+/* A tablet (design 5): the same screen, larger. The column is 760px (home's three games in a row are below). --zoom is
    how much a picture's own size cap grows there (the balance's cube, the stories' unit); a thumb keeps 1. */
 @media (min-width: 700px) and (min-height: 760px) {
   :root { --card-h: 148px; --fs-card: 48px; --fs-eq: 68px; --gap: 12px; --panel-h: clamp(200px, 50dvh, 560px); --column: 760px; --zoom: 1.4; }
-  .games { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .card-dots { grid-template-columns: repeat(5, 11px); gap: 4px; width: 71px; }
-  .card-dots i { width: 11px; height: 11px; }
 }
 /* A screen comes in once (design 8): its parts fade in, 250ms, and on every screen but a round they also rise 16px to
    their place. A round's picture and exercise only fade: the game measures the picture as it mounts, and the demo's
@@ -208,6 +205,13 @@ main:is([data-screen="round"], [data-screen="demo"]) > :is(.panel, .equation) { 
 .parents-link { display: flex; align-items: center; min-height: var(--target); color: var(--ink-soft); font-size: 16px; font-weight: 500; }
 /* Soft grey under 24px needs paper behind it, off the grid's lines (design 3: 4.11:1 on a line; bug hunt #25). */
 .parents-link > span, .who { background: var(--paper); }
+
+/* A tablet (design 5), after the rules it changes: three games in a row, and larger dots on the larger cards. */
+@media (min-width: 700px) and (min-height: 760px) {
+  .games { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card-dots { grid-template-columns: repeat(5, 11px); gap: 4px; width: 71px; }
+  .card-dots i { width: 11px; height: 11px; }
+}
 
 /* The end screen: the rounds played, solved (R10, pedagogy 5.10). */
 .end-thumbs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

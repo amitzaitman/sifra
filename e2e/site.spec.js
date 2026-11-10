@@ -819,6 +819,72 @@ test('a screen comes in once: home\'s parts rise, a round\'s picture and exercis
   expect((await motion('main > .panel, [data-choices] > button')).every((m) => m.name === 'none')).toBe(true);
 });
 
+// The round's sizes by screen (design 5; owner decision 2026-11-10, "פריסה שממלאת את המסך"): [width, height, the
+// picture's height, the exercise's font size, a card's height, the column's width]. Under 640px of height nothing
+// changed; from there the spare height goes to the round; a tablet's column is 760px.
+const LAYOUTS = [
+  [320, 568, 227, 35, 112, 288],
+  [375, 550, 220, 41, 112, 343],
+  [844, 390, 200, 48, 112, 560],
+  [390, 664, 305, 51, 113, 358],
+  [412, 839, 386, 54, 143, 380],
+  [810, 1080, 540, 68, 148, 760],
+  [1080, 810, 405, 68, 148, 760],
+];
+test('a tall screen gives its spare height to the round, with the cards at the bottom and no scroll; a short one keeps its sizes; a tablet has a wider column (design 5)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
+  await open(page, `${FIXTURE}#/play/parts`);
+  await expect(page.locator('[data-choices]')).toBeVisible();
+  const read = () => page.evaluate(() => {
+    const box = (selector) => /** @type {Element} */ (document.querySelector(selector)).getBoundingClientRect();
+    const [panel, eq, cards, card, bar] = ['.panel', '.eq', '[data-choices]', '[data-choices] > button', '.bar'].map(box);
+    const row = /** @type {Element} */ (document.querySelector('.eq'));
+    return {
+      panel: Math.round(panel.height), font: Math.round(parseFloat(getComputedStyle(row).fontSize)), card: Math.round(card.height), column: Math.round(bar.width),
+      // The exercise stands in the middle of the height between the picture and the cards, within a pixel.
+      off: Math.abs((eq.top + eq.bottom) / 2 - (panel.bottom + cards.top) / 2),
+      below: innerHeight - cards.bottom, scroll: [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight],
+    };
+  });
+  for (const [w, h, panel, font, card, column] of LAYOUTS) {
+    await page.setViewportSize({ width: w, height: h });
+    const at = `${w}x${h}`;
+    const seen = await read();
+    expect([seen.panel, seen.font, seen.card, seen.column], `${at}: picture, exercise, card, column`).toEqual([panel, font, card, column]);
+    expect(seen.scroll[0], `${at}: no sideways scroll`).toBe(0);
+    if (h < 640) continue;
+    expect(seen.scroll[1], `${at}: no scroll`).toBe(0);
+    expect(seen.below, `${at}: the cards rest at the bottom, over the page's 16px`).toBe(16);
+    expect(seen.off, `${at}: the exercise in the middle of what is left`).toBeLessThanOrEqual(1);
+  }
+  // "הַבָּא" takes the cards' place, at the bottom too.
+  await page.setViewportSize({ width: 412, height: 839 });
+  await solve(page);
+  const next = await page.locator('[data-next]').boundingBox();
+  expect(Math.abs(839 - 16 - 143 / 2 - (next.y + next.height / 2)), '"הַבָּא" in the middle of the cards\' row').toBeLessThan(1);
+});
+
+test('a tablet\'s home shows three games in a row, and a picture\'s own size cap grows only in a round (design 5)', async ({ page }) => {
+  await page.setViewportSize({ width: 810, height: 1080 });
+  await open(page, INDEX);
+  const cards = page.locator('.games > a');
+  await expect(cards).toHaveCount(3);
+  const tops = await cards.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+  expect(new Set(tops).size, 'one row').toBe(1);
+  const zoom = (selector) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).getPropertyValue('--zoom').trim());
+  expect(await zoom('[data-thumb]')).toBe('1');
+  await page.goto(`${INDEX}#/dev/balance/2/3`);
+  await expect(page.locator('[data-choices]')).toBeVisible();
+  expect(await zoom('.panel')).toBe('1.4');
+  const dot = await page.locator('.card-dots i').first().evaluate((el) => el.getBoundingClientRect().width);
+  expect(dot, 'a card\'s dots on a tablet').toBe(11);
+  const cube = await page.locator('.bl-cube').first().evaluate((el) => el.getBoundingClientRect().width);
+  expect(Math.abs(cube - 28 * 1.4), 'the balance\'s cube at its tablet cap').toBeLessThan(0.5);
+  await page.setViewportSize({ width: 412, height: 839 });
+  expect(await zoom('.panel'), 'a phone has no zoom').toBe('');
+});
+
 test('a double tap on the end screen\'s home button opens home and stays there (design 6.9)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await seedStore(page, storeWith({ games: { parts: ladderAt('split-10') } }));
